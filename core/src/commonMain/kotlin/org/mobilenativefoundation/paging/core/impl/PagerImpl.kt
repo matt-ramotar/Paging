@@ -81,12 +81,13 @@ class StateManager<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any>(
 
 
 class RealPager<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : Any>(
+    initialKey: PagingKey<K, P>,
+    stateManager: StateManager<Id, K, P, D, E>,
     private val dispatcher: Dispatcher<Id, K, P, D, E, A>,
-    stateManager: StateManager<Id, K, P, D, E>
 ) : Pager<Id, K, P, D, E, A> {
 
     init {
-        dispatcher.dispatch(PagingAction.App(PagingAction.App.Type.START))
+        dispatcher.dispatch(PagingAction.Load(initialKey))
     }
 
     override val state: StateFlow<PagingState<Id, K, P, D, E>> = stateManager.state
@@ -450,7 +451,6 @@ class DefaultReducer<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A 
             is PagingAction.UpdateData -> reduceUpdateDataAction(action, state)
             is PagingAction.User.Custom -> reduceUserCustomAction(action, state)
             is PagingAction.User.Load -> reduceUserLoadAction(action, state)
-            is PagingAction.App -> reduceAppAction(action, state)
             is PagingAction.UpdateError -> reduceUpdateErrorAction(action, state)
             is PagingAction.Load -> reduceLoadAction(action, state)
         }
@@ -571,13 +571,6 @@ class DefaultReducer<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A 
     private fun reduceUserLoadAction(action: PagingAction.User.Load<K, P>, prevState: PagingState<Id, K, P, D, E>): PagingState<Id, K, P, D, E> {
         return if (prevState is PagingState.Data) reduceLoadActionAndDataState(prevState) else reduceLoadActionAndNonDataState(action.key, prevState)
     }
-
-    private fun reduceAppAction(action: PagingAction.App<Id, K, P, D, E, A>, prevState: PagingState<Id, K, P, D, E>): PagingState<Id, K, P, D, E> {
-        return when (action.type) {
-            PagingAction.App.Type.START -> PagingState.Loading(initialKey, null)
-        }
-    }
-
 
     private fun resetRetriesFor(params: PagingSource.LoadParams<K, P>) {
         childScope.launch {
