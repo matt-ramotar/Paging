@@ -5,6 +5,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.plus
+import org.mobilenativefoundation.paging.core.PagingAction.Load
+import org.mobilenativefoundation.paging.core.PagingAction.UpdateData
+import org.mobilenativefoundation.paging.core.PagingAction.User
 import org.mobilenativefoundation.paging.core.PagingSource.LoadResult
 import org.mobilenativefoundation.paging.core.PagingState.Data
 import org.mobilenativefoundation.paging.core.PagingState.Error
@@ -12,18 +15,27 @@ import org.mobilenativefoundation.paging.core.PagingState.Initial
 import org.mobilenativefoundation.paging.core.PagingState.Loading
 import org.mobilenativefoundation.paging.core.impl.DefaultAggregatingStrategy
 import org.mobilenativefoundation.paging.core.impl.DefaultFetchingStrategy
+import org.mobilenativefoundation.paging.core.impl.DefaultLoadEffect
 import org.mobilenativefoundation.paging.core.impl.DefaultLoadNextEffect
 import org.mobilenativefoundation.paging.core.impl.DefaultLogger
+import org.mobilenativefoundation.paging.core.impl.DefaultPagingSource
+import org.mobilenativefoundation.paging.core.impl.DefaultPagingSourceCollector
 import org.mobilenativefoundation.paging.core.impl.DefaultReducer
 import org.mobilenativefoundation.paging.core.impl.Dispatcher
 import org.mobilenativefoundation.paging.core.impl.EffectsHolder
 import org.mobilenativefoundation.paging.core.impl.EffectsLauncher
 import org.mobilenativefoundation.paging.core.impl.RealDispatcher
+import org.mobilenativefoundation.paging.core.impl.RealJobCoordinator
 import org.mobilenativefoundation.paging.core.impl.RealMutablePagingBuffer
 import org.mobilenativefoundation.paging.core.impl.RealPager
 import org.mobilenativefoundation.paging.core.impl.RealQueueManager
 import org.mobilenativefoundation.paging.core.impl.RetriesManager
 import org.mobilenativefoundation.paging.core.impl.StateManager
+import org.mobilenativefoundation.paging.core.impl.StorePagingSourceKeyFactory
+import org.mobilenativefoundation.paging.core.impl.pagingSourceStreamProvider
+import org.mobilenativefoundation.store.store5.ExperimentalStoreApi
+import org.mobilenativefoundation.store.store5.MutableStore
+import org.mobilenativefoundation.store.store5.Store
 import kotlin.reflect.KClass
 
 
@@ -98,7 +110,7 @@ interface Pager<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : Any
      *
      * @param action The user-initiated [PagingAction] to dispatch.
      */
-    fun dispatch(action: PagingAction.User<Id, K, P, D, E, A>)
+    fun dispatch(action: User<Id, K, P, D, E, A>)
 }
 
 
@@ -328,6 +340,7 @@ class PagerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : 
 ) {
 
     private val childScope = scope + Job()
+    private val jobCoordinator = RealJobCoordinator(childScope)
 
     private var middleware: MutableList<Middleware<Id, K, P, D, E, A>> = mutableListOf()
 
@@ -347,10 +360,23 @@ class PagerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : 
     private val pagingBufferInjector = RealInjector<PagingBuffer<Id, K, P, D>>()
 
     private val insertionStrategyInjector = RealInjector<InsertionStrategy>()
+    private val pagingSourceCollectorInjector = RealInjector<PagingSourceCollector<Id, K, P, D, E, A>>().apply {
+        this.instance = DefaultPagingSourceCollector()
+    }
+    private val pagingSourceInjector = RealInjector<PagingSource<Id, K, P, D, E>>()
 
     private val stateManager = StateManager(initialState, loggerInjector)
 
-    private var loadNextEffect: LoadNextEffect<Id, K, P, D, E, A> = DefaultLoadNextEffect<Id, K, P, D, E, A>(loggerInjector, queueManagerInjector)
+    private var loadNextEffect: LoadNextEffect<Id, K, P, D, E, A> = DefaultLoadNextEffect(loggerInjector, queueManagerInjector)
+
+    private var loadEffect: LoadEffect<Id, K, P, D, E, A> = DefaultLoadEffect(
+        loggerInjector = loggerInjector,
+        dispatcherInjector = dispatcherInjector,
+        jobCoordinator = jobCoordinator,
+        pagingSourceCollectorInjector = pagingSourceCollectorInjector,
+        pagingSourceInjector = pagingSourceInjector,
+        stateManager = stateManager
+    )
 
     private lateinit var reducer: Reducer<Id, K, P, D, E, A>
 
@@ -368,7 +394,9 @@ class PagerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : 
      * @param block A lambda function that takes a [DefaultReducerBuilder] as receiver and allows configuring the default reducer.
      * @return The [PagerBuilder] instance for chaining.
      */
-    fun defaultReducer(block: DefaultReducerBuilder<Id, K, P, D, E, A>.() -> Unit) = apply {
+    fun defaultReducer(
+        block: DefaultReducerBuilder<Id, K, P, D, E, A>.() -> Unit
+    ) = apply {
         val builder = DefaultReducerBuilder<Id, K, P, D, E, A>(
             childScope = childScope,
             initialKey = initialKey,
@@ -406,9 +434,9 @@ class PagerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : 
      * @param effect The [LoadNextEffect] to be used for loading the next page of data.
      * @return The [PagerBuilder] instance for chaining.
      */
-    fun loadNextEffect(effect: LoadNextEffect<Id, K, P, D, E, A>) = apply {
-        this.loadNextEffect = effect
-    }
+    fun loadNextEffect(effect: LoadNextEffect<Id, K, P, D, E, A>) = apply { this.loadNextEffect = effect }
+
+    fun loadEffect(effect: LoadEffect<Id, K, P, D, E, A>) = apply { this.loadEffect = effect }
 
     /**
      * Adds a [Middleware] to the pager.
@@ -459,8 +487,34 @@ class PagerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : 
      */
     fun insertionStrategy(insertionStrategy: InsertionStrategy) = apply { this.insertionStrategyInjector.instance = insertionStrategy }
 
+    fun pagingSourceCollector(pagingSourceCollector: PagingSourceCollector<Id, K, P, D, E, A>) = apply { this.pagingSourceCollectorInjector.instance = pagingSourceCollector }
+
+    fun pagingSource(pagingSource: PagingSource<Id, K, P, D, E>) = apply { this.pagingSourceInjector.instance = pagingSource }
+
+    fun defaultPagingSource(streamProvider: PagingSourceStreamProvider<Id, K, P, D, E>) = apply {
+        this.pagingSourceInjector.instance = DefaultPagingSource<Id, K, P, D, E, A>(streamProvider)
+    }
+
+    @OptIn(ExperimentalStoreApi::class)
+    fun mutableStorePagingSource(store: MutableStore<PagingKey<K, P>, PagingData<Id, K, P, D>>, factory: () -> StorePagingSourceKeyFactory<Id, K, P, D>) = apply {
+        this.pagingSourceInjector.instance = DefaultPagingSource<Id, K, P, D, E, A>(
+            streamProvider = store.pagingSourceStreamProvider<Id, K, P, D, E, A>(
+                keyFactory = factory()
+            )
+        )
+    }
+
+    fun storePagingSource(store: Store<PagingKey<K, P>, PagingData<Id, K, P, D>>, factory: () -> StorePagingSourceKeyFactory<Id, K, P, D>) = apply {
+        this.pagingSourceInjector.instance = DefaultPagingSource<Id, K, P, D, E, A>(
+            streamProvider = store.pagingSourceStreamProvider<Id, K, P, D, E, A>(
+                keyFactory = factory()
+            )
+        )
+    }
+
     private fun provideDefaultEffects() {
-        this.effectsHolder.put(PagingAction.UpdateData::class, PagingState.Data.Idle::class, this.loadNextEffect)
+        this.effectsHolder.put(UpdateData::class, Data.Idle::class, this.loadNextEffect)
+        this.effectsHolder.put(Load::class, Initial::class, this.loadEffect)
     }
 
     private fun provideDispatcher() {
@@ -901,7 +955,7 @@ interface UserCustomActionReducer<Id : Comparable<Id>, K : Any, P : Any, D : Any
      * @return The new [PagingState] after applying the custom user action.
      */
     fun reduce(
-        action: PagingAction.User.Custom<A>,
+        action: User.Custom<A>,
         state: PagingState<Id, K, P, D, E>
     ): PagingState<Id, K, P, D, E>
 }
@@ -1022,4 +1076,6 @@ interface PagingSourceStreamProvider<Id : Comparable<Id>, K : Any, P : Any, D : 
  * @param E The type of errors that can occur during the paging process.
  * @param A The type of custom actions that can be dispatched.
  */
-typealias LoadNextEffect<Id, K, P, D, E, A> = Effect<Id, K, P, D, E, A, PagingAction.UpdateData<Id, K, P, D, E, A>, PagingState.Data.Idle<Id, K, P, D, E>>
+typealias LoadNextEffect<Id, K, P, D, E, A> = Effect<Id, K, P, D, E, A, UpdateData<Id, K, P, D, E, A>, Data.Idle<Id, K, P, D, E>>
+
+typealias LoadEffect<Id, K, P, D, E, A> = Effect<Id, K, P, D, E, A, Load<Id, K, P, D, E, A>, PagingState<Id, K, P, D, E>>

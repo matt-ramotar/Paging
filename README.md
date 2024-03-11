@@ -25,7 +25,7 @@ dependencies {
 
 ### Basic Usage
 
-1. Create a `PagingConfig` to configure the paging behavior:
+#### 1. Create a `PagingConfig` to configure the paging behavior:
 
 ```kotlin
 val pagingConfig = PagingConfig(
@@ -35,7 +35,7 @@ val pagingConfig = PagingConfig(
 )
 ```
 
-2. Implement a `PagingSource` to provide data for pagination:
+#### 2. Implement a `PagingSource` to provide data for pagination:
 
 ```kotlin
 val pagingSource = DefaultPagingSource(
@@ -43,7 +43,7 @@ val pagingSource = DefaultPagingSource(
 )
 ```
 
-3. Configure the `Pager` using `PagerBuilder`:
+#### 3. Configure the `Pager` using `PagerBuilder`:
 
 ```kotlin
 val pager = PagerBuilder<Int, Int, MyParams, MyData, MyCustomError, MyCustomAction>(
@@ -53,12 +53,24 @@ val pager = PagerBuilder<Int, Int, MyParams, MyData, MyCustomError, MyCustomActi
     .pagingConfig(pagingConfig)
 
     .pagerBufferMaxSize(100)
+    
+    // Provide a custom paging source
+    .pagingSource(MyCustomPagingSource())
+    
+    // Or, use the default paging source
+    .defaultPagingSource(MyPagingSourceStreamProvider())
+    
+    // Or, use Store as your paging source
+    .mutableStorePagingSource(mutableStore)
 
     // Use the default reducer
     .defaultReducer {
         errorHandlingStrategy(ErrorHandlingStrategy.RetryLast(3))
         customActionReducer(MyCustomActionReducer())
     }
+    
+    // Or, provide a custom reducer
+    .reducer(MyCustomReducer())
 
     // Add custom middleware
     .middleware(MyCustomMiddleware1())
@@ -83,7 +95,7 @@ val pager = PagerBuilder<Int, Int, MyParams, MyData, MyCustomError, MyCustomActi
     .build()
 ```
 
-4. Observe the paging state and dispatch actions:
+#### 4. Observe the paging state and dispatch actions:
 
 ```kotlin
 pager.state.collect { state ->

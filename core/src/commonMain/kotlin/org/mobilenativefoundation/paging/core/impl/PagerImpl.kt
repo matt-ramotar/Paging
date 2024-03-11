@@ -20,6 +20,7 @@ import org.mobilenativefoundation.paging.core.ErrorHandlingStrategy
 import org.mobilenativefoundation.paging.core.FetchingStrategy
 import org.mobilenativefoundation.paging.core.Injector
 import org.mobilenativefoundation.paging.core.InsertionStrategy
+import org.mobilenativefoundation.paging.core.LoadEffect
 import org.mobilenativefoundation.paging.core.LoadNextEffect
 import org.mobilenativefoundation.paging.core.Logger
 import org.mobilenativefoundation.paging.core.Middleware
@@ -41,6 +42,7 @@ import org.mobilenativefoundation.paging.core.Reducer
 import org.mobilenativefoundation.paging.core.UserCustomActionReducer
 import org.mobilenativefoundation.store.store5.ExperimentalStoreApi
 import org.mobilenativefoundation.store.store5.MutableStore
+import org.mobilenativefoundation.store.store5.Store
 import org.mobilenativefoundation.store.store5.StoreReadRequest
 import org.mobilenativefoundation.store.store5.StoreReadResponse
 import kotlin.reflect.KClass
@@ -648,10 +650,33 @@ fun <Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : Any> MutableSt
     return StorePagingSourceStreamProvider(::createParentStream, ::createChildStream, keyFactory)
 }
 
+fun <Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : Any> Store<PagingKey<K, P>, PagingData<Id, K, P, D>>.pagingSourceStreamProvider(
+    keyFactory: StorePagingSourceKeyFactory<Id, K, P, D>
+): PagingSourceStreamProvider<Id, K, P, D, E> {
+
+    fun createParentStream(key: PagingKey<K, P>) = paged<Id, K, P, D, E>(key)
+
+    fun createChildStream(key: PagingKey<K, P>) = stream(StoreReadRequest.cached(key, refresh = false))
+
+    return StorePagingSourceStreamProvider(::createParentStream, ::createChildStream, keyFactory)
+}
+
 @OptIn(ExperimentalStoreApi::class)
 fun <Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any> MutableStore<PagingKey<K, P>, PagingData<Id, K, P, D>>.paged(
     key: PagingKey<K, P>
 ): Flow<PagingSource.LoadResult<Id, K, P, D, E>> = stream<Any>(StoreReadRequest.cached(key, refresh = false)).mapNotNull { response ->
+    when (response) {
+        is StoreReadResponse.Data -> PagingSource.LoadResult.Data(response.value as PagingData.Collection)
+        is StoreReadResponse.Error.Exception -> PagingSource.LoadResult.Error.Exception(response.error)
+        is StoreReadResponse.Error.Message -> PagingSource.LoadResult.Error.Exception(Exception(response.message))
+        is StoreReadResponse.Loading,
+        is StoreReadResponse.NoNewData -> null
+    }
+}
+
+fun <Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any> Store<PagingKey<K, P>, PagingData<Id, K, P, D>>.paged(
+    key: PagingKey<K, P>
+): Flow<PagingSource.LoadResult<Id, K, P, D, E>> = stream(StoreReadRequest.cached(key, refresh = false)).mapNotNull { response ->
     when (response) {
         is StoreReadResponse.Data -> PagingSource.LoadResult.Data(response.value as PagingData.Collection)
         is StoreReadResponse.Error.Exception -> PagingSource.LoadResult.Error.Exception(response.error)
@@ -727,4 +752,40 @@ class StorePagingSourceStreamProvider<Id : Comparable<Id>, K : Any, P : Any, D :
 
 fun interface StorePagingSourceKeyFactory<Id : Comparable<Id>, K : Any, P : Any, D : Any> {
     fun createKeyFor(single: PagingData.Single<Id, K, P, D>): PagingKey<K, P>
+}
+
+class DefaultLoadEffect<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : Any>(
+    loggerInjector: OptionalInjector<Logger>,
+    dispatcherInjector: Injector<Dispatcher<Id, K, P, D, E, A>>,
+    pagingSourceCollectorInjector: Injector<PagingSourceCollector<Id, K, P, D, E, A>>,
+    pagingSourceInjector: Injector<PagingSource<Id, K, P, D, E>>,
+    private val jobCoordinator: JobCoordinator,
+    private val stateManager: StateManager<Id, K, P, D, E>,
+) : LoadEffect<Id, K, P, D, E, A> {
+    private val logger = loggerInjector.inject()
+    private val dispatcher = dispatcherInjector.inject()
+    private val pagingSourceCollector = pagingSourceCollectorInjector.inject()
+    private val pagingSource = pagingSourceInjector.inject()
+
+    override fun invoke(action: PagingAction.Load<Id, K, P, D, E, A>, state: PagingState<Id, K, P, D, E>, dispatch: (PagingAction<Id, K, P, D, E, A>) -> Unit) {
+        logger?.log(
+            """
+            Running post reducer effect:
+                Effect: Load
+                State: $state
+                Action: $action
+            """.trimIndent(),
+        )
+
+        jobCoordinator.launchIfNotActive(action.key) {
+            val params = PagingSource.LoadParams(action.key, true)
+            pagingSourceCollector(
+                params,
+                pagingSource.stream(params),
+                stateManager.state.value,
+                dispatcher::dispatch
+            )
+        }
+    }
+
 }
