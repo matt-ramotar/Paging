@@ -41,6 +41,7 @@ import org.mobilenativefoundation.paging.core.QueueManager
 import org.mobilenativefoundation.paging.core.Reducer
 import org.mobilenativefoundation.paging.core.UserCustomActionReducer
 import org.mobilenativefoundation.paging.core.UserLoadEffect
+import org.mobilenativefoundation.paging.core.UserLoadMoreEffect
 import org.mobilenativefoundation.store.store5.ExperimentalStoreApi
 import org.mobilenativefoundation.store.store5.MutableStore
 import org.mobilenativefoundation.store.store5.Store
@@ -365,6 +366,7 @@ class DefaultLoadNextEffect<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : 
 }
 
 interface JobCoordinator {
+    fun launch(key: Any, block: suspend CoroutineScope.() -> Unit)
     fun launchIfNotActive(key: Any, block: suspend CoroutineScope.() -> Unit)
     fun cancel(key: Any)
     fun cancelAll()
@@ -375,20 +377,29 @@ class RealJobCoordinator(
 ) : JobCoordinator {
     private val jobs: MutableMap<Any, Job> = mutableMapOf()
 
+    override fun launch(
+        key: Any,
+        block: suspend CoroutineScope.() -> Unit,
+    ) {
+        cancel(key)
+
+        val job =
+            childScope.launch {
+                block()
+            }
+        jobs[key] = job
+
+        job.invokeOnCompletion {
+            job.cancel()
+        }
+    }
+
     override fun launchIfNotActive(
         key: Any,
         block: suspend CoroutineScope.() -> Unit,
     ) {
         if (jobs[key]?.isActive != true) {
-            val job =
-                childScope.launch {
-                    block()
-                }
-            jobs[key] = job
-
-            job.invokeOnCompletion {
-                job.cancel()
-            }
+            launch(key, block)
         }
     }
 
@@ -838,7 +849,42 @@ class DefaultUserLoadEffect<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : 
             """.trimIndent(),
         )
 
-        jobCoordinator.launchIfNotActive(action.key) {
+        jobCoordinator.launch(action.key) {
+            val params = PagingSource.LoadParams(action.key, true)
+            pagingSourceCollector.value(
+                params,
+                pagingSource.value.stream(params),
+                stateManager.state.value,
+                dispatcher.value::dispatch
+            )
+        }
+    }
+
+}
+
+class DefaultUserLoadMoreEffect<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : Any>(
+    loggerInjector: OptionalInjector<Logger>,
+    dispatcherInjector: Injector<Dispatcher<Id, K, P, D, E, A>>,
+    pagingSourceCollectorInjector: Injector<PagingSourceCollector<Id, K, P, D, E, A>>,
+    pagingSourceInjector: Injector<PagingSource<Id, K, P, D, E>>,
+    private val jobCoordinator: JobCoordinator,
+    private val stateManager: StateManager<Id, K, P, D, E>,
+) : UserLoadMoreEffect<Id, K, P, D, E, A> {
+    private val logger = lazy { loggerInjector.inject() }
+    private val dispatcher = lazy { dispatcherInjector.inject() }
+    private val pagingSourceCollector = lazy { pagingSourceCollectorInjector.inject() }
+    private val pagingSource = lazy { pagingSourceInjector.inject() }
+
+    override fun invoke(action: PagingAction.User.Load<Id, K, P, D, E, A>, state: PagingState.Data.LoadingMore<Id, K, P, D, E>, dispatch: (PagingAction<Id, K, P, D, E, A>) -> Unit) {
+        logger.value?.log(
+            """Running post reducer effect:
+                Effect: User load more
+                State: $state
+                Action: $action
+            """.trimIndent(),
+        )
+
+        jobCoordinator.launch(action.key) {
             val params = PagingSource.LoadParams(action.key, true)
             pagingSourceCollector.value(
                 params,

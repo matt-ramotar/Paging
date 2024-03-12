@@ -2,10 +2,12 @@ package org.mobilenativefoundation.paging.core.utils
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import org.mobilenativefoundation.paging.core.Effect
 import org.mobilenativefoundation.paging.core.Middleware
 import org.mobilenativefoundation.paging.core.PagingAction
 import org.mobilenativefoundation.paging.core.PagingData
 import org.mobilenativefoundation.paging.core.PagingKey
+import org.mobilenativefoundation.paging.core.PagingSource
 import org.mobilenativefoundation.paging.core.PagingState
 import org.mobilenativefoundation.paging.core.UserCustomActionReducer
 import org.mobilenativefoundation.store.store5.Converter
@@ -32,7 +34,10 @@ typealias SD = PagingData.Single<Int, Int, P, TimelineData>
 typealias A = TimelineAction
 typealias E = TimelineError
 
-sealed class TimelineError
+sealed class TimelineError {
+    data class Exception(val throwable: Throwable) : TimelineError()
+}
+
 sealed interface TimelineAction {
     data object ClearData : TimelineAction
 }
@@ -76,6 +81,17 @@ class AuthMiddleware(private val authTokenProvider: () -> String) : Middleware<I
             }
 
             else -> next(action)
+        }
+    }
+}
+
+class ErrorLoggingEffect(private val log: (error: E) -> Unit) : Effect<Id, K, P, D, E, A, PagingAction.UpdateError<Id, K, P, D, E, A>, PagingState.Error.Exception<Id, K, P, D, E>> {
+    override fun invoke(action: PagingAction.UpdateError<Id, K, P, D, E, A>, state: PagingState.Error.Exception<Id, K, P, D, E>, dispatch: (PagingAction<Id, K, P, D, E, A>) -> Unit) {
+        when (val error = action.error) {
+            is PagingSource.LoadResult.Error.Custom -> {}
+            is PagingSource.LoadResult.Error.Exception -> {
+                log(TimelineError.Exception(error.error))
+            }
         }
     }
 }
@@ -150,7 +166,6 @@ class RealFeedService(
 ) : FeedService {
 
     override suspend fun get(key: CK): TimelineData.Feed {
-
         setHeaders(key)
 
         error.value?.let {
@@ -190,11 +205,17 @@ class RealPostService(
 }
 
 
+data class Event(
+    val name: String,
+    val message: String
+)
+
 class Backend {
 
     private val posts = mutableMapOf<SK, TimelineData.Post>()
     private val error = MutableStateFlow<Throwable?>(null)
     private val tries: MutableMap<CK, Int> = mutableMapOf()
+    private val logs = mutableListOf<Event>()
 
     private val headers: MutableMap<CK, MutableMap<String, String>> = mutableMapOf()
 
@@ -238,6 +259,12 @@ class Backend {
         val headers = this.headers[key] ?: mapOf()
         return headers
     }
+
+    fun log(name: String, message: String) {
+        logs.add(Event(name, message))
+    }
+
+    fun getLogs() = logs
 }
 
 

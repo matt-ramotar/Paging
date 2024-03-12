@@ -2,9 +2,11 @@ package org.mobilenativefoundation.paging.core
 
 import app.cash.turbine.TurbineTestContext
 import app.cash.turbine.test
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.mobilenativefoundation.paging.core.impl.StorePagingSourceKeyFactory
 import org.mobilenativefoundation.paging.core.utils.A
@@ -13,6 +15,7 @@ import org.mobilenativefoundation.paging.core.utils.Backend
 import org.mobilenativefoundation.paging.core.utils.CK
 import org.mobilenativefoundation.paging.core.utils.D
 import org.mobilenativefoundation.paging.core.utils.E
+import org.mobilenativefoundation.paging.core.utils.ErrorLoggingEffect
 import org.mobilenativefoundation.paging.core.utils.Id
 import org.mobilenativefoundation.paging.core.utils.K
 import org.mobilenativefoundation.paging.core.utils.P
@@ -21,6 +24,7 @@ import org.mobilenativefoundation.paging.core.utils.PK
 import org.mobilenativefoundation.paging.core.utils.SD
 import org.mobilenativefoundation.paging.core.utils.TimelineAction
 import org.mobilenativefoundation.paging.core.utils.TimelineActionReducer
+import org.mobilenativefoundation.paging.core.utils.TimelineError
 import org.mobilenativefoundation.paging.core.utils.TimelineKeyParams
 import org.mobilenativefoundation.paging.core.utils.TimelineStoreFactory
 import org.mobilenativefoundation.store.store5.ExperimentalStoreApi
@@ -29,6 +33,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 @Suppress("TestFunctionName")
@@ -47,14 +52,15 @@ class RealPagerTest {
         timelineStore = timelineStoreFactory.create()
     }
 
-    private fun TestScope.StandardTestPager(
+
+    private fun TestScope.StandardTestPagerBuilder(
         initialKey: PK,
         anchorPosition: StateFlow<PK>,
         pagingConfig: PagingConfig = PagingConfig(10, prefetchDistance = 50, insertionStrategy = InsertionStrategy.APPEND),
         maxRetries: Int = 3,
         errorHandlingStrategy: ErrorHandlingStrategy = ErrorHandlingStrategy.RetryLast(maxRetries),
         timelineActionReducer: TimelineActionReducer? = null,
-        middleware: List<Middleware<Id, K, P, D, E, A>> = emptyList()
+        middleware: List<Middleware<Id, K, P, D, E, A>> = emptyList(),
     ) = PagerBuilder<Id, K, P, D, E, A>(
         scope = this,
         initialKey = initialKey,
@@ -85,7 +91,15 @@ class RealPagerTest {
 
         .defaultLogger()
 
-        .build()
+    private fun TestScope.StandardTestPager(
+        initialKey: PK,
+        anchorPosition: StateFlow<PK>,
+        pagingConfig: PagingConfig = PagingConfig(10, prefetchDistance = 50, insertionStrategy = InsertionStrategy.APPEND),
+        maxRetries: Int = 3,
+        errorHandlingStrategy: ErrorHandlingStrategy = ErrorHandlingStrategy.RetryLast(maxRetries),
+        timelineActionReducer: TimelineActionReducer? = null,
+        middleware: List<Middleware<Id, K, P, D, E, A>> = emptyList(),
+    ) = StandardTestPagerBuilder(initialKey, anchorPosition, pagingConfig, maxRetries, errorHandlingStrategy, timelineActionReducer, middleware).build()
 
 
     private suspend fun TurbineTestContext<PagingState<Id, K, P, D, E>>.verifyPrefetching(
@@ -367,5 +381,89 @@ class RealPagerTest {
             expectNoEvents()
         }
 
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun testEffectsAreLaunchedAfterReducingState() = testScope.runTest {
+        val pageSize = 10
+        val prefetchDistance = 0
+        val initialKey: CK = PagingKey(0, TimelineKeyParams.Collection(pageSize))
+        val anchorPosition = MutableStateFlow(initialKey)
+
+        val authToken = "Bearer token123"
+        val authTokenProvider = { authToken }
+        val authMiddleware = AuthMiddleware(authTokenProvider)
+
+        val message = "Failed to load data"
+        val throwable = Throwable(message)
+
+        val errorLoggingEffect = ErrorLoggingEffect {
+            when (it) {
+                is TimelineError.Exception -> backend.log("Exception", it.throwable.message ?: "")
+            }
+        }
+
+        val pager = StandardTestPagerBuilder(
+            initialKey,
+            anchorPosition,
+            pagingConfig = PagingConfig(pageSize, prefetchDistance, InsertionStrategy.APPEND),
+            errorHandlingStrategy = ErrorHandlingStrategy.PassThrough,
+            timelineActionReducer = TimelineActionReducer(),
+            middleware = listOf(authMiddleware)
+        ).effect(PagingAction.UpdateError::class, PagingState.Error.Exception::class, errorLoggingEffect).build()
+
+        val state = pager.state
+
+        state.test {
+            val initial = awaitItem()
+            assertIs<PagingState.Initial<Id, K, P, D, E>>(initial)
+
+            backend.failWith(throwable)
+
+            pager.dispatch(PagingAction.User.Load(initialKey))
+
+            val loading = awaitItem()
+            assertIs<PagingState.Loading<Id, K, P, D, E>>(loading)
+
+            val error = awaitItem()
+            assertIs<PagingState.Error<Id, K, P, D, E, E>>(error)
+
+            assertEquals(1, backend.getLogs().size)
+            assertEquals(message, backend.getLogs().first().message)
+
+            backend.clearError()
+
+            pager.dispatch(PagingAction.User.Load(initialKey))
+
+            val loading2 = awaitItem()
+            assertIs<PagingState.Loading<Id, K, P, D, E>>(loading2)
+
+            val idle = awaitItem()
+            assertIs<PagingState.Data.Idle<Id, K, P, D, E>>(idle)
+            assertEquals(pageSize, idle.data.size)
+
+            assertEquals(1, backend.getLogs().size)
+
+            val nextKey = idle.nextKey
+            assertNotNull(nextKey)
+
+            backend.failWith(throwable)
+
+            advanceUntilIdle()
+
+            pager.dispatch(PagingAction.User.Load(nextKey))
+
+            val loadingMore = awaitItem()
+            assertIs<PagingState.Data.LoadingMore<Id, K, P, D, E>>(loadingMore)
+
+            val error2 = awaitItem()
+            assertIs<PagingState.Data.ErrorLoadingMore<Id, K, P, D, E, E>>(error2)
+
+            // The effect is configured to run for PagingState.Error only, not also PagingState.Data.ErrorLoadingMore
+            assertEquals(1, backend.getLogs().size)
+
+            expectNoEvents()
+        }
     }
 }
