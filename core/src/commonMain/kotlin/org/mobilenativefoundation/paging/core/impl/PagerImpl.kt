@@ -172,9 +172,13 @@ class RealDispatcher<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A 
 
     override fun <PA : PagingAction<Id, K, P, D, E, A>> dispatch(action: PA, index: Int) {
         if (index < middleware.size) {
-            middleware[index].apply(action) { nextAction ->
-                dispatch(nextAction, index + 1)
+
+            childScope.launch {
+                middleware[index].apply(action) { nextAction ->
+                    dispatch(nextAction, index + 1)
+                }
             }
+
         } else {
             childScope.launch {
                 reduceAndLaunchEffects(action)

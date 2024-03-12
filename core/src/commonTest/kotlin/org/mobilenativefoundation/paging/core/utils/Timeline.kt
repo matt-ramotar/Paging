@@ -2,6 +2,7 @@ package org.mobilenativefoundation.paging.core.utils
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import org.mobilenativefoundation.paging.core.Middleware
 import org.mobilenativefoundation.paging.core.PagingAction
 import org.mobilenativefoundation.paging.core.PagingData
 import org.mobilenativefoundation.paging.core.PagingKey
@@ -57,6 +58,28 @@ class TimelineActionReducer : UserCustomActionReducer<Id, K, P, D, E, A> {
 
 }
 
+class AuthMiddleware(private val authTokenProvider: () -> String) : Middleware<Id, K, P, D, E, A> {
+    private fun setAuthToken(headers: MutableMap<String, String>) = headers.apply {
+        this["auth"] = authTokenProvider()
+    }
+
+    override suspend fun apply(action: PagingAction<Id, K, P, D, E, A>, next: suspend (PagingAction<Id, K, P, D, E, A>) -> Unit) {
+        when (action) {
+            is PagingAction.User.Load -> {
+                setAuthToken(action.key.params.headers)
+                next(action)
+            }
+
+            is PagingAction.Load -> {
+                setAuthToken(action.key.params.headers)
+                next(action)
+            }
+
+            else -> next(action)
+        }
+    }
+}
+
 enum class KeyType {
     SINGLE,
     COLLECTION
@@ -82,11 +105,17 @@ interface Filter<T : Any> {
 
 
 sealed interface TimelineKeyParams {
-    data object Single : TimelineKeyParams
+    val headers: MutableMap<String, String>
+
+    data class Single(
+        override val headers: MutableMap<String, String> = mutableMapOf(),
+    ) : TimelineKeyParams
+
     data class Collection(
         val size: Int,
         val filter: List<Filter<SD>> = emptyList(),
-        val sort: Sort? = null
+        val sort: Sort? = null,
+        override val headers: MutableMap<String, String> = mutableMapOf()
     ) : TimelineKeyParams
 }
 
@@ -116,10 +145,13 @@ interface PostService {
 class RealFeedService(
     private val posts: List<TimelineData.Post>,
     private val error: StateFlow<Throwable?>,
-    private val incrementTriesFor: (key: CK) -> Unit
+    private val incrementTriesFor: (key: CK) -> Unit,
+    private val setHeaders: (key: CK) -> Unit
 ) : FeedService {
 
     override suspend fun get(key: CK): TimelineData.Feed {
+
+        setHeaders(key)
 
         error.value?.let {
             incrementTriesFor(key)
@@ -164,17 +196,27 @@ class Backend {
     private val error = MutableStateFlow<Throwable?>(null)
     private val tries: MutableMap<CK, Int> = mutableMapOf()
 
+    private val headers: MutableMap<CK, MutableMap<String, String>> = mutableMapOf()
+
     init {
-        (1..200).map { TimelineData.Post(it, "Post $it") }.forEach { this.posts[PagingKey(it.id, TimelineKeyParams.Single)] = it }
+        (1..200).map { TimelineData.Post(it, "Post $it") }.forEach { this.posts[PagingKey(it.id, TimelineKeyParams.Single())] = it }
     }
 
-    val feedService: FeedService = RealFeedService(posts.values.toList(), error) { key ->
+    val feedService: FeedService = RealFeedService(posts.values.toList(), error, { key ->
         if (key !in tries) {
             tries[key] = 0
         }
 
         tries[key] = tries[key]!! + 1
-    }
+    }, { key ->
+        if (key !in headers) {
+            headers[key] = key.params.headers
+        }
+
+        val mergedHeaders = headers[key]!! + key.params.headers
+
+        headers[key] = mergedHeaders.toMutableMap()
+    })
 
     val postService: PostService = RealPostService(posts, error)
 
@@ -190,6 +232,11 @@ class Backend {
         val tries = tries[key] ?: 0
         val retries = tries - 1
         return max(retries, 0)
+    }
+
+    fun getHeadersFor(key: CK): Map<String, String> {
+        val headers = this.headers[key] ?: mapOf()
+        return headers
     }
 }
 
@@ -216,8 +263,8 @@ class TimelineStoreFactory(
                 )
             }
 
-            TimelineKeyParams.Single -> {
-                val sk = PagingKey(key.key, TimelineKeyParams.Single)
+            is TimelineKeyParams.Single -> {
+                val sk = PagingKey(key.key, params)
                 val post = postService.get(sk)
                 if (post == null) {
                     throw Throwable("Post is null")
@@ -235,12 +282,12 @@ class TimelineStoreFactory(
 
     private fun createUpdater(): Updater<PK, PD, Any> = Updater.by(
         post = { key, value ->
-            when (key.params) {
-                TimelineKeyParams.Single -> {
+            when (val params = key.params) {
+                is TimelineKeyParams.Single -> {
                     if (value is PagingData.Single) {
                         val updatedValue = value.data
                         if (updatedValue is TimelineData.Post) {
-                            val sk = PagingKey(key.key, TimelineKeyParams.Single)
+                            val sk = PagingKey(key.key, params)
                             val response = postService.update(sk, updatedValue)
                             UpdaterResult.Success.Typed(response)
                         } else {

@@ -8,6 +8,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.mobilenativefoundation.paging.core.impl.StorePagingSourceKeyFactory
 import org.mobilenativefoundation.paging.core.utils.A
+import org.mobilenativefoundation.paging.core.utils.AuthMiddleware
 import org.mobilenativefoundation.paging.core.utils.Backend
 import org.mobilenativefoundation.paging.core.utils.CK
 import org.mobilenativefoundation.paging.core.utils.D
@@ -46,14 +47,15 @@ class RealPagerTest {
         timelineStore = timelineStoreFactory.create()
     }
 
-    private fun TestScope.TestPager(
+    private fun TestScope.StandardTestPager(
         initialKey: PK,
         anchorPosition: StateFlow<PK>,
         pagingConfig: PagingConfig = PagingConfig(10, prefetchDistance = 50, insertionStrategy = InsertionStrategy.APPEND),
         maxRetries: Int = 3,
         errorHandlingStrategy: ErrorHandlingStrategy = ErrorHandlingStrategy.RetryLast(maxRetries),
-        timelineActionReducer: TimelineActionReducer? = null
-    ): Pager<Id, K, P, D, E, A> = PagerBuilder<Id, K, P, D, E, A>(
+        timelineActionReducer: TimelineActionReducer? = null,
+        middleware: List<Middleware<Id, K, P, D, E, A>> = emptyList()
+    ) = PagerBuilder<Id, K, P, D, E, A>(
         scope = this,
         initialKey = initialKey,
         initialState = PagingState.Initial(initialKey, null),
@@ -63,7 +65,7 @@ class RealPagerTest {
 
         .mutableStorePagingSource(timelineStore) {
             StorePagingSourceKeyFactory {
-                PagingKey(it.id, TimelineKeyParams.Single)
+                PagingKey(it.id, TimelineKeyParams.Single())
             }
         }
 
@@ -74,6 +76,13 @@ class RealPagerTest {
                 customActionReducer(it)
             }
         }
+
+        .apply {
+            middleware.forEach {
+                this.middleware(it)
+            }
+        }
+
         .defaultLogger()
 
         .build()
@@ -124,14 +133,18 @@ class RealPagerTest {
     fun testPrefetchingWhenPrefetchDistanceIsGreaterThan0() = testScope.runTest {
         val pageSize = 10
         val prefetchDistance = 50
-        val initialKey: PK = PagingKey(0, TimelineKeyParams.Collection(pageSize))
+        val initialKey: CK = PagingKey(0, TimelineKeyParams.Collection(pageSize))
         val anchorPosition = MutableStateFlow(initialKey)
-        val pager = TestPager(initialKey, anchorPosition, pagingConfig = PagingConfig(pageSize, prefetchDistance, InsertionStrategy.APPEND))
+        val pager = StandardTestPager(initialKey, anchorPosition, pagingConfig = PagingConfig(pageSize, prefetchDistance, InsertionStrategy.APPEND))
 
         val state = pager.state
 
         state.test {
             verifyPrefetching(pageSize, prefetchDistance)
+
+            val headers = backend.getHeadersFor(initialKey)
+            assertEquals(0, headers.keys.size)
+
             expectNoEvents()
         }
     }
@@ -140,14 +153,18 @@ class RealPagerTest {
     fun testPrefetchingWhenPrefetchDistanceEquals0() = testScope.runTest {
         val pageSize = 10
         val prefetchDistance = 0
-        val initialKey: PK = PagingKey(0, TimelineKeyParams.Collection(pageSize))
+        val initialKey: CK = PagingKey(0, TimelineKeyParams.Collection(pageSize))
         val anchorPosition = MutableStateFlow(initialKey)
-        val pager = TestPager(initialKey, anchorPosition, pagingConfig = PagingConfig(pageSize, prefetchDistance, InsertionStrategy.APPEND))
+        val pager = StandardTestPager(initialKey, anchorPosition, pagingConfig = PagingConfig(pageSize, prefetchDistance, InsertionStrategy.APPEND))
 
         val state = pager.state
 
         state.test {
             verifyPrefetching(pageSize, prefetchDistance)
+
+            val headers = backend.getHeadersFor(initialKey)
+            assertEquals(0, headers.keys.size)
+
             expectNoEvents()
         }
     }
@@ -156,9 +173,9 @@ class RealPagerTest {
     fun testUserLoadWhenPrefetchDistanceEquals0() = testScope.runTest {
         val pageSize = 10
         val prefetchDistance = 0
-        val initialKey: PK = PagingKey(0, TimelineKeyParams.Collection(pageSize))
+        val initialKey: CK = PagingKey(0, TimelineKeyParams.Collection(pageSize))
         val anchorPosition = MutableStateFlow(initialKey)
-        val pager = TestPager(initialKey, anchorPosition, pagingConfig = PagingConfig(pageSize, prefetchDistance, InsertionStrategy.APPEND))
+        val pager = StandardTestPager(initialKey, anchorPosition, pagingConfig = PagingConfig(pageSize, prefetchDistance, InsertionStrategy.APPEND))
 
         val state = pager.state
 
@@ -173,6 +190,9 @@ class RealPagerTest {
             val idle = awaitItem()
             assertIs<PagingState.Data.Idle<Id, K, P, D, E>>(idle)
             assertEquals(pageSize, idle.data.size)
+
+            val headers = backend.getHeadersFor(initialKey)
+            assertEquals(0, headers.keys.size)
 
             expectNoEvents()
         }
@@ -190,7 +210,7 @@ class RealPagerTest {
         val throwable = Throwable(message)
         backend.failWith(throwable)
 
-        val pager = TestPager(initialKey, anchorPosition, pagingConfig = PagingConfig(pageSize, prefetchDistance, InsertionStrategy.APPEND), maxRetries = maxRetries)
+        val pager = StandardTestPager(initialKey, anchorPosition, pagingConfig = PagingConfig(pageSize, prefetchDistance, InsertionStrategy.APPEND), maxRetries = maxRetries)
 
         val state = pager.state
 
@@ -210,6 +230,9 @@ class RealPagerTest {
             val retryCount = backend.getRetryCountFor(initialKey)
             assertEquals(maxRetries, retryCount)
 
+            val headers = backend.getHeadersFor(initialKey)
+            assertEquals(0, headers.keys.size)
+
             expectNoEvents()
         }
     }
@@ -226,7 +249,12 @@ class RealPagerTest {
         val throwable = Throwable(message)
         backend.failWith(throwable)
 
-        val pager = TestPager(initialKey, anchorPosition, pagingConfig = PagingConfig(pageSize, prefetchDistance, InsertionStrategy.APPEND), errorHandlingStrategy = ErrorHandlingStrategy.PassThrough)
+        val pager = StandardTestPager(
+            initialKey,
+            anchorPosition,
+            pagingConfig = PagingConfig(pageSize, prefetchDistance, InsertionStrategy.APPEND),
+            errorHandlingStrategy = ErrorHandlingStrategy.PassThrough
+        )
 
         val state = pager.state
 
@@ -245,6 +273,9 @@ class RealPagerTest {
             val retryCount = backend.getRetryCountFor(initialKey)
             assertEquals(0, retryCount)
 
+            val headers = backend.getHeadersFor(initialKey)
+            assertEquals(0, headers.keys.size)
+
             expectNoEvents()
         }
     }
@@ -256,7 +287,7 @@ class RealPagerTest {
         val initialKey: CK = PagingKey(0, TimelineKeyParams.Collection(pageSize))
         val anchorPosition = MutableStateFlow(initialKey)
 
-        val pager = TestPager(
+        val pager = StandardTestPager(
             initialKey,
             anchorPosition,
             pagingConfig = PagingConfig(pageSize, prefetchDistance, InsertionStrategy.APPEND),
@@ -285,7 +316,56 @@ class RealPagerTest {
             assertIs<PagingState.Data.Idle<Id, K, P, D, E>>(modifiedIdle)
             assertTrue(modifiedIdle.data.isEmpty())
 
+            val headers = backend.getHeadersFor(initialKey)
+            assertEquals(0, headers.keys.size)
+
             expectNoEvents()
         }
+    }
+
+    @Test
+    fun testMiddlewareInterceptsAndModifiesActions() = testScope.runTest {
+        val pageSize = 10
+        val prefetchDistance = 0
+        val initialKey: CK = PagingKey(0, TimelineKeyParams.Collection(pageSize))
+        val anchorPosition = MutableStateFlow(initialKey)
+
+        val authToken = "Bearer token123"
+        val authTokenProvider = { authToken }
+        val authMiddleware = AuthMiddleware(authTokenProvider)
+
+        val pager = StandardTestPager(
+            initialKey,
+            anchorPosition,
+            pagingConfig = PagingConfig(pageSize, prefetchDistance, InsertionStrategy.APPEND),
+            errorHandlingStrategy = ErrorHandlingStrategy.PassThrough,
+            timelineActionReducer = TimelineActionReducer(),
+            middleware = listOf(authMiddleware)
+        )
+
+        val state = pager.state
+
+        state.test {
+            val initial = awaitItem()
+            assertIs<PagingState.Initial<Id, K, P, D, E>>(initial)
+
+            pager.dispatch(PagingAction.User.Load(initialKey))
+
+            val loading = awaitItem()
+            assertIs<PagingState.Loading<Id, K, P, D, E>>(loading)
+
+            val idle = awaitItem()
+            assertIs<PagingState.Data.Idle<Id, K, P, D, E>>(idle)
+            assertEquals(pageSize, idle.data.size)
+
+            val headers = backend.getHeadersFor(initialKey)
+
+            assertEquals(1, headers.keys.size)
+            assertEquals("auth", headers.keys.first())
+            assertEquals(authToken, headers.values.first())
+
+            expectNoEvents()
+        }
+
     }
 }

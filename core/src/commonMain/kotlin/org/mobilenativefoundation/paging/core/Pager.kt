@@ -266,7 +266,7 @@ interface Middleware<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A 
      * @param next A suspending function that should be invoked with the processed action to pass it to the next middleware or the reducer.
      * If the middleware does not want to pass the action further, it can choose not to invoke this function.
      */
-    fun apply(action: PagingAction<Id, K, P, D, E, A>, next: suspend (PagingAction<Id, K, P, D, E, A>) -> Unit)
+    suspend fun apply(action: PagingAction<Id, K, P, D, E, A>, next: suspend (PagingAction<Id, K, P, D, E, A>) -> Unit)
 }
 
 interface Injector<T : Any> {
