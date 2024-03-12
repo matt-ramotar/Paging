@@ -543,6 +543,7 @@ class PagerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : 
         return RealPager(
             initialKey = initialKey,
             dispatcher = dispatcherInjector.inject(),
+            pagingConfigInjector = pagingConfigInjector,
             stateManager = stateManager,
         )
     }

@@ -86,11 +86,16 @@ class StateManager<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any>(
 class RealPager<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : Any>(
     initialKey: PagingKey<K, P>,
     stateManager: StateManager<Id, K, P, D, E>,
+    pagingConfigInjector: Injector<PagingConfig>,
     private val dispatcher: Dispatcher<Id, K, P, D, E, A>,
 ) : Pager<Id, K, P, D, E, A> {
 
+    private val pagingConfig = lazy { pagingConfigInjector.inject() }
+
     init {
-        dispatcher.dispatch(PagingAction.Load(initialKey))
+        if (pagingConfig.value.prefetchDistance > 0) {
+            dispatcher.dispatch(PagingAction.Load(initialKey))
+        }
     }
 
     override val state: StateFlow<PagingState<Id, K, P, D, E>> = stateManager.state

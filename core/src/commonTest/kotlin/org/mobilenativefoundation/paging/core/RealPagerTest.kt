@@ -70,7 +70,7 @@ class RealPagerTest {
         .build()
 
 
-    private suspend fun TurbineTestContext<PagingState<Id, K, P, D, E>>.testPrefetching() {
+    private suspend fun TurbineTestContext<PagingState<Id, K, P, D, E>>.verifyPrefetching() {
 
         fun checkRange(data: List<SD>) {
             data.forEachIndexed { index, item ->
@@ -129,7 +129,7 @@ class RealPagerTest {
     }
 
     @Test
-    fun testPrefetching() = testScope.runTest {
+    fun testPrefetchingWhenPrefetchDistanceIsGreaterThan0() = testScope.runTest {
         val initialKey: PK = PagingKey(0, TimelineKeyParams.Collection(size))
         val anchorPosition = MutableStateFlow(initialKey)
         val pager = TestPager(initialKey, anchorPosition)
@@ -137,7 +137,23 @@ class RealPagerTest {
         val state = pager.state
 
         state.test {
-            this.testPrefetching()
+            verifyPrefetching()
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun testPrefetchingWhenPrefetchDistanceEquals0() = testScope.runTest {
+        val initialKey: PK = PagingKey(0, TimelineKeyParams.Collection(size))
+        val anchorPosition = MutableStateFlow(initialKey)
+        val pager = TestPager(initialKey, anchorPosition, pagingConfig = PagingConfig(10, 0, InsertionStrategy.APPEND))
+
+        val state = pager.state
+
+        state.test {
+            val initial = awaitItem()
+            assertIs<PagingState.Initial<Id, K, P, D, E>>(initial)
+
             expectNoEvents()
         }
     }
