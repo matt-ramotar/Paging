@@ -12,7 +12,9 @@ A solution for efficient paging in Kotlin Multiplatform projects.
 - Includes built-in hooks for logging and error handling
 - Uses a modular architecture with unidirectional data flow to make it easier to reason about and maintain
 
-## Installation
+## Getting Started
+
+### 1. Installation
 
 Add the following dependency to your project:
 
@@ -22,9 +24,7 @@ dependencies {
 }
 ```
 
-## Getting Started
-
-### 1. Create a `PagingConfig` to configure the paging behavior:
+### 2. Create a `PagingConfig` to configure the paging behavior:
 
 ```kotlin
 val pagingConfig = PagingConfig(
@@ -34,7 +34,7 @@ val pagingConfig = PagingConfig(
 )
 ```
 
-### 2. Implement a `PagingSource` to provide data for pagination:
+### 3. Implement a `PagingSource` to provide data for pagination:
 
 ```kotlin
 val pagingSource = DefaultPagingSource(
@@ -42,7 +42,7 @@ val pagingSource = DefaultPagingSource(
 )
 ```
 
-### 3. Configure the `Pager` using `PagerBuilder`:
+### 4. Configure the `Pager` using `PagerBuilder`:
 
 ```kotlin
 val pager = PagerBuilder<MyId, MyKey, MyParams, MyData, MyCustomError, MyCustomAction>(
@@ -94,7 +94,7 @@ val pager = PagerBuilder<MyId, MyKey, MyParams, MyData, MyCustomError, MyCustomA
     .build()
 ```
 
-### 4. Observe the paging state and dispatch actions:
+### 5. Observe the paging state and dispatch actions:
 
 ```kotlin
 pager.state.collect { state ->
@@ -123,8 +123,6 @@ pager.state.collect { state ->
 
 ## Advanced Usage
 
-### Using Type Aliases
-
 ```kotlin
 typealias Id = MyId
 typealias K = MyKey
@@ -135,8 +133,6 @@ typealias A = MyCustomAction
 ```
 
 ### Handling Errors
-
-This library supports different error handling strategies to handle errors that occur during the paging process.
 
 #### 1. **Built-In Error Handling**: You can configure error handling strategy using the `errorHandlingStrategy` function when building the pager.
 
