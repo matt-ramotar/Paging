@@ -22,6 +22,7 @@ import org.mobilenativefoundation.paging.core.impl.DefaultPagingSource
 import org.mobilenativefoundation.paging.core.impl.DefaultPagingSourceCollector
 import org.mobilenativefoundation.paging.core.impl.DefaultReducer
 import org.mobilenativefoundation.paging.core.impl.DefaultUserLoadEffect
+import org.mobilenativefoundation.paging.core.impl.DefaultUserLoadMoreEffect
 import org.mobilenativefoundation.paging.core.impl.Dispatcher
 import org.mobilenativefoundation.paging.core.impl.EffectsHolder
 import org.mobilenativefoundation.paging.core.impl.EffectsLauncher
@@ -159,7 +160,7 @@ sealed interface PagingState<Id : Comparable<Id>, out K : Any, out P : Any, out 
             override val prefetchPosition: PagingKey<K, P>?
         ) : Data<Id, K, P, D, E>
 
-        data class ErrorLoadingMore<Id : Comparable<Id>, K : Any, P : Any, D : Any, RE : Any>(
+        data class ErrorLoadingMore<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, RE : Any>(
             override val error: RE,
             override val data: List<PagingData.Single<Id, K, P, D>>,
             override val itemsBefore: Int?,
@@ -167,7 +168,7 @@ sealed interface PagingState<Id : Comparable<Id>, out K : Any, out P : Any, out 
             override val nextKey: PagingKey<K, P>?,
             override val currentKey: PagingKey<K, P>,
             override val prefetchPosition: PagingKey<K, P>?
-        ) : Data<Id, K, P, D, Nothing>, Error<Id, K, P, D, Nothing, RE>
+        ) : Data<Id, K, P, D, E>, Error<Id, K, P, D, E, RE>
     }
 }
 
@@ -202,9 +203,9 @@ sealed interface PagingAction<Id : Comparable<Id>, out K : Any, out P : Any, out
          *
          * @param action The custom action payload.
          */
-        data class Custom<A : Any>(
+        data class Custom<Id : Comparable<Id>, out K : Any, out P : Any, out D : Any, out E : Any, out A : Any>(
             val action: A
-        ) : User<Nothing, Nothing, Nothing, Nothing, Nothing, A>
+        ) : User<Id, K, P, D, E, A>
     }
 
 
@@ -266,7 +267,7 @@ interface Middleware<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A 
      * @param next A suspending function that should be invoked with the processed action to pass it to the next middleware or the reducer.
      * If the middleware does not want to pass the action further, it can choose not to invoke this function.
      */
-    fun apply(action: PagingAction<Id, K, P, D, E, A>, next: suspend (PagingAction<Id, K, P, D, E, A>) -> Unit)
+    suspend fun apply(action: PagingAction<Id, K, P, D, E, A>, next: suspend (PagingAction<Id, K, P, D, E, A>) -> Unit)
 }
 
 interface Injector<T : Any> {
@@ -372,6 +373,15 @@ class PagerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : 
         stateManager = stateManager
     )
 
+    private var userLoadMoreEffect: UserLoadMoreEffect<Id, K, P, D, E, A> = DefaultUserLoadMoreEffect(
+        loggerInjector = loggerInjector,
+        dispatcherInjector = dispatcherInjector,
+        jobCoordinator = jobCoordinator,
+        pagingSourceCollectorInjector = pagingSourceCollectorInjector,
+        pagingSourceInjector = pagingSourceInjector,
+        stateManager = stateManager
+    )
+
     private lateinit var reducer: Reducer<Id, K, P, D, E, A>
 
     /**
@@ -417,8 +427,8 @@ class PagerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : 
      * @return The [PagerBuilder] instance for chaining.
      */
     fun <PA : PagingAction<Id, K, P, D, E, A>, S : PagingState<Id, K, P, D, E>> effect(
-        action: KClass<out PagingAction<Id, K, P, D, E, A>>,
-        state: KClass<out PagingState<Id, K, P, D, E>>,
+        action: KClass<out PagingAction<*, *, *, *, *, *>>,
+        state: KClass<out PagingState<*, *, *, *, *>>,
         effect: Effect<Id, K, P, D, E, A, PA, S>
     ) = apply {
         this.effectsHolder.put(action, state, effect)
@@ -434,6 +444,7 @@ class PagerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : 
 
     fun appLoadEffect(effect: AppLoadEffect<Id, K, P, D, E, A>) = apply { this.appLoadEffect = effect }
     fun userLoadEffect(effect: UserLoadEffect<Id, K, P, D, E, A>) = apply { this.userLoadEffect = effect }
+    fun userLoadMoreEffect(effect: UserLoadMoreEffect<Id, K, P, D, E, A>) = apply { this.userLoadMoreEffect = effect }
 
     /**
      * Adds a [Middleware] to the pager.
@@ -513,6 +524,7 @@ class PagerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : 
         this.effectsHolder.put(UpdateData::class, Data.Idle::class, this.loadNextEffect)
         this.effectsHolder.put(Load::class, PagingState::class, this.appLoadEffect)
         this.effectsHolder.put(User.Load::class, Loading::class, this.userLoadEffect)
+        this.effectsHolder.put(User.Load::class, Data.LoadingMore::class, this.userLoadMoreEffect)
     }
 
     private fun provideDispatcher() {
@@ -949,7 +961,7 @@ interface UserCustomActionReducer<Id : Comparable<Id>, K : Any, P : Any, D : Any
      * @return The new [PagingState] after applying the custom user action.
      */
     fun reduce(
-        action: User.Custom<A>,
+        action: User.Custom<Id, K, P, D, E, A>,
         state: PagingState<Id, K, P, D, E>
     ): PagingState<Id, K, P, D, E>
 }
@@ -1074,3 +1086,4 @@ typealias LoadNextEffect<Id, K, P, D, E, A> = Effect<Id, K, P, D, E, A, UpdateDa
 
 typealias AppLoadEffect<Id, K, P, D, E, A> = Effect<Id, K, P, D, E, A, Load<Id, K, P, D, E, A>, PagingState<Id, K, P, D, E>>
 typealias UserLoadEffect<Id, K, P, D, E, A> = Effect<Id, K, P, D, E, A, User.Load<Id, K, P, D, E, A>, Loading<Id, K, P, D, E>>
+typealias UserLoadMoreEffect<Id, K, P, D, E, A> = Effect<Id, K, P, D, E, A, User.Load<Id, K, P, D, E, A>, Data.LoadingMore<Id, K, P, D, E>>
