@@ -9,6 +9,7 @@ import kotlinx.coroutines.test.runTest
 import org.mobilenativefoundation.paging.core.impl.StorePagingSourceKeyFactory
 import org.mobilenativefoundation.paging.core.utils.A
 import org.mobilenativefoundation.paging.core.utils.Backend
+import org.mobilenativefoundation.paging.core.utils.CK
 import org.mobilenativefoundation.paging.core.utils.D
 import org.mobilenativefoundation.paging.core.utils.E
 import org.mobilenativefoundation.paging.core.utils.Id
@@ -46,6 +47,7 @@ class RealPagerTest {
         initialKey: PK,
         anchorPosition: StateFlow<PK>,
         pagingConfig: PagingConfig = PagingConfig(10, prefetchDistance = 50, insertionStrategy = InsertionStrategy.APPEND),
+        maxRetries: Int = 3,
     ): Pager<Id, K, P, D, E, A> = PagerBuilder<Id, K, P, D, E, A>(
         scope = this,
         initialKey = initialKey,
@@ -61,7 +63,7 @@ class RealPagerTest {
         }
 
         .defaultReducer {
-            errorHandlingStrategy(ErrorHandlingStrategy.RetryLast())
+            errorHandlingStrategy(ErrorHandlingStrategy.RetryLast(maxRetries))
         }
         .defaultLogger()
 
@@ -140,6 +142,7 @@ class RealPagerTest {
             expectNoEvents()
         }
     }
+
     @Test
     fun testUserLoadWhenPrefetchDistanceEquals0() = testScope.runTest {
         val pageSize = 10
@@ -161,6 +164,42 @@ class RealPagerTest {
             val idle = awaitItem()
             assertIs<PagingState.Data.Idle<Id, K, P, D, E>>(idle)
             assertEquals(pageSize, idle.data.size)
+
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun testErrorHandlingStrategyRetryLast() = testScope.runTest {
+        val pageSize = 10
+        val prefetchDistance = 0
+        val initialKey: CK = PagingKey(0, TimelineKeyParams.Collection(pageSize))
+        val anchorPosition = MutableStateFlow(initialKey)
+        val maxRetries = 3
+
+        val message = "Failed to load data"
+        val throwable = Throwable(message)
+        backend.failWith(throwable)
+
+        val pager = TestPager(initialKey, anchorPosition, pagingConfig = PagingConfig(pageSize, prefetchDistance, InsertionStrategy.APPEND), maxRetries = maxRetries)
+
+        val state = pager.state
+
+        state.test {
+            val initial = awaitItem()
+            assertIs<PagingState.Initial<Id, K, P, D, E>>(initial)
+
+            pager.dispatch(PagingAction.User.Load(initialKey))
+
+            val loading = awaitItem()
+            assertIs<PagingState.Loading<Id, K, P, D, E>>(loading)
+
+            val error = awaitItem()
+            assertIs<PagingState.Error.Exception<Id, K, P, D, E>>(error)
+            assertEquals(throwable, error.error)
+
+            val retryCount = backend.getRetryCountFor(initialKey)
+            assertEquals(maxRetries, retryCount)
 
             expectNoEvents()
         }

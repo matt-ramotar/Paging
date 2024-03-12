@@ -383,7 +383,7 @@ class RealJobCoordinator(
             jobs[key] = job
 
             job.invokeOnCompletion {
-                cancel(key)
+                job.cancel()
             }
         }
     }
@@ -455,7 +455,8 @@ class DefaultReducer<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A 
     private val errorHandlingStrategy: ErrorHandlingStrategy,
     private val mutablePagingBuffer: MutablePagingBuffer<Id, K, P, D>,
     private val aggregatingStrategy: AggregatingStrategy<Id, K, P, D>,
-    private val retriesManager: RetriesManager<Id, K, P, D>
+    private val retriesManager: RetriesManager<Id, K, P, D>,
+    private val jobCoordinator: JobCoordinator,
 ) : Reducer<Id, K, P, D, E, A> {
 
     private val logger = lazy { loggerInjector.inject() }
@@ -512,11 +513,13 @@ class DefaultReducer<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A 
     }
 
     private suspend fun retryLast(maxRetries: Int, action: PagingAction.UpdateError<Id, K, P, D, E, A>, prevState: PagingState<Id, K, P, D, E>): PagingState<Id, K, P, D, E> {
+
         val retries = retriesManager.getRetriesFor(action.params)
 
         return if (retries < maxRetries) {
             // Retry without emitting the error
 
+            jobCoordinator.cancel(action.params.key)
             retriesManager.incrementRetriesFor(action.params)
             dispatcher.value.dispatch(PagingAction.Load(action.params.key))
             prevState
@@ -665,7 +668,7 @@ fun <Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : Any> MutableSt
 
     fun createParentStream(key: PagingKey<K, P>) = paged<Id, K, P, D, E>(key)
 
-    fun createChildStream(key: PagingKey<K, P>) = stream<Any>(StoreReadRequest.cached(key, refresh = false))
+    fun createChildStream(key: PagingKey<K, P>) = stream<Any>(StoreReadRequest.fresh(key))
 
     return StorePagingSourceStreamProvider(::createParentStream, ::createChildStream, keyFactory)
 }
@@ -676,7 +679,7 @@ fun <Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : Any> Store<Pag
 
     fun createParentStream(key: PagingKey<K, P>) = paged<Id, K, P, D, E>(key)
 
-    fun createChildStream(key: PagingKey<K, P>) = stream(StoreReadRequest.cached(key, refresh = false))
+    fun createChildStream(key: PagingKey<K, P>) = stream(StoreReadRequest.fresh(key))
 
     return StorePagingSourceStreamProvider(::createParentStream, ::createChildStream, keyFactory)
 }
@@ -684,7 +687,7 @@ fun <Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : Any> Store<Pag
 @OptIn(ExperimentalStoreApi::class)
 fun <Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any> MutableStore<PagingKey<K, P>, PagingData<Id, K, P, D>>.paged(
     key: PagingKey<K, P>
-): Flow<PagingSource.LoadResult<Id, K, P, D, E>> = stream<Any>(StoreReadRequest.cached(key, refresh = false)).mapNotNull { response ->
+): Flow<PagingSource.LoadResult<Id, K, P, D, E>> = stream<Any>(StoreReadRequest.fresh(key)).mapNotNull { response ->
     when (response) {
         is StoreReadResponse.Data -> PagingSource.LoadResult.Data(response.value as PagingData.Collection)
         is StoreReadResponse.Error.Exception -> PagingSource.LoadResult.Error.Exception(response.error)

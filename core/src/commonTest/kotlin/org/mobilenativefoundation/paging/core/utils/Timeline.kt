@@ -1,5 +1,7 @@
 package org.mobilenativefoundation.paging.core.utils
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import org.mobilenativefoundation.paging.core.PagingData
 import org.mobilenativefoundation.paging.core.PagingKey
 import org.mobilenativefoundation.store.store5.Converter
@@ -9,6 +11,7 @@ import org.mobilenativefoundation.store.store5.MutableStore
 import org.mobilenativefoundation.store.store5.StoreBuilder
 import org.mobilenativefoundation.store.store5.Updater
 import org.mobilenativefoundation.store.store5.UpdaterResult
+import kotlin.math.max
 
 typealias Id = Int
 typealias K = Int
@@ -85,10 +88,18 @@ interface PostService {
 }
 
 class RealFeedService(
-    private val posts: List<TimelineData.Post>
+    private val posts: List<TimelineData.Post>,
+    private val error: StateFlow<Throwable?>,
+    private val incrementTriesFor: (key: CK) -> Unit
 ) : FeedService {
 
     override suspend fun get(key: CK): TimelineData.Feed {
+
+        error.value?.let {
+            incrementTriesFor(key)
+            throw it
+        }
+
         val start = key.key
         val end = start + key.params.size
         val posts = this.posts.subList(start, end)
@@ -103,13 +114,18 @@ class RealFeedService(
 }
 
 class RealPostService(
-    private val posts: MutableMap<SK, TimelineData.Post>
+    private val posts: MutableMap<SK, TimelineData.Post>,
+    private val error: StateFlow<Throwable?>
 ) : PostService {
     override suspend fun get(key: SK): TimelineData.Post? {
+        error.value?.let { throw it }
+
         return posts[key]
     }
 
     override suspend fun update(key: SK, value: TimelineData.Post) {
+        error.value?.let { throw it }
+
         posts[key] = value
     }
 
@@ -119,13 +135,36 @@ class RealPostService(
 class Backend {
 
     private val posts = mutableMapOf<SK, TimelineData.Post>()
+    private val error = MutableStateFlow<Throwable?>(null)
+    private val tries: MutableMap<CK, Int> = mutableMapOf()
 
     init {
         (1..200).map { TimelineData.Post(it, "Post $it") }.forEach { this.posts[PagingKey(it.id, TimelineKeyParams.Single)] = it }
     }
 
-    val feedService: FeedService = RealFeedService(posts.values.toList())
-    val postService: PostService = RealPostService(posts)
+    val feedService: FeedService = RealFeedService(posts.values.toList(), error) { key ->
+        if (key !in tries) {
+            tries[key] = 0
+        }
+
+        tries[key] = tries[key]!! + 1
+    }
+
+    val postService: PostService = RealPostService(posts, error)
+
+    fun failWith(error: Throwable) {
+        this.error.value = error
+    }
+
+    fun clearError() {
+        this.error.value = null
+    }
+
+    fun getRetryCountFor(key: CK): Int {
+        val tries = tries[key] ?: 0
+        val retries = tries - 1
+        return max(retries, 0)
+    }
 }
 
 

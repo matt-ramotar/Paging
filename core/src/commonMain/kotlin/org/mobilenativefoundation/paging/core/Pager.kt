@@ -25,6 +25,7 @@ import org.mobilenativefoundation.paging.core.impl.DefaultUserLoadEffect
 import org.mobilenativefoundation.paging.core.impl.Dispatcher
 import org.mobilenativefoundation.paging.core.impl.EffectsHolder
 import org.mobilenativefoundation.paging.core.impl.EffectsLauncher
+import org.mobilenativefoundation.paging.core.impl.JobCoordinator
 import org.mobilenativefoundation.paging.core.impl.RealDispatcher
 import org.mobilenativefoundation.paging.core.impl.RealJobCoordinator
 import org.mobilenativefoundation.paging.core.impl.RealMutablePagingBuffer
@@ -397,7 +398,8 @@ class PagerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : 
             loggerInjector = loggerInjector,
             pagingConfigInjector = pagingConfigInjector,
             anchorPosition = anchorPosition,
-            mutablePagingBufferInjector = mutablePagingBufferInjector
+            mutablePagingBufferInjector = mutablePagingBufferInjector,
+            jobCoordinator = jobCoordinator
         )
         block(builder)
         val reducer = builder.build()
@@ -645,6 +647,7 @@ class DefaultReducerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : 
     private val pagingConfigInjector: Injector<PagingConfig>,
     private val anchorPosition: StateFlow<PagingKey<K, P>>,
     private val mutablePagingBufferInjector: Injector<MutablePagingBuffer<Id, K, P, D>>,
+    private val jobCoordinator: JobCoordinator
 ) {
 
     private var errorHandlingStrategy: ErrorHandlingStrategy = ErrorHandlingStrategy.RetryLast()
@@ -703,7 +706,8 @@ class DefaultReducerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : 
             aggregatingStrategy = aggregatingStrategy,
             initialKey = initialKey,
             retriesManager = RetriesManager(),
-            errorHandlingStrategy = errorHandlingStrategy
+            errorHandlingStrategy = errorHandlingStrategy,
+            jobCoordinator = jobCoordinator
         )
     }
 }
