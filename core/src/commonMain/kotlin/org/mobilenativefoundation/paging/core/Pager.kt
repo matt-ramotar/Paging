@@ -159,7 +159,7 @@ sealed interface PagingState<Id : Comparable<Id>, out K : Any, out P : Any, out 
             override val prefetchPosition: PagingKey<K, P>?
         ) : Data<Id, K, P, D, E>
 
-        data class ErrorLoadingMore<Id : Comparable<Id>, K : Any, P : Any, D : Any, RE : Any>(
+        data class ErrorLoadingMore<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, RE : Any>(
             override val error: RE,
             override val data: List<PagingData.Single<Id, K, P, D>>,
             override val itemsBefore: Int?,
@@ -167,7 +167,7 @@ sealed interface PagingState<Id : Comparable<Id>, out K : Any, out P : Any, out 
             override val nextKey: PagingKey<K, P>?,
             override val currentKey: PagingKey<K, P>,
             override val prefetchPosition: PagingKey<K, P>?
-        ) : Data<Id, K, P, D, Nothing>, Error<Id, K, P, D, Nothing, RE>
+        ) : Data<Id, K, P, D, E>, Error<Id, K, P, D, E, RE>
     }
 }
 
@@ -202,9 +202,9 @@ sealed interface PagingAction<Id : Comparable<Id>, out K : Any, out P : Any, out
          *
          * @param action The custom action payload.
          */
-        data class Custom<A : Any>(
+        data class Custom<Id : Comparable<Id>, out K : Any, out P : Any, out D : Any, out E : Any, out A : Any>(
             val action: A
-        ) : User<Nothing, Nothing, Nothing, Nothing, Nothing, A>
+        ) : User<Id, K, P, D, E, A>
     }
 
 
@@ -949,7 +949,7 @@ interface UserCustomActionReducer<Id : Comparable<Id>, K : Any, P : Any, D : Any
      * @return The new [PagingState] after applying the custom user action.
      */
     fun reduce(
-        action: User.Custom<A>,
+        action: User.Custom<Id, K, P, D, E, A>,
         state: PagingState<Id, K, P, D, E>
     ): PagingState<Id, K, P, D, E>
 }

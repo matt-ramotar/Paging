@@ -2,8 +2,11 @@ package org.mobilenativefoundation.paging.core.utils
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import org.mobilenativefoundation.paging.core.PagingAction
 import org.mobilenativefoundation.paging.core.PagingData
 import org.mobilenativefoundation.paging.core.PagingKey
+import org.mobilenativefoundation.paging.core.PagingState
+import org.mobilenativefoundation.paging.core.UserCustomActionReducer
 import org.mobilenativefoundation.store.store5.Converter
 import org.mobilenativefoundation.store.store5.ExperimentalStoreApi
 import org.mobilenativefoundation.store.store5.Fetcher
@@ -29,7 +32,30 @@ typealias A = TimelineAction
 typealias E = TimelineError
 
 sealed class TimelineError
-sealed class TimelineAction
+sealed interface TimelineAction {
+    data object ClearData : TimelineAction
+}
+
+class TimelineActionReducer : UserCustomActionReducer<Id, K, P, D, E, A> {
+    override fun reduce(action: PagingAction.User.Custom<Id, K, P, D, E, A>, state: PagingState<Id, K, P, D, E>): PagingState<Id, K, P, D, E> {
+        when (action.action) {
+            TimelineAction.ClearData -> {
+                val nextState = when (state) {
+                    is PagingState.Data.ErrorLoadingMore<Id, K, P, D, E, *> -> state.copy(data = emptyList())
+                    is PagingState.Data.Idle -> state.copy(data = emptyList())
+                    is PagingState.Data.LoadingMore -> state.copy(data = emptyList())
+                    is PagingState.Error.Custom,
+                    is PagingState.Error.Exception,
+                    is PagingState.Initial,
+                    is PagingState.Loading -> state
+                }
+
+                return nextState
+            }
+        }
+    }
+
+}
 
 enum class KeyType {
     SINGLE,

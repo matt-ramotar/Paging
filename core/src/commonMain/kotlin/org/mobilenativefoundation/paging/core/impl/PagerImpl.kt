@@ -191,7 +191,7 @@ class RealDispatcher<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A 
         when (nextState) {
             is PagingState.Initial -> effectsLauncher.launch(action, nextState, ::dispatch)
             is PagingState.Data.Idle -> effectsLauncher.launch(action, nextState, ::dispatch)
-            is PagingState.Data.ErrorLoadingMore<Id, K, P, D, *> -> effectsLauncher.launch(action, nextState, ::dispatch)
+            is PagingState.Data.ErrorLoadingMore<Id, K, P, D, E, *> -> effectsLauncher.launch(action, nextState, ::dispatch)
             is PagingState.Data.LoadingMore -> effectsLauncher.launch(action, nextState, ::dispatch)
             is PagingState.Error.Custom -> effectsLauncher.launch(action, nextState, ::dispatch)
             is PagingState.Error.Exception -> effectsLauncher.launch(action, nextState, ::dispatch)
@@ -570,7 +570,7 @@ class DefaultReducer<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A 
     }
 
 
-    private fun reduceUserCustomAction(action: PagingAction.User.Custom<A>, prevState: PagingState<Id, K, P, D, E>): PagingState<Id, K, P, D, E> {
+    private fun reduceUserCustomAction(action: PagingAction.User.Custom<Id, K, P, D, E, A>, prevState: PagingState<Id, K, P, D, E>): PagingState<Id, K, P, D, E> {
         return userCustomActionReducer?.reduce(action, prevState) ?: prevState
     }
 

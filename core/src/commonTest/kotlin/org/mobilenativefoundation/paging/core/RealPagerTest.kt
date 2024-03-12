@@ -18,6 +18,8 @@ import org.mobilenativefoundation.paging.core.utils.P
 import org.mobilenativefoundation.paging.core.utils.PD
 import org.mobilenativefoundation.paging.core.utils.PK
 import org.mobilenativefoundation.paging.core.utils.SD
+import org.mobilenativefoundation.paging.core.utils.TimelineAction
+import org.mobilenativefoundation.paging.core.utils.TimelineActionReducer
 import org.mobilenativefoundation.paging.core.utils.TimelineKeyParams
 import org.mobilenativefoundation.paging.core.utils.TimelineStoreFactory
 import org.mobilenativefoundation.store.store5.ExperimentalStoreApi
@@ -26,6 +28,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 @Suppress("TestFunctionName")
 @OptIn(ExperimentalStoreApi::class)
@@ -48,7 +51,8 @@ class RealPagerTest {
         anchorPosition: StateFlow<PK>,
         pagingConfig: PagingConfig = PagingConfig(10, prefetchDistance = 50, insertionStrategy = InsertionStrategy.APPEND),
         maxRetries: Int = 3,
-        errorHandlingStrategy: ErrorHandlingStrategy = ErrorHandlingStrategy.RetryLast(maxRetries)
+        errorHandlingStrategy: ErrorHandlingStrategy = ErrorHandlingStrategy.RetryLast(maxRetries),
+        timelineActionReducer: TimelineActionReducer? = null
     ): Pager<Id, K, P, D, E, A> = PagerBuilder<Id, K, P, D, E, A>(
         scope = this,
         initialKey = initialKey,
@@ -65,6 +69,10 @@ class RealPagerTest {
 
         .defaultReducer {
             errorHandlingStrategy(errorHandlingStrategy)
+
+            timelineActionReducer?.let {
+                customActionReducer(it)
+            }
         }
         .defaultLogger()
 
@@ -236,6 +244,46 @@ class RealPagerTest {
             assertEquals(throwable, error.error)
             val retryCount = backend.getRetryCountFor(initialKey)
             assertEquals(0, retryCount)
+
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun testCustomActionReducerModifiesState() = testScope.runTest {
+        val pageSize = 10
+        val prefetchDistance = 0
+        val initialKey: CK = PagingKey(0, TimelineKeyParams.Collection(pageSize))
+        val anchorPosition = MutableStateFlow(initialKey)
+
+        val pager = TestPager(
+            initialKey,
+            anchorPosition,
+            pagingConfig = PagingConfig(pageSize, prefetchDistance, InsertionStrategy.APPEND),
+            errorHandlingStrategy = ErrorHandlingStrategy.PassThrough,
+            timelineActionReducer = TimelineActionReducer()
+        )
+
+        val state = pager.state
+
+        state.test {
+            val initial = awaitItem()
+            assertIs<PagingState.Initial<Id, K, P, D, E>>(initial)
+
+            pager.dispatch(PagingAction.User.Load(initialKey))
+
+            val loading = awaitItem()
+            assertIs<PagingState.Loading<Id, K, P, D, E>>(loading)
+
+            val idle = awaitItem()
+            assertIs<PagingState.Data.Idle<Id, K, P, D, E>>(idle)
+            assertEquals(pageSize, idle.data.size)
+
+            pager.dispatch(PagingAction.User.Custom(TimelineAction.ClearData))
+
+            val modifiedIdle = awaitItem()
+            assertIs<PagingState.Data.Idle<Id, K, P, D, E>>(modifiedIdle)
+            assertTrue(modifiedIdle.data.isEmpty())
 
             expectNoEvents()
         }
