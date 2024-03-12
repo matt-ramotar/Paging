@@ -41,31 +41,8 @@ import kotlin.reflect.KClass
 
 data class PagingKey<out K : Any, out P : Any>(
     val key: K,
-    val params: P? = null,
+    val params: P,
 )
-
-enum class PagingKeyType {
-    SINGLE,
-    COLLECTION
-}
-
-
-/**
- * An enum defining sorting options that can be applied during fetching.
- */
-enum class Sort {
-    NEWEST,
-    OLDEST,
-    ALPHABETICAL,
-    REVERSE_ALPHABETICAL,
-}
-
-/**
- * Defines filters that can be applied during fetching.
- */
-interface Filter<T : Any> {
-    operator fun invoke(items: List<T>): List<T>
-}
 
 sealed interface PagingData<out Id : Any, out K : Any, out P : Any, out D : Any> {
     data class Single<Id : Any, K : Any, P : Any, D : Any>(
@@ -348,7 +325,11 @@ class PagerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : 
         instance = PagingConfig(10, 50, InsertionStrategy.APPEND)
     }
 
-    private var fetchingStrategyInjector = RealInjector<FetchingStrategy<Id, K, P, D>>()
+    private var fetchingStrategyInjector = RealInjector<FetchingStrategy<Id, K, P, D>>().apply {
+        this.instance = DefaultFetchingStrategy()
+    }
+
+    private var pagingBufferMaxSize = 100
 
     private val effectsHolder: EffectsHolder<Id, K, P, D, E, A> = EffectsHolder()
 
@@ -357,7 +338,9 @@ class PagerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : 
     private val loggerInjector = RealOptionalInjector<Logger>()
 
     private val queueManagerInjector = RealInjector<QueueManager<K, P>>()
-    private val pagingBufferInjector = RealInjector<PagingBuffer<Id, K, P, D>>()
+    private val mutablePagingBufferInjector = RealInjector<MutablePagingBuffer<Id, K, P, D>>().apply {
+        this.instance = mutablePagingBufferOf<Id, K, P, D, E, A>(500)
+    }
 
     private val insertionStrategyInjector = RealInjector<InsertionStrategy>()
     private val pagingSourceCollectorInjector = RealInjector<PagingSourceCollector<Id, K, P, D, E, A>>().apply {
@@ -403,7 +386,8 @@ class PagerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : 
             dispatcherInjector = dispatcherInjector,
             loggerInjector = loggerInjector,
             pagingConfigInjector = pagingConfigInjector,
-            anchorPosition = anchorPosition
+            anchorPosition = anchorPosition,
+            mutablePagingBufferInjector = mutablePagingBufferInjector
         )
         block(builder)
         val reducer = builder.build()
@@ -477,7 +461,7 @@ class PagerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : 
      * @param maxSize The maximum size of the pager buffer.
      * @return The [PagerBuilder] instance for chaining.
      */
-    fun pagerBufferMaxSize(maxSize: Int) = apply { this.pagingBufferInjector.instance = RealMutablePagingBuffer<Id, K, P, D, E, A>(maxSize) }
+    fun pagerBufferMaxSize(maxSize: Int) = apply { this.mutablePagingBufferInjector.instance = RealMutablePagingBuffer<Id, K, P, D, E, A>(maxSize) }
 
     /**
      * Sets the [InsertionStrategy] for the pager.
@@ -514,7 +498,7 @@ class PagerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : 
 
     private fun provideDefaultEffects() {
         this.effectsHolder.put(UpdateData::class, Data.Idle::class, this.loadNextEffect)
-        this.effectsHolder.put(Load::class, Initial::class, this.loadEffect)
+        this.effectsHolder.put(Load::class, PagingState::class, this.loadEffect)
     }
 
     private fun provideDispatcher() {
@@ -537,7 +521,7 @@ class PagerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : 
             loggerInjector = loggerInjector,
             dispatcherInjector = dispatcherInjector,
             fetchingStrategy = fetchingStrategyInjector.inject(),
-            pagingBuffer = pagingBufferInjector.inject(),
+            pagingBuffer = mutablePagingBufferInjector.inject(),
             anchorPosition = anchorPosition,
             stateManager = stateManager
         )
@@ -647,12 +631,13 @@ class DefaultReducerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : 
     private val loggerInjector: OptionalInjector<Logger>,
     private val pagingConfigInjector: Injector<PagingConfig>,
     private val anchorPosition: StateFlow<PagingKey<K, P>>,
+    private val mutablePagingBufferInjector: Injector<MutablePagingBuffer<Id, K, P, D>>,
 ) {
+
     private var errorHandlingStrategy: ErrorHandlingStrategy = ErrorHandlingStrategy.RetryLast()
     private var aggregatingStrategy: AggregatingStrategy<Id, K, P, D> = DefaultAggregatingStrategy()
     private var fetchingStrategy: FetchingStrategy<Id, K, P, D> = DefaultFetchingStrategy()
     private var customActionReducer: UserCustomActionReducer<Id, K, P, D, E, A>? = null
-    private var pagingBufferMaxSize: Int = 100
 
     /**
      * Sets the [ErrorHandlingStrategy] to be used by the reducer.
@@ -687,20 +672,12 @@ class DefaultReducerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : 
     fun customActionReducer(customActionReducer: UserCustomActionReducer<Id, K, P, D, E, A>) = apply { this.customActionReducer = customActionReducer }
 
     /**
-     * Sets the maximum size of the paging buffer.
-     *
-     * @param maxSize The maximum size of the paging buffer.
-     * @return The [DefaultReducerBuilder] instance for chaining.
-     */
-    fun pagingBufferMaxSize(maxSize: Int) = apply { this.pagingBufferMaxSize = maxSize }
-
-    /**
      * Builds and returns the configured default [Reducer] instance.
      *
      * @return The built default [Reducer] instance.
      */
     fun build(): Reducer<Id, K, P, D, E, A> {
-        val mutablePagingBuffer = mutablePagingBufferOf<Id, K, P, D, E, A>(maxSize = this.pagingBufferMaxSize)
+        val mutablePagingBuffer = mutablePagingBufferInjector.inject()
 
         return DefaultReducer(
             childScope = childScope,

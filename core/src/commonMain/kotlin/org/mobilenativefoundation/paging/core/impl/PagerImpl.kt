@@ -45,6 +45,7 @@ import org.mobilenativefoundation.store.store5.MutableStore
 import org.mobilenativefoundation.store.store5.Store
 import org.mobilenativefoundation.store.store5.StoreReadRequest
 import org.mobilenativefoundation.store.store5.StoreReadResponse
+import kotlin.math.max
 import kotlin.reflect.KClass
 
 const val UNCHECKED_CAST = "UNCHECKED_CAST"
@@ -58,7 +59,7 @@ class StateManager<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any>(
     loggerInjector: OptionalInjector<Logger>
 ) {
 
-    private val logger = loggerInjector.inject()
+    private val logger = lazy { loggerInjector.inject() }
 
     private val _state = MutableStateFlow(initialState)
     val state = _state.asStateFlow()
@@ -71,7 +72,7 @@ class StateManager<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any>(
     }
 
     private fun log(nextState: PagingState<Id, K, P, D, E>) {
-        logger?.log(
+        logger.value?.log(
             """
             Updating state:
                 Previous state: ${_state.value}
@@ -136,14 +137,20 @@ class EffectsHolder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A :
     }
 }
 
+@Suppress("UNCHECKED_CAST")
 class EffectsLauncher<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : Any>(
     private val effectsHolder: EffectsHolder<Id, K, P, D, E, A>
 ) {
 
     fun <PA : PagingAction<Id, K, P, D, E, A>, S : PagingState<Id, K, P, D, E>> launch(action: PA, state: S, dispatch: (PagingAction<Id, K, P, D, E, A>) -> Unit) {
-        val effects = effectsHolder.get<PA, S>(action::class, state::class)
 
-        effects.forEach { effect -> effect(action, state, dispatch) }
+        effectsHolder.get<PA, S>(action::class, state::class).forEach { effect ->
+            effect(action, state, dispatch)
+        }
+
+        effectsHolder.get<PA, PagingState<Id, K, P, D, E>>(action::class, PagingState::class as KClass<out PagingState<Id, K, P, D, E>>).forEach { effect ->
+            effect(action, state, dispatch)
+        }
     }
 }
 
@@ -215,14 +222,14 @@ class RealQueueManager<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, 
     private val stateManager: StateManager<Id, K, P, D, E>,
 ) : QueueManager<K, P> {
 
-    private val logger = loggerInjector.inject()
-    private val pagingConfig = pagingConfigInjector.inject()
-    private val dispatcher = dispatcherInjector.inject()
+    private val logger = lazy { loggerInjector.inject() }
+    private val pagingConfig = lazy { pagingConfigInjector.inject() }
+    private val dispatcher = lazy { dispatcherInjector.inject() }
 
     private val queue: ArrayDeque<PagingKey<K, P>> = ArrayDeque()
 
     override fun enqueue(key: PagingKey<K, P>) {
-        logger?.log(
+        logger.value?.log(
             """
             Enqueueing:
                 Key: $key
@@ -238,19 +245,19 @@ class RealQueueManager<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, 
         while (queue.isNotEmpty() && fetchingStrategy.shouldFetch(
                 anchorPosition = anchorPosition.value,
                 prefetchPosition = stateManager.state.value.prefetchPosition,
-                pagingConfig = pagingConfig,
+                pagingConfig = pagingConfig.value,
                 pagingBuffer = pagingBuffer,
             )
         ) {
             val nextKey = queue.removeFirst()
 
-            logger?.log(
+            logger.value?.log(
                 """Dequeued:
                     Key: $nextKey
                 """.trimMargin(),
             )
 
-            dispatcher.dispatch(PagingAction.Load(nextKey))
+            dispatcher.value.dispatch(PagingAction.Load(nextKey))
         }
     }
 }
@@ -316,20 +323,22 @@ class RealMutablePagingBuffer<Id : Comparable<Id>, K : Any, P : Any, D : Any, E 
 
     override fun isEmpty(): Boolean = size == 0
 
-    override fun indexOf(key: PagingKey<K, P>): Int = buffer.filterNotNull().flatMap { it.collection.items }.indexOfFirst { it.id == key.key }
+    override fun indexOf(key: PagingKey<K, P>): Int {
+        return keyToIndex[key] ?: -1
+    }
 }
 
 
 class DefaultLoadNextEffect<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : Any>(
     loggerInjector: OptionalInjector<Logger>,
-    queueManagerInjector: Injector<QueueManager<K, P>>
+    queueManagerInjector: Injector<QueueManager<K, P>>,
 ) : LoadNextEffect<Id, K, P, D, E, A> {
 
-    private val logger = loggerInjector.inject()
-    private val queueManager = queueManagerInjector.inject()
+    private val logger = lazy { loggerInjector.inject() }
+    private val queueManager = lazy { queueManagerInjector.inject() }
 
     override fun invoke(action: PagingAction.UpdateData<Id, K, P, D, E, A>, state: PagingState.Data.Idle<Id, K, P, D, E>, dispatch: (PagingAction<Id, K, P, D, E, A>) -> Unit) {
-        logger?.log(
+        logger.value?.log(
             """
             Running post reducer effect:
                 Effect: Load next
@@ -339,7 +348,7 @@ class DefaultLoadNextEffect<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : 
         )
 
         action.data.collection.nextKey?.key?.let {
-            queueManager.enqueue(action.data.collection.nextKey)
+            queueManager.value.enqueue(action.data.collection.nextKey)
         }
     }
 }
@@ -415,8 +424,14 @@ class DefaultFetchingStrategy<Id : Comparable<Id>, K : Any, P : Any, D : Any> : 
         val indexOfAnchor = pagingBuffer.indexOf(anchorPosition)
         val indexOfPrefetch = pagingBuffer.indexOf(prefetchPosition)
 
-        if (indexOfAnchor == -1 && indexOfPrefetch == -1 || indexOfPrefetch == -1) return true
-        return indexOfPrefetch - indexOfAnchor < pagingConfig.prefetchDistance
+        if ((indexOfAnchor == -1 && indexOfPrefetch == -1) || indexOfPrefetch == -1) return true
+
+        val effectiveAnchor = max(indexOfAnchor, 0)
+        val effectivePrefetch = (indexOfPrefetch + 1) * pagingConfig.pageSize
+
+        val shouldFetch = effectivePrefetch - effectiveAnchor < pagingConfig.prefetchDistance
+
+        return shouldFetch
     }
 
 }
@@ -436,12 +451,12 @@ class DefaultReducer<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A 
     private val retriesManager: RetriesManager<Id, K, P, D>
 ) : Reducer<Id, K, P, D, E, A> {
 
-    private val logger = loggerInjector.inject()
-    private val pagingConfig = pagingConfigInjector.inject()
-    private val dispatcher = dispatcherInjector.inject()
+    private val logger = lazy { loggerInjector.inject() }
+    private val pagingConfig = lazy { pagingConfigInjector.inject() }
+    private val dispatcher = lazy { dispatcherInjector.inject() }
 
     override suspend fun reduce(action: PagingAction<Id, K, P, D, E, A>, state: PagingState<Id, K, P, D, E>): PagingState<Id, K, P, D, E> {
-        logger?.log(
+        logger.value?.log(
             """
             Reducing:
                 Action: $action
@@ -463,14 +478,12 @@ class DefaultReducer<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A 
 
         val nextPagingItems = aggregatingStrategy.aggregate(
             anchorPosition = anchorPosition.value,
-            prefetchPosition = prevState.prefetchPosition,
-            pagingConfig = pagingConfig,
+            prefetchPosition = action.params.key,
+            pagingConfig = pagingConfig.value,
             pagingBuffer = mutablePagingBuffer
         )
 
         resetRetriesFor(action.params)
-
-        val nextPrefetchPosition = action.data.collection.items.last().id
 
         return PagingState.Data.Idle(
             data = nextPagingItems.data,
@@ -478,7 +491,7 @@ class DefaultReducer<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A 
             itemsAfter = action.data.collection.itemsAfter,
             currentKey = action.data.collection.prevKey,
             nextKey = action.data.collection.nextKey,
-            prefetchPosition = action.data.collection.prevKey
+            prefetchPosition = action.params.key
         )
 
     }
@@ -498,7 +511,7 @@ class DefaultReducer<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A 
             // Retry without emitting the error
 
             retriesManager.incrementRetriesFor(action.params)
-            dispatcher.dispatch(PagingAction.Load(action.params.key))
+            dispatcher.value.dispatch(PagingAction.Load(action.params.key))
             prevState
         } else {
             // Emit the error and reset the counter
@@ -762,15 +775,14 @@ class DefaultLoadEffect<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any,
     private val jobCoordinator: JobCoordinator,
     private val stateManager: StateManager<Id, K, P, D, E>,
 ) : LoadEffect<Id, K, P, D, E, A> {
-    private val logger = loggerInjector.inject()
-    private val dispatcher = dispatcherInjector.inject()
-    private val pagingSourceCollector = pagingSourceCollectorInjector.inject()
-    private val pagingSource = pagingSourceInjector.inject()
+    private val logger = lazy { loggerInjector.inject() }
+    private val dispatcher = lazy { dispatcherInjector.inject() }
+    private val pagingSourceCollector = lazy { pagingSourceCollectorInjector.inject() }
+    private val pagingSource = lazy { pagingSourceInjector.inject() }
 
     override fun invoke(action: PagingAction.Load<Id, K, P, D, E, A>, state: PagingState<Id, K, P, D, E>, dispatch: (PagingAction<Id, K, P, D, E, A>) -> Unit) {
-        logger?.log(
-            """
-            Running post reducer effect:
+        logger.value?.log(
+            """Running post reducer effect:
                 Effect: Load
                 State: $state
                 Action: $action
@@ -779,11 +791,11 @@ class DefaultLoadEffect<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any,
 
         jobCoordinator.launchIfNotActive(action.key) {
             val params = PagingSource.LoadParams(action.key, true)
-            pagingSourceCollector(
+            pagingSourceCollector.value(
                 params,
-                pagingSource.stream(params),
+                pagingSource.value.stream(params),
                 stateManager.state.value,
-                dispatcher::dispatch
+                dispatcher.value::dispatch
             )
         }
     }
