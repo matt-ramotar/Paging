@@ -2,32 +2,29 @@
 
 [![codecov](https://codecov.io/gh/matt-ramotar/Paging/graph/badge.svg?token=62YL5HZR9Q)](https://codecov.io/gh/matt-ramotar/Paging)
 
-Powerful and extensible library for efficient paging in Kotlin Multiplatform projects. Built with a focus on performance, flexibility, and ease of use.
+A solution for efficient paging in Kotlin Multiplatform projects.
 
 ## Features
 
-- Seamless integration with `Store` for optimized data management
-- Support for local mutations and streaming of child items within the list of paging items
-- Highly customizable with support for custom reducers, middleware, and post-reducer effects
-- Modular architecture with unidirectional data flow for easy reasoning and maintenance
-- Built-in support for logging and error handling
-- Extensible design to accommodate various data sources and paging strategies
+- Prioritizes extensibility with support for custom middleware, reducers, post-reducer effects, paging strategies, and data sources
+- Supports delegating to [Store](https://github.com/MobileNativeFoundation/Store) for optimized data loading and caching
+- Opens up mutations and streaming of child items within the list of paging items
+- Includes built-in hooks for logging and error handling
+- Uses a modular architecture with unidirectional data flow to make it easier to reason about and maintain
 
-## Getting Started
-
-### Installation
+## Installation
 
 Add the following dependency to your project:
 
 ```kotlin
 dependencies {
-    implementation("org.mobilenativefoundation.paging:core:1.0.0")
+    implementation("org.mobilenativefoundation.storex:storex-paging-core:1.0.0")
 }
 ```
 
-### Basic Usage
+## Getting Started
 
-#### 1. Create a `PagingConfig` to configure the paging behavior:
+### 1. Create a `PagingConfig` to configure the paging behavior:
 
 ```kotlin
 val pagingConfig = PagingConfig(
@@ -37,7 +34,7 @@ val pagingConfig = PagingConfig(
 )
 ```
 
-#### 2. Implement a `PagingSource` to provide data for pagination:
+### 2. Implement a `PagingSource` to provide data for pagination:
 
 ```kotlin
 val pagingSource = DefaultPagingSource(
@@ -45,23 +42,23 @@ val pagingSource = DefaultPagingSource(
 )
 ```
 
-#### 3. Configure the `Pager` using `PagerBuilder`:
+### 3. Configure the `Pager` using `PagerBuilder`:
 
 ```kotlin
-val pager = PagerBuilder<Int, Int, MyParams, MyData, MyCustomError, MyCustomAction>(
+val pager = PagerBuilder<MyId, MyKey, MyParams, MyData, MyCustomError, MyCustomAction>(
     initialKey = PagingKey(key = 1, params = MyParams()),
     anchorPosition = anchorPositionFlow,
 )
     .pagingConfig(pagingConfig)
 
     .pagerBufferMaxSize(100)
-    
+
     // Provide a custom paging source
     .pagingSource(MyCustomPagingSource())
-    
+
     // Or, use the default paging source
     .defaultPagingSource(MyPagingSourceStreamProvider())
-    
+
     // Or, use Store as your paging source
     .mutableStorePagingSource(mutableStore)
 
@@ -70,7 +67,7 @@ val pager = PagerBuilder<Int, Int, MyParams, MyData, MyCustomError, MyCustomActi
         errorHandlingStrategy(ErrorHandlingStrategy.RetryLast(3))
         customActionReducer(MyCustomActionReducer())
     }
-    
+
     // Or, provide a custom reducer
     .reducer(MyCustomReducer())
 
@@ -97,7 +94,7 @@ val pager = PagerBuilder<Int, Int, MyParams, MyData, MyCustomError, MyCustomActi
     .build()
 ```
 
-#### 4. Observe the paging state and dispatch actions:
+### 4. Observe the paging state and dispatch actions:
 
 ```kotlin
 pager.state.collect { state ->
@@ -124,13 +121,180 @@ pager.state.collect { state ->
 }
 ```
 
-## Documentation
+## Advanced Usage
 
-Please check out our website for detailed documentation on architecture, customizations, and advanced usage.
+### Using Type Aliases
 
-## Contributing
+```kotlin
+typealias Id = MyId
+typealias K = MyKey
+typealias P = MyParams
+typealias D = MyData
+typealias E = MyCustomError
+typealias A = MyCustomAction
+```
 
-Please read our contributing guidelines to get started.
+### Handling Errors
+
+This library supports different error handling strategies to handle errors that occur during the paging process.
+
+#### 1. **Built-In Error Handling**: You can configure error handling strategy using the `errorHandlingStrategy` function when building the pager.
+
+```kotlin
+val pager = PagerBuilder<Id, K, P, D, E, A>(
+    scope,
+    initialKey,
+    initialState,
+    anchorPosition
+)
+    .defaultReducer {
+        // Retry without emitting the error
+        errorHandlingStrategy(ErrorHandlingStrategy.RetryLast(3))
+
+        // Emit the error
+        errorHandlingStrategy(ErrorHandlingStrategy.PassThrough)
+
+        // Ignore the error
+        errorHandlingStrategy(ErrorHandlingStrategy.Ignore)
+    }
+```
+
+#### 2. **Custom Middleware**: You can add custom middleware for handling errors.
+
+```kotlin
+sealed class CustomError {
+    data class Enriched(
+        val throwable: Throwable,
+        val context: CustomContext
+    ) : CustomError()
+}
+
+class ErrorEnrichingMiddleware(
+    private val contextProvider: CustomContextProvider
+) : Middleware<Id, K, P, D, E, A> {
+    override suspend fun apply(
+        action: PagingAction<Id, K, P, D, E, A>,
+        next: suspend (PagingAction<Id, K, P, D, E, A>) -> Unit
+    ) {
+        if (action is PagingAction.UpdateError) {
+            val modifiedError = CustomError.Enriched(action.error, contextProvider.requireContext())
+            next(action.copy(error = modifiedError))
+        } else {
+            next(action)
+        }
+    }
+}
+
+val pager = PagerBuilder<Id, K, P, D, E, A>(
+    scope,
+    initialKey,
+    initialState,
+    anchorPosition
+)
+    .middleware(ErrorEnrichingMiddleware(contextProvider))
+```
+
+#### 3. **Custom Effects**: You can add custom post-reducer effects for handling errors.
+
+```kotlin
+class ErrorLoggingEffect(private val logger: Logger) :
+    Effect<Id, K, P, D, E, A, PagingAction.UpdateError<Id, K, P, D, E, A>, PagingState.Error.Exception<Id, K, P, D, E>> {
+    override fun invoke(
+        action: PagingAction.UpdateError<Id, K, P, D, E, A>,
+        state: PagingState.Error.Exception<Id, K, P, D, E>,
+        dispatch: (PagingAction<Id, K, P, D, E, A>) -> Unit
+    ) {
+        when (val error = action.error) {
+            is PagingSource.LoadResult.Error.Custom -> {}
+            is PagingSource.LoadResult.Error.Exception -> {
+                logger.log(error)
+            }
+        }
+    }
+}
+
+val pager = PagerBuilder<Id, K, P, D, E, A>(
+    scope,
+    initialKey,
+    initialState,
+    anchorPosition
+)
+    .effect(PagingAction.UpdateError::class, PagingState.Error.Exception::class, errorLoggingEffect)
+```
+
+### Reducing Custom Actions
+
+```kotlin
+sealed interface MyCustomAction {
+    data object ClearData : TimelineAction
+}
+
+class MyCustomActionReducer : UserCustomActionReducer<Id, K, P, D, E, A> {
+    override fun reduce(action: PagingAction.User.Custom<Id, K, P, D, E, A>, state: PagingState<Id, K, P, D, E>): PagingState<Id, K, P, D, E> {
+        return when (action.action) {
+            MyCustomAction.ClearData -> {
+                when (state) {
+                    is PagingState.Data.ErrorLoadingMore<Id, K, P, D, E, *> -> state.copy(data = emptyList())
+                    is PagingState.Data.Idle -> state.copy(data = emptyList())
+                    is PagingState.Data.LoadingMore -> state.copy(data = emptyList())
+                    is PagingState.Error.Custom,
+                    is PagingState.Error.Exception,
+                    is PagingState.Initial,
+                    is PagingState.Loading -> state
+                }
+            }
+        }
+    }
+}
+
+val pager = PagerBuilder<Id, K, P, D, E, A>(
+    scope,
+    initialKey,
+    initialState,
+    anchorPosition
+)
+    .defaultReducer {
+        customActionReducer(MyCustomActionReducer())
+    }
+```
+
+### Intercepting and Modifying Actions
+
+```kotlin
+class AuthMiddleware(private val authTokenProvider: () -> String) : Middleware<Id, K, P, D, E, A> {
+    private fun setAuthToken(headers: MutableMap<String, String>) = headers.apply {
+        this["auth"] = authTokenProvider()
+    }
+
+    override suspend fun apply(action: PagingAction<Id, K, P, D, E, A>, next: suspend (PagingAction<Id, K, P, D, E, A>) -> Unit) {
+        when (action) {
+            is PagingAction.User.Load -> {
+                setAuthToken(action.key.params.headers)
+                next(action)
+            }
+
+            is PagingAction.Load -> {
+                setAuthToken(action.key.params.headers)
+                next(action)
+            }
+
+            else -> next(action)
+        }
+    }
+}
+
+val pager = PagerBuilder<Id, K, P, D, E, A>(
+    scope,
+    initialKey,
+    initialState,
+    anchorPosition
+)
+    .middleware(AuthMiddleware(authTokenProvider))
+```
+
+### Performing Side Effects After State Has Been Reduced
+
+See the [Custom Effects](#3-custom-effects-you-can-add-custom-post-reducer-effects-for-handling-errors) section under [Handling Errors](#handling-errors).
 
 ## License
 

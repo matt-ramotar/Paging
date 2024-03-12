@@ -44,7 +44,7 @@ sealed interface TimelineAction {
 
 class TimelineActionReducer : UserCustomActionReducer<Id, K, P, D, E, A> {
     override fun reduce(action: PagingAction.User.Custom<Id, K, P, D, E, A>, state: PagingState<Id, K, P, D, E>): PagingState<Id, K, P, D, E> {
-        when (action.action) {
+        return when (action.action) {
             TimelineAction.ClearData -> {
                 val nextState = when (state) {
                     is PagingState.Data.ErrorLoadingMore<Id, K, P, D, E, *> -> state.copy(data = emptyList())
@@ -56,7 +56,7 @@ class TimelineActionReducer : UserCustomActionReducer<Id, K, P, D, E, A> {
                     is PagingState.Loading -> state
                 }
 
-                return nextState
+                nextState
             }
         }
     }
