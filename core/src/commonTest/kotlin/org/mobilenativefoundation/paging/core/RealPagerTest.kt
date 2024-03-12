@@ -48,6 +48,7 @@ class RealPagerTest {
         anchorPosition: StateFlow<PK>,
         pagingConfig: PagingConfig = PagingConfig(10, prefetchDistance = 50, insertionStrategy = InsertionStrategy.APPEND),
         maxRetries: Int = 3,
+        errorHandlingStrategy: ErrorHandlingStrategy = ErrorHandlingStrategy.RetryLast(maxRetries)
     ): Pager<Id, K, P, D, E, A> = PagerBuilder<Id, K, P, D, E, A>(
         scope = this,
         initialKey = initialKey,
@@ -63,7 +64,7 @@ class RealPagerTest {
         }
 
         .defaultReducer {
-            errorHandlingStrategy(ErrorHandlingStrategy.RetryLast(maxRetries))
+            errorHandlingStrategy(errorHandlingStrategy)
         }
         .defaultLogger()
 
@@ -200,6 +201,41 @@ class RealPagerTest {
 
             val retryCount = backend.getRetryCountFor(initialKey)
             assertEquals(maxRetries, retryCount)
+
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun testErrorHandlingStrategyPassThrough() = testScope.runTest {
+        val pageSize = 10
+        val prefetchDistance = 0
+        val initialKey: CK = PagingKey(0, TimelineKeyParams.Collection(pageSize))
+        val anchorPosition = MutableStateFlow(initialKey)
+
+
+        val message = "Failed to load data"
+        val throwable = Throwable(message)
+        backend.failWith(throwable)
+
+        val pager = TestPager(initialKey, anchorPosition, pagingConfig = PagingConfig(pageSize, prefetchDistance, InsertionStrategy.APPEND), errorHandlingStrategy = ErrorHandlingStrategy.PassThrough)
+
+        val state = pager.state
+
+        state.test {
+            val initial = awaitItem()
+            assertIs<PagingState.Initial<Id, K, P, D, E>>(initial)
+
+            pager.dispatch(PagingAction.User.Load(initialKey))
+
+            val loading = awaitItem()
+            assertIs<PagingState.Loading<Id, K, P, D, E>>(loading)
+
+            val error = awaitItem()
+            assertIs<PagingState.Error.Exception<Id, K, P, D, E>>(error)
+            assertEquals(throwable, error.error)
+            val retryCount = backend.getRetryCountFor(initialKey)
+            assertEquals(0, retryCount)
 
             expectNoEvents()
         }
