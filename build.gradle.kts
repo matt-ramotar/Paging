@@ -29,7 +29,7 @@ allprojects {
 configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
     additionalEditorconfig.set(
         mapOf(
-            "max_line_length" to "200"
-        )
+            "max_line_length" to "200",
+        ),
     )
 }
