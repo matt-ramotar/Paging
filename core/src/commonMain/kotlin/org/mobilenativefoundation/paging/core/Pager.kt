@@ -14,13 +14,14 @@ import org.mobilenativefoundation.paging.core.PagingState.Error
 import org.mobilenativefoundation.paging.core.PagingState.Initial
 import org.mobilenativefoundation.paging.core.PagingState.Loading
 import org.mobilenativefoundation.paging.core.impl.DefaultAggregatingStrategy
+import org.mobilenativefoundation.paging.core.impl.DefaultAppLoadEffect
 import org.mobilenativefoundation.paging.core.impl.DefaultFetchingStrategy
-import org.mobilenativefoundation.paging.core.impl.DefaultLoadEffect
 import org.mobilenativefoundation.paging.core.impl.DefaultLoadNextEffect
 import org.mobilenativefoundation.paging.core.impl.DefaultLogger
 import org.mobilenativefoundation.paging.core.impl.DefaultPagingSource
 import org.mobilenativefoundation.paging.core.impl.DefaultPagingSourceCollector
 import org.mobilenativefoundation.paging.core.impl.DefaultReducer
+import org.mobilenativefoundation.paging.core.impl.DefaultUserLoadEffect
 import org.mobilenativefoundation.paging.core.impl.Dispatcher
 import org.mobilenativefoundation.paging.core.impl.EffectsHolder
 import org.mobilenativefoundation.paging.core.impl.EffectsLauncher
@@ -191,9 +192,9 @@ sealed interface PagingAction<Id : Comparable<Id>, out K : Any, out P : Any, out
          *
          * @param key The page key to load data for.
          */
-        data class Load<K : Any, P : Any>(
+        data class Load<Id : Comparable<Id>, out K : Any, out P : Any, out D : Any, out E : Any, out A : Any>(
             val key: PagingKey<K, P>,
-        ) : User<Nothing, K, P, Nothing, Nothing, Nothing>
+        ) : User<Id, K, P, D, E, A>
 
         /**
          * Represents a custom user-initiated action.
@@ -352,7 +353,16 @@ class PagerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : 
 
     private var loadNextEffect: LoadNextEffect<Id, K, P, D, E, A> = DefaultLoadNextEffect(loggerInjector, queueManagerInjector)
 
-    private var loadEffect: LoadEffect<Id, K, P, D, E, A> = DefaultLoadEffect(
+    private var appLoadEffect: AppLoadEffect<Id, K, P, D, E, A> = DefaultAppLoadEffect(
+        loggerInjector = loggerInjector,
+        dispatcherInjector = dispatcherInjector,
+        jobCoordinator = jobCoordinator,
+        pagingSourceCollectorInjector = pagingSourceCollectorInjector,
+        pagingSourceInjector = pagingSourceInjector,
+        stateManager = stateManager
+    )
+
+    private var userLoadEffect: UserLoadEffect<Id, K, P, D, E, A> = DefaultUserLoadEffect(
         loggerInjector = loggerInjector,
         dispatcherInjector = dispatcherInjector,
         jobCoordinator = jobCoordinator,
@@ -420,7 +430,8 @@ class PagerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : 
      */
     fun loadNextEffect(effect: LoadNextEffect<Id, K, P, D, E, A>) = apply { this.loadNextEffect = effect }
 
-    fun loadEffect(effect: LoadEffect<Id, K, P, D, E, A>) = apply { this.loadEffect = effect }
+    fun appLoadEffect(effect: AppLoadEffect<Id, K, P, D, E, A>) = apply { this.appLoadEffect = effect }
+    fun userLoadEffect(effect: UserLoadEffect<Id, K, P, D, E, A>) = apply { this.userLoadEffect = effect }
 
     /**
      * Adds a [Middleware] to the pager.
@@ -498,7 +509,8 @@ class PagerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : 
 
     private fun provideDefaultEffects() {
         this.effectsHolder.put(UpdateData::class, Data.Idle::class, this.loadNextEffect)
-        this.effectsHolder.put(Load::class, PagingState::class, this.loadEffect)
+        this.effectsHolder.put(Load::class, PagingState::class, this.appLoadEffect)
+        this.effectsHolder.put(User.Load::class, Loading::class, this.userLoadEffect)
     }
 
     private fun provideDispatcher() {
@@ -1056,4 +1068,5 @@ interface PagingSourceStreamProvider<Id : Comparable<Id>, K : Any, P : Any, D : 
  */
 typealias LoadNextEffect<Id, K, P, D, E, A> = Effect<Id, K, P, D, E, A, UpdateData<Id, K, P, D, E, A>, Data.Idle<Id, K, P, D, E>>
 
-typealias LoadEffect<Id, K, P, D, E, A> = Effect<Id, K, P, D, E, A, Load<Id, K, P, D, E, A>, PagingState<Id, K, P, D, E>>
+typealias AppLoadEffect<Id, K, P, D, E, A> = Effect<Id, K, P, D, E, A, Load<Id, K, P, D, E, A>, PagingState<Id, K, P, D, E>>
+typealias UserLoadEffect<Id, K, P, D, E, A> = Effect<Id, K, P, D, E, A, User.Load<Id, K, P, D, E, A>, Loading<Id, K, P, D, E>>

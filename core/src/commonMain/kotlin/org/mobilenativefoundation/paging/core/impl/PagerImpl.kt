@@ -15,12 +15,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.mobilenativefoundation.paging.core.AggregatingStrategy
+import org.mobilenativefoundation.paging.core.AppLoadEffect
 import org.mobilenativefoundation.paging.core.Effect
 import org.mobilenativefoundation.paging.core.ErrorHandlingStrategy
 import org.mobilenativefoundation.paging.core.FetchingStrategy
 import org.mobilenativefoundation.paging.core.Injector
 import org.mobilenativefoundation.paging.core.InsertionStrategy
-import org.mobilenativefoundation.paging.core.LoadEffect
 import org.mobilenativefoundation.paging.core.LoadNextEffect
 import org.mobilenativefoundation.paging.core.Logger
 import org.mobilenativefoundation.paging.core.Middleware
@@ -40,6 +40,7 @@ import org.mobilenativefoundation.paging.core.PagingState
 import org.mobilenativefoundation.paging.core.QueueManager
 import org.mobilenativefoundation.paging.core.Reducer
 import org.mobilenativefoundation.paging.core.UserCustomActionReducer
+import org.mobilenativefoundation.paging.core.UserLoadEffect
 import org.mobilenativefoundation.store.store5.ExperimentalStoreApi
 import org.mobilenativefoundation.store.store5.MutableStore
 import org.mobilenativefoundation.store.store5.Store
@@ -119,6 +120,7 @@ class EffectsHolder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A :
     ): List<Effect<Id, K, P, D, E, A, PA, S>> {
         action as KClass<PA>
         state as KClass<S>
+
         return effects[state]?.get(action) as? List<Effect<Id, K, P, D, E, A, PA, S>> ?: emptyList()
     }
 
@@ -588,7 +590,7 @@ class DefaultReducer<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A 
     }
 
 
-    private fun reduceUserLoadAction(action: PagingAction.User.Load<K, P>, prevState: PagingState<Id, K, P, D, E>): PagingState<Id, K, P, D, E> {
+    private fun reduceUserLoadAction(action: PagingAction.User.Load<Id, K, P, D, E, A>, prevState: PagingState<Id, K, P, D, E>): PagingState<Id, K, P, D, E> {
         return if (prevState is PagingState.Data) reduceLoadActionAndDataState(prevState) else reduceLoadActionAndNonDataState(action.key, prevState)
     }
 
@@ -772,14 +774,14 @@ fun interface StorePagingSourceKeyFactory<Id : Comparable<Id>, K : Any, P : Any,
     fun createKeyFor(single: PagingData.Single<Id, K, P, D>): PagingKey<K, P>
 }
 
-class DefaultLoadEffect<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : Any>(
+class DefaultAppLoadEffect<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : Any>(
     loggerInjector: OptionalInjector<Logger>,
     dispatcherInjector: Injector<Dispatcher<Id, K, P, D, E, A>>,
     pagingSourceCollectorInjector: Injector<PagingSourceCollector<Id, K, P, D, E, A>>,
     pagingSourceInjector: Injector<PagingSource<Id, K, P, D, E>>,
     private val jobCoordinator: JobCoordinator,
     private val stateManager: StateManager<Id, K, P, D, E>,
-) : LoadEffect<Id, K, P, D, E, A> {
+) : AppLoadEffect<Id, K, P, D, E, A> {
     private val logger = lazy { loggerInjector.inject() }
     private val dispatcher = lazy { dispatcherInjector.inject() }
     private val pagingSourceCollector = lazy { pagingSourceCollectorInjector.inject() }
@@ -788,7 +790,42 @@ class DefaultLoadEffect<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any,
     override fun invoke(action: PagingAction.Load<Id, K, P, D, E, A>, state: PagingState<Id, K, P, D, E>, dispatch: (PagingAction<Id, K, P, D, E, A>) -> Unit) {
         logger.value?.log(
             """Running post reducer effect:
-                Effect: Load
+                Effect: App load
+                State: $state
+                Action: $action
+            """.trimIndent(),
+        )
+
+        jobCoordinator.launchIfNotActive(action.key) {
+            val params = PagingSource.LoadParams(action.key, true)
+            pagingSourceCollector.value(
+                params,
+                pagingSource.value.stream(params),
+                stateManager.state.value,
+                dispatcher.value::dispatch
+            )
+        }
+    }
+
+}
+
+class DefaultUserLoadEffect<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : Any>(
+    loggerInjector: OptionalInjector<Logger>,
+    dispatcherInjector: Injector<Dispatcher<Id, K, P, D, E, A>>,
+    pagingSourceCollectorInjector: Injector<PagingSourceCollector<Id, K, P, D, E, A>>,
+    pagingSourceInjector: Injector<PagingSource<Id, K, P, D, E>>,
+    private val jobCoordinator: JobCoordinator,
+    private val stateManager: StateManager<Id, K, P, D, E>,
+) : UserLoadEffect<Id, K, P, D, E, A> {
+    private val logger = lazy { loggerInjector.inject() }
+    private val dispatcher = lazy { dispatcherInjector.inject() }
+    private val pagingSourceCollector = lazy { pagingSourceCollectorInjector.inject() }
+    private val pagingSource = lazy { pagingSourceInjector.inject() }
+
+    override fun invoke(action: PagingAction.User.Load<Id, K, P, D, E, A>, state: PagingState.Loading<Id, K, P, D, E>, dispatch: (PagingAction<Id, K, P, D, E, A>) -> Unit) {
+        logger.value?.log(
+            """Running post reducer effect:
+                Effect: User load
                 State: $state
                 Action: $action
             """.trimIndent(),

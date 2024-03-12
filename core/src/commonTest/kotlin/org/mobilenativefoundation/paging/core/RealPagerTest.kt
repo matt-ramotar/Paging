@@ -140,4 +140,29 @@ class RealPagerTest {
             expectNoEvents()
         }
     }
+    @Test
+    fun testUserLoadWhenPrefetchDistanceEquals0() = testScope.runTest {
+        val pageSize = 10
+        val prefetchDistance = 0
+        val initialKey: PK = PagingKey(0, TimelineKeyParams.Collection(pageSize))
+        val anchorPosition = MutableStateFlow(initialKey)
+        val pager = TestPager(initialKey, anchorPosition, pagingConfig = PagingConfig(pageSize, prefetchDistance, InsertionStrategy.APPEND))
+
+        val state = pager.state
+
+        state.test {
+            verifyPrefetching(pageSize, prefetchDistance)
+
+            pager.dispatch(PagingAction.User.Load(initialKey))
+
+            val loading = awaitItem()
+            assertIs<PagingState.Loading<Id, K, P, D, E>>(loading)
+
+            val idle = awaitItem()
+            assertIs<PagingState.Data.Idle<Id, K, P, D, E>>(idle)
+            assertEquals(pageSize, idle.data.size)
+
+            expectNoEvents()
+        }
+    }
 }
