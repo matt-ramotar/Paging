@@ -26,6 +26,7 @@ kotlin {
                 implementation(libs.touchlab.kermit)
                 implementation(libs.kotlinx.coroutines.core)
                 api(libs.store)
+                implementation(libs.kotlinx.datetime)
             }
         }
 

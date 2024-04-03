@@ -120,7 +120,8 @@ sealed interface PagingState<Id : Comparable<Id>, out K : Any, out P : Any, out 
         override val prefetchPosition: PagingKey<K, P>?
     ) : PagingState<Id, K, P, D, E>
 
-    sealed interface Error<Id : Comparable<Id>, out K : Any, out P : Any, out D : Any, out E : Any, out RE : Any> : PagingState<Id, K, P, D, E> {
+    sealed interface Error<Id : Comparable<Id>, out K : Any, out P : Any, out D : Any, out E : Any, out RE : Any> :
+        PagingState<Id, K, P, D, E> {
         val error: RE
 
         data class Exception<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any>(
@@ -187,7 +188,8 @@ sealed interface PagingAction<Id : Comparable<Id>, out K : Any, out P : Any, out
     /**
      * Defines user-initiated actions.
      */
-    sealed interface User<Id : Comparable<Id>, out K : Any, out P : Any, out D : Any, out E : Any, out A : Any> : PagingAction<Id, K, P, D, E, A> {
+    sealed interface User<Id : Comparable<Id>, out K : Any, out P : Any, out D : Any, out E : Any, out A : Any> :
+        PagingAction<Id, K, P, D, E, A> {
 
         /**
          * Represents a user-initiated action to load data for a specific page key.
@@ -485,7 +487,8 @@ class PagerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : 
      * @param maxSize The maximum size of the pager buffer.
      * @return The [PagerBuilder] instance for chaining.
      */
-    fun pagerBufferMaxSize(maxSize: Int) = apply { this.mutablePagingBufferInjector.instance = RealMutablePagingBuffer<Id, K, P, D, E, A>(maxSize) }
+    fun pagerBufferMaxSize(maxSize: Int) =
+        apply { this.mutablePagingBufferInjector.instance = RealMutablePagingBuffer<Id, K, P, D, E, A>(maxSize) }
 
     /**
      * Sets the [InsertionStrategy] for the pager.
@@ -495,7 +498,8 @@ class PagerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : 
      */
     fun insertionStrategy(insertionStrategy: InsertionStrategy) = apply { this.insertionStrategyInjector.instance = insertionStrategy }
 
-    fun pagingSourceCollector(pagingSourceCollector: PagingSourceCollector<Id, K, P, D, E, A>) = apply { this.pagingSourceCollectorInjector.instance = pagingSourceCollector }
+    fun pagingSourceCollector(pagingSourceCollector: PagingSourceCollector<Id, K, P, D, E, A>) =
+        apply { this.pagingSourceCollectorInjector.instance = pagingSourceCollector }
 
     fun pagingSource(pagingSource: PagingSource<Id, K, P, D, E>) = apply { this.pagingSourceInjector.instance = pagingSource }
 
@@ -504,7 +508,10 @@ class PagerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : 
     }
 
     @OptIn(ExperimentalStoreApi::class)
-    fun mutableStorePagingSource(store: MutableStore<PagingKey<K, P>, PagingData<Id, K, P, D>>, factory: () -> StorePagingSourceKeyFactory<Id, K, P, D>) = apply {
+    fun mutableStorePagingSource(
+        store: MutableStore<PagingKey<K, P>, PagingData<Id, K, P, D>>,
+        factory: () -> StorePagingSourceKeyFactory<Id, K, P, D>
+    ) = apply {
         this.pagingSourceInjector.instance = DefaultPagingSource<Id, K, P, D, E, A>(
             streamProvider = store.pagingSourceStreamProvider<Id, K, P, D, E, A>(
                 keyFactory = factory()
@@ -512,13 +519,14 @@ class PagerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : 
         )
     }
 
-    fun storePagingSource(store: Store<PagingKey<K, P>, PagingData<Id, K, P, D>>, factory: () -> StorePagingSourceKeyFactory<Id, K, P, D>) = apply {
-        this.pagingSourceInjector.instance = DefaultPagingSource<Id, K, P, D, E, A>(
-            streamProvider = store.pagingSourceStreamProvider<Id, K, P, D, E, A>(
-                keyFactory = factory()
+    fun storePagingSource(store: Store<PagingKey<K, P>, PagingData<Id, K, P, D>>, factory: () -> StorePagingSourceKeyFactory<Id, K, P, D>) =
+        apply {
+            this.pagingSourceInjector.instance = DefaultPagingSource<Id, K, P, D, E, A>(
+                streamProvider = store.pagingSourceStreamProvider<Id, K, P, D, E, A>(
+                    keyFactory = factory()
+                )
             )
-        )
-    }
+        }
 
     private fun provideDefaultEffects() {
         this.effectsHolder.put(UpdateData::class, Data.Idle::class, this.loadNextEffect)
@@ -663,7 +671,8 @@ class DefaultReducerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : 
 ) {
 
     private var errorHandlingStrategy: ErrorHandlingStrategy = ErrorHandlingStrategy.RetryLast()
-    private var aggregatingStrategy: AggregatingStrategy<Id, K, P, D> = DefaultAggregatingStrategy()
+    private var aggregatingStrategy: AggregatingStrategy<Id, K, P, D> =
+        DefaultAggregatingStrategy.Builder<Id, K, P, D, E, Any, Any>().build()
     private var fetchingStrategy: FetchingStrategy<Id, K, P, D> = DefaultFetchingStrategy()
     private var customActionReducer: UserCustomActionReducer<Id, K, P, D, E, A>? = null
 
@@ -681,7 +690,15 @@ class DefaultReducerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : 
      * @param aggregatingStrategy The [AggregatingStrategy] to be used.
      * @return The [DefaultReducerBuilder] instance for chaining.
      */
-    fun aggregatingStrategy(aggregatingStrategy: AggregatingStrategy<Id, K, P, D>) = apply { this.aggregatingStrategy = aggregatingStrategy }
+    fun aggregatingStrategy(aggregatingStrategy: AggregatingStrategy<Id, K, P, D>) =
+        apply { this.aggregatingStrategy = aggregatingStrategy }
+
+    fun <S : Any, F : Any> defaultAggregatingStrategy(block: DefaultAggregatingStrategy.Builder<Id, K, P, D, E, S, F>.() -> Unit) {
+        val builder = DefaultAggregatingStrategy.Builder<Id, K, P, D, E, S, F>()
+        block(builder)
+        val aggregatingStrategy = builder.build()
+        this.aggregatingStrategy = aggregatingStrategy
+    }
 
     /**
      * Sets the [FetchingStrategy] to be used by the reducer.
@@ -697,7 +714,8 @@ class DefaultReducerBuilder<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : 
      * @param customActionReducer The [UserCustomActionReducer] to be used.
      * @return The [DefaultReducerBuilder] instance for chaining.
      */
-    fun customActionReducer(customActionReducer: UserCustomActionReducer<Id, K, P, D, E, A>) = apply { this.customActionReducer = customActionReducer }
+    fun customActionReducer(customActionReducer: UserCustomActionReducer<Id, K, P, D, E, A>) =
+        apply { this.customActionReducer = customActionReducer }
 
     /**
      * Builds and returns the configured default [Reducer] instance.
@@ -815,6 +833,31 @@ interface PagingBuffer<Id : Comparable<Id>, K : Any, P : Any, D : Any> {
      * @return The index of the data associated with the specified [key], or -1 if not found.
      */
     fun indexOf(key: PagingKey<K, P>): Int
+
+    /**
+     * Retrieves the data within the specified range, determined by the anchor position, prefetch position, and paging configuration.
+     *
+     * @param anchorPosition The [PagingKey] representing the anchor position.
+     * @param prefetchPosition The [PagingKey] representing the prefetch position, or `null` if no prefetching is required.
+     * @param pagingConfig The [PagingConfig] specifying the paging configuration.
+     * @return A list of [D] items within the specified range.
+     */
+    fun getSinglesInRange(
+        anchorPosition: PagingKey<K, P>,
+        prefetchPosition: PagingKey<K, P>?,
+        pagingConfig: PagingConfig
+    ): List<PagingData.Single<Id, K, P, D>>
+
+
+    /**
+     * Retrieves the data within the specified range, determined by the anchor position, prefetch position, and paging configuration.
+     *
+     * @param anchorPosition The [PagingKey] representing the anchor position.
+     * @param prefetchPosition The [PagingKey] representing the prefetch position, or `null` if no prefetching is required.
+     * @param pagingConfig The [PagingConfig] specifying the paging configuration.
+     * @return A list of [D] items within the specified range.
+     */
+    fun getDataInRange(anchorPosition: PagingKey<K, P>, prefetchPosition: PagingKey<K, P>?, pagingConfig: PagingConfig): List<D>
 }
 
 /**
@@ -871,7 +914,8 @@ interface PagingSource<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any> 
             data class Custom<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any>(val error: E) : Error<Id, K, P, D, E>()
         }
 
-        data class Data<Id : Comparable<Id>, K : Any, P : Any, D : Any>(val collection: PagingData.Collection<Id, K, P, D>) : LoadResult<Id, K, P, D, Nothing>()
+        data class Data<Id : Comparable<Id>, K : Any, P : Any, D : Any>(val collection: PagingData.Collection<Id, K, P, D>) :
+            LoadResult<Id, K, P, D, Nothing>()
     }
 }
 

@@ -20,8 +20,7 @@ coroutines = "1.8.0"
 kover = "0.6.0"
 dokkaGradlePlugin = "1.9.10"
 ktlintGradle = "12.1.0"
-
-
+datetime = "0.6.0-RC.2"
 
 [libraries]
 kotlin-stdlib = { group = "org.jetbrains.kotlin", name = "kotlin-stdlib", version.ref = "kotlin" }
@@ -36,7 +35,7 @@ kotlin-serialization-plugin = { group = "org.jetbrains.kotlin", name = "kotlin-s
 dokka-gradle-plugin = { group = "org.jetbrains.dokka", name = "dokka-gradle-plugin", version.ref = "dokkaGradlePlugin" }
 ktlint-gradle-plugin = { group = "org.jlleitschuh.gradle", name = "ktlint-gradle", version.ref = "ktlintGradle" }
 kover-plugin = { group = "org.jetbrains.kotlinx", name = "kover", version.ref = "kover" }
-
+kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "datetime" }
 
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }

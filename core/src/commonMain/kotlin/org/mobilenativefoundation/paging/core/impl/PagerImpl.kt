@@ -150,15 +150,20 @@ class EffectsLauncher<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A
     private val effectsHolder: EffectsHolder<Id, K, P, D, E, A>
 ) {
 
-    fun <PA : PagingAction<Id, K, P, D, E, A>, S : PagingState<Id, K, P, D, E>> launch(action: PA, state: S, dispatch: (PagingAction<Id, K, P, D, E, A>) -> Unit) {
+    fun <PA : PagingAction<Id, K, P, D, E, A>, S : PagingState<Id, K, P, D, E>> launch(
+        action: PA,
+        state: S,
+        dispatch: (PagingAction<Id, K, P, D, E, A>) -> Unit
+    ) {
 
         effectsHolder.get<PA, S>(action::class, state::class).forEach { effect ->
             effect(action, state, dispatch)
         }
 
-        effectsHolder.get<PA, PagingState<Id, K, P, D, E>>(action::class, PagingState::class as KClass<out PagingState<Id, K, P, D, E>>).forEach { effect ->
-            effect(action, state, dispatch)
-        }
+        effectsHolder.get<PA, PagingState<Id, K, P, D, E>>(action::class, PagingState::class as KClass<out PagingState<Id, K, P, D, E>>)
+            .forEach { effect ->
+                effect(action, state, dispatch)
+            }
     }
 }
 
@@ -338,6 +343,32 @@ class RealMutablePagingBuffer<Id : Comparable<Id>, K : Any, P : Any, D : Any, E 
     override fun indexOf(key: PagingKey<K, P>): Int {
         return keyToIndex[key] ?: -1
     }
+
+
+    override fun getDataInRange(anchorPosition: PagingKey<K, P>, prefetchPosition: PagingKey<K, P>?, pagingConfig: PagingConfig): List<D> {
+        return getSinglesInRange(anchorPosition, prefetchPosition, pagingConfig).map { single -> single.data }
+    }
+
+    override fun getSinglesInRange(
+        anchorPosition: PagingKey<K, P>,
+        prefetchPosition: PagingKey<K, P>?,
+        pagingConfig: PagingConfig
+    ): List<PagingData.Single<Id, K, P, D>> {
+        val buffer = getAll()
+        val anchorIndex = indexOf(anchorPosition)
+
+        if (anchorIndex == -1) {
+            return emptyList()
+        }
+
+        val prefetchIndex = prefetchPosition?.let { indexOf(it) } ?: buffer.lastIndex
+
+        val startIndex = (anchorIndex - pagingConfig.prefetchDistance).coerceAtLeast(0)
+        val endIndex = (prefetchIndex + pagingConfig.prefetchDistance).coerceAtMost(buffer.lastIndex)
+
+        return buffer.subList(startIndex, endIndex + 1)
+            .flatMap { it.collection.items }
+    }
 }
 
 
@@ -349,7 +380,11 @@ class DefaultLoadNextEffect<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : 
     private val logger = lazy { loggerInjector.inject() }
     private val queueManager = lazy { queueManagerInjector.inject() }
 
-    override fun invoke(action: PagingAction.UpdateData<Id, K, P, D, E, A>, state: PagingState.Data.Idle<Id, K, P, D, E>, dispatch: (PagingAction<Id, K, P, D, E, A>) -> Unit) {
+    override fun invoke(
+        action: PagingAction.UpdateData<Id, K, P, D, E, A>,
+        state: PagingState.Data.Idle<Id, K, P, D, E>,
+        dispatch: (PagingAction<Id, K, P, D, E, A>) -> Unit
+    ) {
         logger.value?.log(
             """
             Running post reducer effect:
@@ -414,33 +449,14 @@ class RealJobCoordinator(
 }
 
 
-class DefaultAggregatingStrategy<Id : Comparable<Id>, K : Any, P : Any, D : Any> : AggregatingStrategy<Id, K, P, D> {
-    override fun aggregate(anchorPosition: PagingKey<K, P>, prefetchPosition: PagingKey<K, P>?, pagingConfig: PagingConfig, pagingBuffer: PagingBuffer<Id, K, P, D>): PagingItems<Id, K, P, D> {
-        if (pagingBuffer.isEmpty()) return PagingItems(emptyList())
-
-        val orderedItems = mutableListOf<PagingData.Single<Id, K, P, D>>()
-
-        var currentPage: PagingSource.LoadResult.Data<Id, K, P, D>? = pagingBuffer.head()
-
-        while (currentPage != null) {
-            when (pagingConfig.insertionStrategy) {
-                InsertionStrategy.APPEND -> orderedItems.addAll(currentPage.collection.items)
-                InsertionStrategy.PREPEND -> orderedItems.addAll(0, currentPage.collection.items)
-                InsertionStrategy.REPLACE -> {
-                    orderedItems.clear()
-                    orderedItems.addAll(currentPage.collection.items)
-                }
-            }
-
-            currentPage = currentPage.collection.nextKey?.let { pagingBuffer.get(it) }
-        }
-
-        return PagingItems(orderedItems)
-    }
-}
 
 class DefaultFetchingStrategy<Id : Comparable<Id>, K : Any, P : Any, D : Any> : FetchingStrategy<Id, K, P, D> {
-    override fun shouldFetch(anchorPosition: PagingKey<K, P>, prefetchPosition: PagingKey<K, P>?, pagingConfig: PagingConfig, pagingBuffer: PagingBuffer<Id, K, P, D>): Boolean {
+    override fun shouldFetch(
+        anchorPosition: PagingKey<K, P>,
+        prefetchPosition: PagingKey<K, P>?,
+        pagingConfig: PagingConfig,
+        pagingBuffer: PagingBuffer<Id, K, P, D>
+    ): Boolean {
         if (prefetchPosition == null) return true
 
         val indexOfAnchor = pagingBuffer.indexOf(anchorPosition)
@@ -496,7 +512,10 @@ class DefaultReducer<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A 
         }
     }
 
-    private fun reduceUpdateDataAction(action: PagingAction.UpdateData<Id, K, P, D, E, A>, prevState: PagingState<Id, K, P, D, E>): PagingState<Id, K, P, D, E> {
+    private fun reduceUpdateDataAction(
+        action: PagingAction.UpdateData<Id, K, P, D, E, A>,
+        prevState: PagingState<Id, K, P, D, E>
+    ): PagingState<Id, K, P, D, E> {
         mutablePagingBuffer.put(action.params, action.data)
 
         val nextPagingItems = aggregatingStrategy.aggregate(
@@ -519,7 +538,10 @@ class DefaultReducer<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A 
 
     }
 
-    private suspend fun reduceUpdateErrorAction(action: PagingAction.UpdateError<Id, K, P, D, E, A>, prevState: PagingState<Id, K, P, D, E>): PagingState<Id, K, P, D, E> {
+    private suspend fun reduceUpdateErrorAction(
+        action: PagingAction.UpdateError<Id, K, P, D, E, A>,
+        prevState: PagingState<Id, K, P, D, E>
+    ): PagingState<Id, K, P, D, E> {
         return when (errorHandlingStrategy) {
             ErrorHandlingStrategy.Ignore -> prevState
             ErrorHandlingStrategy.PassThrough -> reduceUpdateErrorActionWithPassThrough(action, prevState)
@@ -527,7 +549,11 @@ class DefaultReducer<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A 
         }
     }
 
-    private suspend fun retryLast(maxRetries: Int, action: PagingAction.UpdateError<Id, K, P, D, E, A>, prevState: PagingState<Id, K, P, D, E>): PagingState<Id, K, P, D, E> {
+    private suspend fun retryLast(
+        maxRetries: Int,
+        action: PagingAction.UpdateError<Id, K, P, D, E, A>,
+        prevState: PagingState<Id, K, P, D, E>
+    ): PagingState<Id, K, P, D, E> {
 
         val retries = retriesManager.getRetriesFor(action.params)
 
@@ -554,19 +580,40 @@ class DefaultReducer<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A 
                 )
             } else {
                 when (action.error) {
-                    is PagingSource.LoadResult.Error.Custom -> PagingState.Error.Custom(action.error.error, action.params.key, prevState.prefetchPosition)
-                    is PagingSource.LoadResult.Error.Exception -> PagingState.Error.Exception(action.error.error, action.params.key, prevState.prefetchPosition)
+                    is PagingSource.LoadResult.Error.Custom -> PagingState.Error.Custom(
+                        action.error.error,
+                        action.params.key,
+                        prevState.prefetchPosition
+                    )
+
+                    is PagingSource.LoadResult.Error.Exception -> PagingState.Error.Exception(
+                        action.error.error,
+                        action.params.key,
+                        prevState.prefetchPosition
+                    )
                 }
             }
         }
     }
 
-    private fun reduceUpdateErrorActionWithPassThrough(action: PagingAction.UpdateError<Id, K, P, D, E, A>, prevState: PagingState<Id, K, P, D, E>): PagingState<Id, K, P, D, E> {
+    private fun reduceUpdateErrorActionWithPassThrough(
+        action: PagingAction.UpdateError<Id, K, P, D, E, A>,
+        prevState: PagingState<Id, K, P, D, E>
+    ): PagingState<Id, K, P, D, E> {
         // Emitting it, but not doing anything else
 
         val errorState: PagingState.Error<Id, K, P, D, E, *> = when (action.error) {
-            is PagingSource.LoadResult.Error.Custom -> PagingState.Error.Custom(action.error.error, action.params.key, prevState.prefetchPosition)
-            is PagingSource.LoadResult.Error.Exception -> PagingState.Error.Exception(action.error.error, action.params.key, prevState.prefetchPosition)
+            is PagingSource.LoadResult.Error.Custom -> PagingState.Error.Custom(
+                action.error.error,
+                action.params.key,
+                prevState.prefetchPosition
+            )
+
+            is PagingSource.LoadResult.Error.Exception -> PagingState.Error.Exception(
+                action.error.error,
+                action.params.key,
+                prevState.prefetchPosition
+            )
         }
 
         return if (prevState is PagingState.Data) {
@@ -585,7 +632,10 @@ class DefaultReducer<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A 
     }
 
 
-    private fun reduceUserCustomAction(action: PagingAction.User.Custom<Id, K, P, D, E, A>, prevState: PagingState<Id, K, P, D, E>): PagingState<Id, K, P, D, E> {
+    private fun reduceUserCustomAction(
+        action: PagingAction.User.Custom<Id, K, P, D, E, A>,
+        prevState: PagingState<Id, K, P, D, E>
+    ): PagingState<Id, K, P, D, E> {
         return userCustomActionReducer?.reduce(action, prevState) ?: prevState
     }
 
@@ -598,18 +648,31 @@ class DefaultReducer<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A 
         prefetchPosition = prevState.prefetchPosition
     )
 
-    private fun reduceLoadActionAndNonDataState(key: PagingKey<K, P>, prevState: PagingState<Id, K, P, D, E>) = PagingState.Loading<Id, K, P, D, E>(
-        currentKey = key,
-        prefetchPosition = prevState.prefetchPosition
-    )
+    private fun reduceLoadActionAndNonDataState(key: PagingKey<K, P>, prevState: PagingState<Id, K, P, D, E>) =
+        PagingState.Loading<Id, K, P, D, E>(
+            currentKey = key,
+            prefetchPosition = prevState.prefetchPosition
+        )
 
-    private fun reduceLoadAction(action: PagingAction.Load<Id, K, P, D, E, A>, prevState: PagingState<Id, K, P, D, E>): PagingState<Id, K, P, D, E> {
-        return if (prevState is PagingState.Data) reduceLoadActionAndDataState(prevState) else reduceLoadActionAndNonDataState(action.key, prevState)
+    private fun reduceLoadAction(
+        action: PagingAction.Load<Id, K, P, D, E, A>,
+        prevState: PagingState<Id, K, P, D, E>
+    ): PagingState<Id, K, P, D, E> {
+        return if (prevState is PagingState.Data) reduceLoadActionAndDataState(prevState) else reduceLoadActionAndNonDataState(
+            action.key,
+            prevState
+        )
     }
 
 
-    private fun reduceUserLoadAction(action: PagingAction.User.Load<Id, K, P, D, E, A>, prevState: PagingState<Id, K, P, D, E>): PagingState<Id, K, P, D, E> {
-        return if (prevState is PagingState.Data) reduceLoadActionAndDataState(prevState) else reduceLoadActionAndNonDataState(action.key, prevState)
+    private fun reduceUserLoadAction(
+        action: PagingAction.User.Load<Id, K, P, D, E, A>,
+        prevState: PagingState<Id, K, P, D, E>
+    ): PagingState<Id, K, P, D, E> {
+        return if (prevState is PagingState.Data) reduceLoadActionAndDataState(prevState) else reduceLoadActionAndNonDataState(
+            action.key,
+            prevState
+        )
     }
 
     private fun resetRetriesFor(params: PagingSource.LoadParams<K, P>) {
@@ -646,7 +709,8 @@ class RetriesManager<Id : Comparable<Id>, K : Any, P : Any, D : Any> {
     }
 }
 
-class DefaultPagingSourceCollector<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : Any> : PagingSourceCollector<Id, K, P, D, E, A> {
+class DefaultPagingSourceCollector<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : Any, A : Any> :
+    PagingSourceCollector<Id, K, P, D, E, A> {
     override suspend fun invoke(
         params: PagingSource.LoadParams<K, P>,
         results: Flow<PagingSource.LoadResult<Id, K, P, D, E>>,
@@ -805,7 +869,11 @@ class DefaultAppLoadEffect<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : A
     private val pagingSourceCollector = lazy { pagingSourceCollectorInjector.inject() }
     private val pagingSource = lazy { pagingSourceInjector.inject() }
 
-    override fun invoke(action: PagingAction.Load<Id, K, P, D, E, A>, state: PagingState<Id, K, P, D, E>, dispatch: (PagingAction<Id, K, P, D, E, A>) -> Unit) {
+    override fun invoke(
+        action: PagingAction.Load<Id, K, P, D, E, A>,
+        state: PagingState<Id, K, P, D, E>,
+        dispatch: (PagingAction<Id, K, P, D, E, A>) -> Unit
+    ) {
         logger.value?.log(
             """Running post reducer effect:
                 Effect: App load
@@ -840,7 +908,11 @@ class DefaultUserLoadEffect<Id : Comparable<Id>, K : Any, P : Any, D : Any, E : 
     private val pagingSourceCollector = lazy { pagingSourceCollectorInjector.inject() }
     private val pagingSource = lazy { pagingSourceInjector.inject() }
 
-    override fun invoke(action: PagingAction.User.Load<Id, K, P, D, E, A>, state: PagingState.Loading<Id, K, P, D, E>, dispatch: (PagingAction<Id, K, P, D, E, A>) -> Unit) {
+    override fun invoke(
+        action: PagingAction.User.Load<Id, K, P, D, E, A>,
+        state: PagingState.Loading<Id, K, P, D, E>,
+        dispatch: (PagingAction<Id, K, P, D, E, A>) -> Unit
+    ) {
         logger.value?.log(
             """Running post reducer effect:
                 Effect: User load
@@ -875,7 +947,11 @@ class DefaultUserLoadMoreEffect<Id : Comparable<Id>, K : Any, P : Any, D : Any, 
     private val pagingSourceCollector = lazy { pagingSourceCollectorInjector.inject() }
     private val pagingSource = lazy { pagingSourceInjector.inject() }
 
-    override fun invoke(action: PagingAction.User.Load<Id, K, P, D, E, A>, state: PagingState.Data.LoadingMore<Id, K, P, D, E>, dispatch: (PagingAction<Id, K, P, D, E, A>) -> Unit) {
+    override fun invoke(
+        action: PagingAction.User.Load<Id, K, P, D, E, A>,
+        state: PagingState.Data.LoadingMore<Id, K, P, D, E>,
+        dispatch: (PagingAction<Id, K, P, D, E, A>) -> Unit
+    ) {
         logger.value?.log(
             """Running post reducer effect:
                 Effect: User load more
