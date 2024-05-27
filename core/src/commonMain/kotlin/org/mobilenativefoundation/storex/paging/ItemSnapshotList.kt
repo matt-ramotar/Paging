@@ -15,4 +15,6 @@ class ItemSnapshotList<Id : Comparable<Id>, V : Identifiable<Id>>(
     override fun get(index: Int): V? = items.getOrNull(index)
 
     fun getAll(): List<V> = items
+
+    fun getAllIds(): List<Id> = items.map { it.id }
 }

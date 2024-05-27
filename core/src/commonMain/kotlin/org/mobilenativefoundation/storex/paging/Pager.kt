@@ -21,12 +21,14 @@ import org.mobilenativefoundation.storex.paging.custom.Middleware
 import org.mobilenativefoundation.storex.paging.custom.SideEffect
 import org.mobilenativefoundation.storex.paging.custom.TransformationStrategy
 import org.mobilenativefoundation.storex.paging.db.DriverFactory
-import org.mobilenativefoundation.storex.paging.internal.api.FetchingStateHolder
+import org.mobilenativefoundation.storex.paging.internal.api.FetchingState
 import org.mobilenativefoundation.storex.paging.internal.api.MutablePagingBuffer
 import org.mobilenativefoundation.storex.paging.internal.impl.ItemStoreFactory
 import org.mobilenativefoundation.storex.paging.internal.impl.KClassRegistry
 import org.mobilenativefoundation.storex.paging.internal.impl.PageStoreFactory
 import org.mobilenativefoundation.storex.paging.internal.impl.PagingError
+import org.mobilenativefoundation.storex.paging.internal.impl.RealFetchingStateHolder
+import org.mobilenativefoundation.storex.paging.internal.impl.RealMutablePagingBuffer
 import org.mobilenativefoundation.storex.paging.internal.impl.RealPager
 import kotlin.reflect.KClass
 
@@ -48,18 +50,18 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
 
         private lateinit var coroutineDispatcher: CoroutineDispatcher
         private lateinit var transformationParams: P
-        private lateinit var fetchingStateHolder: FetchingStateHolder<Id>
-        private lateinit var transformations: List<TransformationStrategy<Id, V, P>>
-        private lateinit var launchEffects: List<LaunchEffect>
-        private lateinit var sideEffects: List<SideEffect<Id, V>>
-        private lateinit var mutablePagingBuffer: MutablePagingBuffer<Id, K, V, E>
+        private var transformations: List<TransformationStrategy<Id, V, P>> = emptyList()
+        private var launchEffects: List<LaunchEffect> = emptyList()
+        private var sideEffects: List<SideEffect<Id, V>> = emptyList()
+        private var pagingBufferMaxSize: Int = 500
         private lateinit var errorHandlingStrategy: ErrorHandlingStrategy
         private lateinit var pagingSource: PagingSource<Id, K, V, E>
         private lateinit var middleware: List<Middleware<K>>
         private lateinit var fetchingStrategy: FetchingStrategy<Id, K, E>
         private lateinit var pagingConfig: PagingConfig
         private lateinit var initialLoadParams: PagingSource.LoadParams<K>
-        private lateinit var initialState: PagingState<Id, E>
+        private var initialState: PagingState<Id, E> = PagingState.initial()
+        private var initialFetchingState: FetchingState<Id> = FetchingState()
 
         private lateinit var itemFetcher: Fetcher<Id, V>
         private lateinit var driverFactory: DriverFactory
@@ -73,10 +75,6 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
             this.transformationParams = transformationParams
         }
 
-        fun fetchingStateHolder(fetchingStateHolder: FetchingStateHolder<Id>) = apply {
-            this.fetchingStateHolder = fetchingStateHolder
-        }
-
         fun transformations(transformations: List<TransformationStrategy<Id, V, P>>) = apply {
             this.transformations = transformations
         }
@@ -87,10 +85,6 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
 
         fun sideEffects(sideEffects: List<SideEffect<Id, V>>) = apply {
             this.sideEffects = sideEffects
-        }
-
-        fun mutablePagingBuffer(mutablePagingBuffer: MutablePagingBuffer<Id, K, V, E>) = apply {
-            this.mutablePagingBuffer = mutablePagingBuffer
         }
 
         fun errorHandlingStrategy(errorHandlingStrategy: ErrorHandlingStrategy) = apply {
@@ -115,6 +109,14 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
 
         fun initialState(initialState: PagingState<Id, E>) = apply {
             this.initialState = initialState
+        }
+
+        fun initialFetchingState(initialFetchingState: FetchingState<Id>) = apply {
+            this.initialFetchingState = initialFetchingState
+        }
+
+        fun pagingBufferMaxSize(maxSize: Int) = apply {
+            this.pagingBufferMaxSize = maxSize
         }
 
 
@@ -167,12 +169,22 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
             val itemStore = itemStoreFactory.create()
 
 
+            val fetchingStateHolder = RealFetchingStateHolder<Id>(
+                initialFetchingState
+            )
+
+            val mutablePagingBuffer: MutablePagingBuffer<Id, K, V, E> =
+                RealMutablePagingBuffer(
+                    pagingBufferMaxSize,
+                    pageStore,
+                    itemStore,
+                    transformationParams,
+                    transformations
+                )
 
             return RealPager<Id, K, V, E, P>(
                 coroutineDispatcher,
-                transformationParams,
                 fetchingStateHolder,
-                transformations,
                 launchEffects,
                 sideEffects,
                 mutablePagingBuffer,

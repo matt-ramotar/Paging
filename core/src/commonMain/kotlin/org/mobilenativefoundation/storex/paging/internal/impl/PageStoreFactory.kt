@@ -17,6 +17,7 @@ import org.mobilenativefoundation.store.store5.StoreBuilder
 import org.mobilenativefoundation.store5.cache.NormalizedCache
 import org.mobilenativefoundation.store5.cache.NormalizingCache
 import org.mobilenativefoundation.store5.core.Identifiable
+import org.mobilenativefoundation.storex.paging.Item
 import org.mobilenativefoundation.storex.paging.Page
 import org.mobilenativefoundation.storex.paging.PagingDb
 import org.mobilenativefoundation.storex.paging.PagingSource
@@ -29,6 +30,9 @@ class PageStoreFactory<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : A
     private val registry: KClassRegistry<Id, K, V, E>,
     private val normalizedCache: NormalizedCache<Id, K, V>,
 ) {
+
+    private val db = PagingDb(driverFactory.createDriver())
+
     fun create(): Store<PagingSource.LoadParams<K>, PagingSource.LoadResult.Data<Id, K, V, E>> {
         return StoreBuilder.from(
             fetcher = fetcher,
@@ -39,7 +43,6 @@ class PageStoreFactory<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : A
     }
 
     private fun createSourceOfTruth(): SourceOfTruth<PagingSource.LoadParams<K>, Page, PagingSource.LoadResult.Data<Id, K, V, E>> {
-        val db = PagingDb(driverFactory.createDriver())
 
         return SourceOfTruth.of(
             reader = { params ->
@@ -53,16 +56,22 @@ class PageStoreFactory<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : A
                     .map { query ->
                         val page = query.executeAsOne()
 
+                        val encodedItemIds =
+                            db.pageQueries.getPageItemIds(encodedParams).executeAsOne()
+
                         val itemIds: List<Id> = Json.decodeFromString(
                             ListSerializer(registry.id.serializer()),
-                            page.itemIds
+                            encodedItemIds
                         )
-                        val encodedItemIds =
-                            itemIds.map { Json.encodeToString(registry.id.serializer(), it) }
 
-                        val items = db.itemQueries.getItems(encodedItemIds).executeAsList().map {
-                            Json.decodeFromString(registry.value.serializer(), it.data_)
+                        val encodedItemIdsList = itemIds.map {
+                            Json.encodeToString(registry.id.serializer(), it)
                         }
+
+                        val items =
+                            db.itemQueries.getItems(encodedItemIdsList).executeAsList().map {
+                                Json.decodeFromString(registry.value.serializer(), it.data_)
+                            }
 
 
                         val prevKey =
@@ -95,6 +104,9 @@ class PageStoreFactory<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : A
             },
             writer = { _, page ->
                 db.pageQueries.setPage(page)
+                // TODO(): Write items!
+
+
             }
         )
     }
@@ -108,11 +120,27 @@ class PageStoreFactory<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : A
     private fun createConverter(): Converter<PagingSource.LoadResult.Data<Id, K, V, E>, Page, PagingSource.LoadResult.Data<Id, K, V, E>> {
         return Converter.Builder<PagingSource.LoadResult.Data<Id, K, V, E>, Page, PagingSource.LoadResult.Data<Id, K, V, E>>()
             .fromNetworkToLocal { network ->
+
+                val params = Json.encodeToString(
+                    PagingSource.LoadParams.serializer(registry.key.serializer()),
+                    network.params
+                )
+
+                // TODO(): Ideally we can fix this at the Store level
+
+                network.items.forEach { item ->
+                    db.itemQueries.setItem(
+                        Item(
+                            Json.encodeToString(registry.id.serializer(), item.id),
+                            Json.encodeToString(registry.value.serializer(), item),
+                            params
+                        )
+                    )
+                }
+
+
                 Page(
-                    params = Json.encodeToString(
-                        PagingSource.LoadParams.serializer(registry.key.serializer()),
-                        network.params
-                    ),
+                    params = params,
 
                     nextKey = network.nextKey?.let {
                         Json.encodeToString(
@@ -126,12 +154,7 @@ class PageStoreFactory<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : A
                             it
                         )
                     },
-                    extras = network.extras?.toString(),
-
-                    itemIds = Json.encodeToString(
-                        ListSerializer(registry.id.serializer()),
-                        network.items.map { it.id }
-                    )
+                    extras = network.extras?.toString()
                 )
             }
 
@@ -154,12 +177,7 @@ class PageStoreFactory<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : A
                             it
                         )
                     },
-                    extras = output.extras?.toString(),
-
-                    itemIds = Json.encodeToString(
-                        ListSerializer(registry.id.serializer()),
-                        output.items.map { it.id }
-                    )
+                    extras = output.extras?.toString()
                 )
             }
             .build()

@@ -17,6 +17,7 @@ interface PagingSource<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : A
         sealed interface Strategy {
             @Serializable
             data class CacheFirst(val refresh: Boolean) : Strategy
+
             @Serializable
             data object SkipCache : Strategy
         }
@@ -26,6 +27,7 @@ interface PagingSource<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : A
             Append
         }
     }
+
     @Serializable
     sealed interface LoadResult<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
         @Serializable
@@ -43,6 +45,16 @@ interface PagingSource<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : A
                 MemoryCache,
                 SourceOfTruth
             }
+
+            val normalized: Normalized<Id, K, V, E>
+                get() = Normalized(
+                    items = items.map { it.id },
+                    prevKey = prevKey,
+                    params = params,
+                    nextKey = nextKey,
+                    origin = origin
+                )
+
         }
 
         @Serializable
@@ -50,5 +62,14 @@ interface PagingSource<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : A
             val error: E,
             val extras: JsonObject? = null
         ) : LoadResult<Id, K, V, E>
+
+        data class Normalized<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any>(
+            val items: List<Id>,
+            val prevKey: K?,
+            val params: LoadParams<K>,
+            val nextKey: K?,
+            val origin: Data.Origin,
+            val extras: JsonObject? = null
+        )
     }
 }

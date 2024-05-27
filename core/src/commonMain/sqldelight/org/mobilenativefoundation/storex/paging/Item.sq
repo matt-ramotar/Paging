@@ -1,13 +1,19 @@
 CREATE TABLE IF NOT EXISTS item (
     id TEXT PRIMARY KEY NOT NULL,
-    data TEXT NOT NULL
+    data TEXT NOT NULL,
+    pageParams TEXT NOT NULL
 );
 
 getItem:
 SELECT * FROM item WHERE id = :id;
 
 setItem:
-INSERT INTO item(id, data) VALUES ?;
+INSERT INTO item(id, data, pageParams) VALUES ?;
 
 getItems:
 SELECT * FROM item WHERE id IN :itemIds;
+
+updateItem:
+UPDATE item
+SET data = :data
+WHERE id = :id;

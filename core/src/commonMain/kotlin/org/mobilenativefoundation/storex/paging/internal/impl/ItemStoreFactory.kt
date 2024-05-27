@@ -24,6 +24,7 @@ class ItemStoreFactory<Id : Comparable<Id>, K : Any, V : Identifiable<Id>>(
     private val registry: KClassRegistry<Id, K, V, *>,
     private val normalizedCache: NormalizedCache<Id, K, V>
 ) {
+    private val db = PagingDb(driverFactory.createDriver())
 
     fun create(): Store<Id, V> {
         return StoreBuilder.from(
@@ -35,7 +36,6 @@ class ItemStoreFactory<Id : Comparable<Id>, K : Any, V : Identifiable<Id>>(
     }
 
     private fun createSourceOfTruth(): SourceOfTruth<Id, Item, V> {
-        val db = PagingDb(driverFactory.createDriver())
 
         return SourceOfTruth.of(
             reader = { id ->
@@ -55,16 +55,26 @@ class ItemStoreFactory<Id : Comparable<Id>, K : Any, V : Identifiable<Id>>(
     private fun createConverter(): Converter<V, Item, V> {
         return Converter.Builder<V, Item, V>()
             .fromNetworkToLocal { network ->
+
+                val id = Json.encodeToString(registry.id.serializer(), network.id)
+                val existingParams = db.itemQueries.getItem(id).executeAsOne().pageParams
+
                 Item(
-                    Json.encodeToString(registry.id.serializer(), network.id),
-                    Json.encodeToString(registry.value.serializer(), network)
+                    id,
+                    Json.encodeToString(registry.value.serializer(), network),
+                    existingParams
                 )
             }
 
             .fromOutputToLocal { output ->
+
+                val id = Json.encodeToString(registry.id.serializer(), output.id)
+                val existingParams = db.itemQueries.getItem(id).executeAsOne().pageParams
+
                 Item(
-                    Json.encodeToString(registry.id.serializer(), output.id),
-                    Json.encodeToString(registry.value.serializer(), output)
+                    id,
+                    Json.encodeToString(registry.value.serializer(), output),
+                    existingParams
                 )
             }
             .build()

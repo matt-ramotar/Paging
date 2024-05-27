@@ -4,9 +4,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,7 +30,6 @@ import org.mobilenativefoundation.storex.paging.custom.FetchingStrategy
 import org.mobilenativefoundation.storex.paging.custom.LaunchEffect
 import org.mobilenativefoundation.storex.paging.custom.Middleware
 import org.mobilenativefoundation.storex.paging.custom.SideEffect
-import org.mobilenativefoundation.storex.paging.custom.TransformationStrategy
 import org.mobilenativefoundation.storex.paging.internal.api.FetchingStateHolder
 import org.mobilenativefoundation.storex.paging.internal.api.MutablePagingBuffer
 
@@ -42,9 +38,7 @@ import org.mobilenativefoundation.storex.paging.internal.api.MutablePagingBuffer
 @OptIn(InternalSerializationApi::class)
 class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P : Any>(
     coroutineDispatcher: CoroutineDispatcher,
-    private val transformationParams: P,
     private val fetchingStateHolder: FetchingStateHolder<Id>,
-    private val transformations: List<TransformationStrategy<Id, V, P>>,
     private val launchEffects: List<LaunchEffect>,
     private val sideEffects: List<SideEffect<Id, V>>,
     private val mutablePagingBuffer: MutablePagingBuffer<Id, K, V, E>,
@@ -84,7 +78,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
             if (selfUpdatingItems[id] == null) {
 
                 val selfUpdatingItem = SelfUpdatingItem(
-                    initialState = mutablePagingBuffer.get(id)?.value?.let {
+                    initialState = mutablePagingBuffer.get(id)?.let {
                         ItemState.loaded<Id, V, E>(
                             it
                         )
@@ -326,27 +320,19 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
 
     @Composable
     private fun PagingState<Id, E>.transform(): PagingState<Id, E> {
-        val snapshot = mutablePagingBuffer.snapshotFrom(ids, ::onSnapshot)
-        return snapshot.transform(this)
-    }
+        var state = this
 
-
-    @Composable
-    private fun ItemSnapshotList<Id, V>.transform(prevPagingState: PagingState<Id, E>): PagingState<Id, E> {
-
-        var transformed by remember(this) { mutableStateOf(this) }
-
-
-        transformations.forEach { transformation ->
-            transformed = transformation.invoke(this, transformationParams)
+        LaunchedEffect(this.ids) {
+            val snapshot = mutablePagingBuffer.snapshot(ids)
+            onSnapshot(snapshot)
+            state = PagingState(
+                ids = snapshot.getAllIds(),
+                loadStates = loadStates
+            )
         }
 
-        val ids = remember(transformed) { transformed.getAll().map { it.id } }
 
-        return PagingState(
-            ids = ids,
-            loadStates = prevPagingState.loadStates
-        )
+        return state
     }
 
     private fun onSnapshot(snapshot: ItemSnapshotList<Id, V>) {
