@@ -1,0 +1,19 @@
+CREATE TABLE IF NOT EXISTS page (
+    params TEXT PRIMARY KEY NOT NULL,
+    prevKey TEXT,
+    nextKey TEXT,
+    extras TEXT,
+    itemIds TEXT NOT NULL
+);
+
+getPage:
+SELECT * FROM page WHERE params = :params;
+
+
+getPageItemIds:
+SELECT itemIds
+FROM page
+WHERE page.params = :params;
+
+setPage:
+INSERT INTO page(params, prevKey, nextKey, extras, itemIds) VALUES ?;

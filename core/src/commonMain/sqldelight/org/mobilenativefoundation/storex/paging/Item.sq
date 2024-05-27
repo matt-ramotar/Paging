@@ -1,0 +1,13 @@
+CREATE TABLE IF NOT EXISTS item (
+    id TEXT PRIMARY KEY NOT NULL,
+    data TEXT NOT NULL
+);
+
+getItem:
+SELECT * FROM item WHERE id = :id;
+
+setItem:
+INSERT INTO item(id, data) VALUES ?;
+
+getItems:
+SELECT * FROM item WHERE id IN :itemIds;

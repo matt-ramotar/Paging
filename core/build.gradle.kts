@@ -5,19 +5,15 @@ plugins {
     id("com.android.library")
     id("org.jetbrains.dokka")
     id("org.jetbrains.kotlinx.kover")
+    alias(libs.plugins.compose)
+    alias(libs.plugins.sqldelight)
+    alias(libs.plugins.serialization)
 }
 
 kotlin {
     androidTarget()
     jvm()
-    iosArm64()
-    iosX64()
-    linuxX64()
-    iosSimulatorArm64()
-    js {
-        browser()
-        nodejs()
-    }
+    applyDefaultHierarchyTemplate()
 
     sourceSets {
         val commonMain by getting {
@@ -26,11 +22,46 @@ kotlin {
                 implementation(libs.touchlab.kermit)
                 implementation(libs.kotlinx.coroutines.core)
                 api(libs.store)
-                implementation(libs.kotlinx.datetime)
+                api(libs.store.cache)
+                // implementation(libs.kotlinx.datetime)
+
+
+                implementation(libs.kotlin.stdlib)
+                implementation(libs.kotlinx.coroutines.core)
+                // api(libs.kotlinx.datetime)
+                api(libs.kotlinx.serialization.core)
+                api(libs.kotlinx.serialization.json)
+                api(compose.runtime)
+                implementation(libs.molecule.runtime)
+
+                implementation(libs.sqldelight.coroutines)
+                implementation(libs.sqldelight.paging)
+                implementation(libs.sqldelight.primitive)
             }
         }
 
-        val androidMain by getting
+        androidMain {
+            dependencies {
+                api(libs.sqldelight.android)
+            }
+        }
+
+        jvmMain {
+            dependencies {
+                api(libs.sqldelight.sqlite)
+            }
+        }
+
+        nativeMain {
+            dependencies {
+                api(libs.sqldelight.native)
+
+                implementation("co.touchlab:stately-common:2.0.7")
+                implementation("co.touchlab:stately-isolate:2.0.7")
+                implementation("co.touchlab:stately-iso-collections:2.0.7")
+            }
+        }
+
         val commonTest by getting {
             dependencies {
                 implementation(kotlin("test"))
@@ -74,5 +105,13 @@ koverMerged {
 
     verify {
         onCheck.set(true)
+    }
+}
+
+sqldelight {
+    databases {
+        create("PagingDb") {
+            packageName = "org.mobilenativefoundation.storex.paging"
+        }
     }
 }
