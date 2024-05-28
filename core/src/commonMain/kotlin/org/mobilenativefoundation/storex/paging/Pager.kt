@@ -47,7 +47,7 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
         private val valueKClass: KClass<V>,
         private val errorKClass: KClass<E>,
         private val pagingConfig: PagingConfig<Id, K>,
-        private val driverFactory: DriverFactory,
+        private val driverFactory: DriverFactory?,
         private val errorFactory: ErrorFactory<E>,
         private val operations: List<Operation<Id, K, V, P, P>>
     ) {
@@ -221,14 +221,14 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
                 operations: List<Operation<Id, K, V, P, P>>,
             ): Builder<Id, K, V, E, P> {
                 return Builder(
-                    Id::class,
-                    K::class,
-                    V::class,
-                    E::class,
-                    pagingConfig,
-                    driverFactory,
-                    errorFactory,
-                    operations
+                    idKClass = Id::class,
+                    keyKClass = K::class,
+                    valueKClass = V::class,
+                    errorKClass = E::class,
+                    pagingConfig = pagingConfig,
+                    driverFactory = driverFactory,
+                    errorFactory = errorFactory,
+                    operations = operations
                 )
             }
 
@@ -238,14 +238,14 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
                 errorFactory: ErrorFactory<E>,
             ): Builder<Id, K, V, E, Any> {
                 return Builder(
-                    Id::class,
-                    K::class,
-                    V::class,
-                    E::class,
-                    pagingConfig,
-                    driverFactory,
-                    errorFactory,
-                    emptyList()
+                    idKClass = Id::class,
+                    keyKClass = K::class,
+                    valueKClass = V::class,
+                    errorKClass = E::class,
+                    pagingConfig = pagingConfig,
+                    driverFactory = driverFactory,
+                    errorFactory = errorFactory,
+                    operations = emptyList()
                 )
             }
 
@@ -254,14 +254,29 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
                 driverFactory: DriverFactory,
             ): Builder<Id, K, V, Throwable, Any> {
                 return Builder(
-                    Id::class,
-                    K::class,
-                    V::class,
-                    Throwable::class,
-                    pagingConfig,
-                    driverFactory,
-                    DefaultErrorFactory(),
-                    emptyList()
+                    idKClass = Id::class,
+                    keyKClass = K::class,
+                    valueKClass = V::class,
+                    errorKClass = Throwable::class,
+                    pagingConfig = pagingConfig,
+                    driverFactory = driverFactory,
+                    errorFactory = DefaultErrorFactory(),
+                    operations = emptyList()
+                )
+            }
+
+            inline operator fun <reified Id : Comparable<Id>, reified K : Any, reified V : Identifiable<Id>> invoke(
+                pagingConfig: PagingConfig<Id, K>,
+            ): Builder<Id, K, V, Throwable, Any> {
+                return Builder(
+                    idKClass = Id::class,
+                    keyKClass = K::class,
+                    valueKClass = V::class,
+                    errorKClass = Throwable::class,
+                    pagingConfig = pagingConfig,
+                    driverFactory = null,
+                    errorFactory = DefaultErrorFactory(),
+                    operations = emptyList()
                 )
             }
         }

@@ -42,14 +42,14 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
     private val registry: KClassRegistry<Id, K, V, E>,
     private val errorFactory: ErrorFactory<E>,
     private val itemFetcher: Fetcher<Id, V>?,
-    driverFactory: DriverFactory,
+    driverFactory: DriverFactory?,
     private val maxSize: Int = 500,
     private val fetchingStateHolder: FetchingStateHolder<Id>,
     private val sideEffects: List<SideEffect<Id, V>>,
     private val pagingConfig: PagingConfig<Id, K>
 ) : NormalizedStore<Id, K, V, E> {
 
-    private val db = PagingDb(driverFactory.createDriver())
+    private val db = driverFactory?.let { PagingDb(driverFactory.createDriver()) }
 
     private data class PageNode<K : Any>(
         val key: K,
@@ -102,8 +102,10 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
             }
         }
 
+        // TODO(): Only encode/decode if db != null
         val encodedItemId = Json.encodeToString(registry.id.serializer(), id)
-        db.itemQueries.removeItem(encodedItemId)
+
+        db?.itemQueries?.removeItem(encodedItemId)
 
         itemMemoryCache.remove(id)
         sizeItems--
@@ -134,7 +136,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
             PagingSource.LoadParams.serializer(registry.key.serializer()),
             keyToParamsMap[node.key]!!
         )
-        db.pageQueries.removePage(encodedParams)
+        db?.pageQueries?.removePage(encodedParams)
 
         sizePages--
     }
@@ -281,7 +283,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
             localParams
         )
 
-        db.itemQueries.setItem(localItem)
+        db?.itemQueries?.setItem(localItem)
     }
 
     private fun saveNormalizedPageToDb(
@@ -306,7 +308,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
             extras = fetcherResult.value.extras?.toString()
         )
 
-        db.pageQueries.setPage(localPage)
+        db?.pageQueries?.setPage(localPage)
     }
 
 
@@ -418,7 +420,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
                     PagingSource.LoadParams.serializer(registry.key.serializer()),
                     params
                 )
-                return db.pageQueries.getPage(localParams).executeAsOneOrNull() != null
+                return db?.pageQueries?.getPage(localParams)?.executeAsOneOrNull() != null
             }
 
             // emit loading
@@ -601,7 +603,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
                                     Json.encodeToString(registry.id.serializer(), item.id)
                                 val updatedData =
                                     Json.encodeToString(registry.value.serializer(), item)
-                                db.itemQueries.updateItem(updatedData, itemId)
+                                db?.itemQueries?.updateItem(updatedData, itemId)
 
                                 // Update state
                                 // TODO(): Should I recheck the state?
@@ -662,7 +664,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
                         val itemId = Json.encodeToString(registry.id.serializer(), event.value.id)
                         val updatedData =
                             Json.encodeToString(registry.value.serializer(), event.value)
-                        db.itemQueries.updateItem(updatedData, itemId)
+                        db?.itemQueries?.updateItem(updatedData, itemId)
 
                         // TODO(): Support network
 
@@ -674,6 +676,10 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
         }
 
         LaunchedEffect(id) {
+            if (db == null) {
+                return@LaunchedEffect
+            }
+
             db.itemQueries.getItem(encodedId).asFlow().map { query ->
                 val item = query.executeAsOneOrNull()
 
