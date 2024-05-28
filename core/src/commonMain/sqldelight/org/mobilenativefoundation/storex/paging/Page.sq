@@ -17,3 +17,7 @@ WHERE page.params = :params;
 
 setPage:
 INSERT INTO page(params, prevKey, nextKey, extras) VALUES ?;
+
+
+removePage:
+DELETE FROM page WHERE params = :params;

@@ -2,13 +2,13 @@ package org.mobilenativefoundation.storex.paging
 
 import org.mobilenativefoundation.storex.paging.custom.ErrorHandlingStrategy
 
-data class PagingConfig(
+data class PagingConfig<Id: Comparable<Id>>(
     val pageSize: Int = DEFAULT_PAGE_SIZE,
     val prefetchDistance: Int = pageSize * DEFAULT_PREFETCH_DISTANCE_MULTIPLIER,
     val initialLoadSize: Int = pageSize * DEFAULT_INITIAL_PAGE_MULTIPLIER,
     val maxSize: Int = MAX_SIZE_UNBOUNDED,
     val jumpThreshold: Int = COUNT_UNDEFINED,
-    val placeholdersEnabled: Boolean = true,
+    val placeholderId: Id?,
     val errorHandlingStrategy: ErrorHandlingStrategy = ErrorHandlingStrategy.RetryLast(),
 ) {
     companion object {

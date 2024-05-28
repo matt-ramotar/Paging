@@ -8,21 +8,21 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.serializer
-import org.mobilenativefoundation.store.store5.Store
-import org.mobilenativefoundation.store.store5.impl.extensions.fresh
 import org.mobilenativefoundation.store5.core.Identifiable
 import org.mobilenativefoundation.storex.paging.ItemSnapshotList
-import org.mobilenativefoundation.storex.paging.ItemState
+import org.mobilenativefoundation.storex.paging.LoadPageStatus
 import org.mobilenativefoundation.storex.paging.Pager
 import org.mobilenativefoundation.storex.paging.PagingConfig
 import org.mobilenativefoundation.storex.paging.PagingLoadState
 import org.mobilenativefoundation.storex.paging.PagingSource
 import org.mobilenativefoundation.storex.paging.PagingState
+import org.mobilenativefoundation.storex.paging.RealNormalizedStore
 import org.mobilenativefoundation.storex.paging.SelfUpdatingItem
 import org.mobilenativefoundation.storex.paging.custom.ErrorFactory
 import org.mobilenativefoundation.storex.paging.custom.ErrorHandlingStrategy
@@ -30,8 +30,8 @@ import org.mobilenativefoundation.storex.paging.custom.FetchingStrategy
 import org.mobilenativefoundation.storex.paging.custom.LaunchEffect
 import org.mobilenativefoundation.storex.paging.custom.Middleware
 import org.mobilenativefoundation.storex.paging.custom.SideEffect
+import org.mobilenativefoundation.storex.paging.custom.TransformationStrategy
 import org.mobilenativefoundation.storex.paging.internal.api.FetchingStateHolder
-import org.mobilenativefoundation.storex.paging.internal.api.MutablePagingBuffer
 
 // TODO(): Design decision to support initial state (e.g., hardcoded)
 
@@ -41,16 +41,16 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
     private val fetchingStateHolder: FetchingStateHolder<Id>,
     private val launchEffects: List<LaunchEffect>,
     private val sideEffects: List<SideEffect<Id, V>>,
-    private val mutablePagingBuffer: MutablePagingBuffer<Id, K, V, E>,
     private val errorHandlingStrategy: ErrorHandlingStrategy,
     private val middleware: List<Middleware<K>>,
     private val fetchingStrategy: FetchingStrategy<Id, K, E>,
-    private val pagingConfig: PagingConfig,
+    private val pagingConfig: PagingConfig<Id>,
     private val initialLoadParams: PagingSource.LoadParams<K>,
-    private val itemStore: Store<Id, V>,
-    private val pageStore: Store<PagingSource.LoadParams<K>, PagingSource.LoadResult.Data<Id, K, V, E>>,
     private val errorFactory: ErrorFactory<E>,
     private val registry: KClassRegistry<Id, K, V, E>,
+    private val normalizedStore: RealNormalizedStore<Id, K, V, E>,
+    private val transformationParams: P,
+    private val transformations: List<TransformationStrategy<Id, V, P>>,
     initialState: PagingState<Id, E> = PagingState.initial()
 ) : Pager<Id, K, V, E> {
 
@@ -58,46 +58,29 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
 
     // TODO(): This is not thread safe!
     private val _mutablePagingState = MutableStateFlow(initialState)
-    private val selfUpdatingItems = mutableMapOf<Id, SelfUpdatingItem<Id, V, E>>()
 
     private val appendLoadParamsQueue: LoadParamsQueue<K> = LoadParamsQueue()
     private val prependLoadParamsQueue: LoadParamsQueue<K> = LoadParamsQueue()
+
 
     init {
         handleLaunchEffects()
         handleEagerLoading()
     }
 
-    @Composable
     override fun selfUpdatingItem(id: Id): SelfUpdatingItem<Id, V, E> {
-        // TODO(): Make this thread safe
-
-        LaunchedEffect(id) {
-            fetchingStateHolder.updateMaxItemAccessedSoFar(id)
-
-            if (selfUpdatingItems[id] == null) {
-
-                val selfUpdatingItem = SelfUpdatingItem(
-                    initialState = mutablePagingBuffer.get(id)?.let {
-                        ItemState.loaded<Id, V, E>(
-                            it
-                        )
-                    } ?: ItemState.initial<Id, V, E>(),
-                    store = itemStore,
-                    errorFactory = errorFactory
-                )
-
-                selfUpdatingItems[id] = selfUpdatingItem
-            }
-        }
-
-        return selfUpdatingItems[id]!!
+        return normalizedStore.selfUpdatingItem(id)
     }
 
     @Composable
     override fun pagingState(loadParams: StateFlow<PagingSource.LoadParams<K>>): PagingState<Id, E> {
 
         val params by loadParams.collectAsState()
+
+
+        val fetchingState by fetchingStateHolder.state.collectAsState()
+
+        val pagingState by _mutablePagingState.collectAsState()
 
         LaunchedEffect(params) {
             when (params.direction) {
@@ -111,14 +94,19 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
                     processAppendQueue()
                 }
             }
-
         }
 
-        val pagingState by _mutablePagingState.collectAsState()
+        LaunchedEffect(fetchingState) {
+            if (fetchingStrategy.shouldFetchForward(params, pagingState, fetchingState)) {
+                handleForwardPrefetching()
+            }
 
-        val transformedPagingState = pagingState.transform()
+            if (fetchingStrategy.shouldFetchBackward(params, pagingState, fetchingState)) {
+                handleBackwardPrefetching()
+            }
+        }
 
-        return transformedPagingState
+        return pagingState
     }
 
     // TODO(): Design decision to get the most recent prepend load params
@@ -136,8 +124,24 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
                 handlePrependLoading(latestPrependLoadParams.applyMiddleware())
             }
         }
+    }
 
+    private fun handleForwardPrefetching() {
+        processAppendQueue()
+    }
 
+    private fun handleBackwardPrefetching() {
+        processPrependQueue()
+    }
+
+    private fun transformSnapshot(snapshot: ItemSnapshotList<Id, V>): ItemSnapshotList<Id, V> {
+        var transformed = snapshot
+
+        transformations.forEach { transformation ->
+            transformed = transformation(transformed, transformationParams)
+        }
+
+        return transformed
     }
 
     private fun processAppendQueue() {
@@ -146,7 +150,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
             val pagingState = _mutablePagingState.value
             val fetchingState = fetchingStateHolder.state.value
 
-            if (fetchingStrategy.shouldFetch(
+            if (fetchingStrategy.shouldFetchForward(
                     appendLoadParamsQueue.first(),
                     pagingState,
                     fetchingState
@@ -154,13 +158,6 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
             ) {
                 val loadParams = appendLoadParamsQueue.removeFirst()
 
-                if (pagingConfig.placeholdersEnabled) {
-                    // Add placeholders to paging buffer
-                    mutablePagingBuffer.append(
-                        loadParams,
-                        createPlaceholders(pagingConfig.pageSize, loadParams.key)
-                    )
-                }
 
                 // TODO(): Do we need to use JobCoordinator?
 
@@ -181,23 +178,53 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
         updateStateWithPrependLoading()
 
         try {
-            val loadResult = pageStore.fresh(loadParams)
-            mutablePagingBuffer.prepend(loadParams, loadResult)
+            normalizedStore.loadPage(loadParams).first {
+                when (it) {
+                    is LoadPageStatus.Empty -> {
+                        // TODO(): Enable debug logging
+                        true
+                    }
 
-            // Update state
-            updateStateWithPrependData(loadResult)
+                    is LoadPageStatus.Error -> {
+                        val encodedError =
+                            Json.encodeToString(registry.error.serializer(), it.error)
+                        throw PagingError(encodedError, it.extras)
+                    }
 
-            // Clear prepend queue
-            prependLoadParamsQueue.clear()
+                    is LoadPageStatus.Loading -> {
+                        updateStateWithAppendLoading()
+                        false
+                    }
 
-            loadResult.prevKey?.let {
-                prependLoadParamsQueue.addLast(
-                    PagingSource.LoadParams(
-                        it,
-                        PagingSource.LoadParams.Strategy.SkipCache,
-                        PagingSource.LoadParams.Direction.Prepend
-                    )
-                )
+                    is LoadPageStatus.Processing -> {
+                        // TODO(): Enable debug logging
+                        false
+                    }
+
+                    is LoadPageStatus.SkippingLoad -> {
+                        true
+                    }
+
+                    is LoadPageStatus.Success -> {
+                        // Update state
+                        updateStateWithPrependData(it)
+
+                        // Clear prepend queue
+                        prependLoadParamsQueue.clear()
+
+                        it.prevKey?.let { key ->
+                            prependLoadParamsQueue.addLast(
+                                PagingSource.LoadParams(
+                                    key,
+                                    PagingSource.LoadParams.Strategy.SkipCache,
+                                    PagingSource.LoadParams.Direction.Prepend
+                                )
+                            )
+                        }
+
+                        true
+                    }
+                }
             }
 
         } catch (pagingError: PagingError) {
@@ -248,58 +275,97 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
         updateStateWithAppendLoading()
 
         try {
-            val loadResult = pageStore.fresh(loadParams)
-            mutablePagingBuffer.append(loadParams, loadResult)
+            normalizedStore.loadPage(loadParams).first {
+                when (it) {
+                    is LoadPageStatus.Empty -> {
+                        // TODO(): Enable debug logging
+                        true
+                    }
 
-            // Update state
-            updateStateWithAppendData(loadResult)
+                    is LoadPageStatus.Error -> {
+                        val encodedError =
+                            Json.encodeToString(registry.error.serializer(), it.error)
+                        throw PagingError(encodedError, it.extras)
+                    }
 
-            // Load next key, if not null
-            // TODO(): Design decision to skip cache on incremental loads
-            loadResult.nextKey?.let {
-                appendLoadParamsQueue.addLast(
-                    PagingSource.LoadParams(
-                        it,
-                        PagingSource.LoadParams.Strategy.SkipCache,
-                        PagingSource.LoadParams.Direction.Append
-                    )
-                )
+                    is LoadPageStatus.Loading -> {
+                        updateStateWithAppendLoading()
+                        false
+                    }
+
+                    is LoadPageStatus.Processing -> {
+                        // TODO(): Enable debug logging
+                        false
+                    }
+
+                    is LoadPageStatus.SkippingLoad -> {
+                        true
+                    }
+
+                    is LoadPageStatus.Success -> {
+                        // Update state
+                        updateStateWithAppendData(it)
+
+                        // Load next key, if not null
+                        // TODO(): Design decision to skip cache on incremental loads
+                        it.nextKey?.let { key ->
+                            appendLoadParamsQueue.addLast(
+                                PagingSource.LoadParams(
+                                    key,
+                                    PagingSource.LoadParams.Strategy.SkipCache,
+                                    PagingSource.LoadParams.Direction.Append
+                                )
+                            )
+                        }
+
+                        true
+                    }
+                }
             }
 
         } catch (pagingError: PagingError) {
-            when (errorHandlingStrategy) {
-                ErrorHandlingStrategy.Ignore -> {
-                    // Ignore
-                }
+            handleAppendPagingError(pagingError, loadParams, retryCount)
+        }
+    }
 
-                ErrorHandlingStrategy.PassThrough -> {
-                    // TODO(): Design decision to remove placeholders when passing an error through
-                    mutablePagingBuffer.remove(loadParams)
+    private suspend fun handleAppendPagingError(
+        pagingError: PagingError,
+        loadParams: PagingSource.LoadParams<K>,
+        retryCount: Int
+    ) {
+        when (errorHandlingStrategy) {
+            ErrorHandlingStrategy.Ignore -> {
+                // Ignore
+            }
+
+            ErrorHandlingStrategy.PassThrough -> {
+                // TODO(): Design decision to remove placeholders when passing an error through
+                normalizedStore.clear(loadParams.key)
+
+                val error =
+                    Json.decodeFromString(registry.error.serializer(), pagingError.encodedError)
+
+                updateStateWithAppendError(error, pagingError.extras)
+            }
+
+            is ErrorHandlingStrategy.RetryLast -> {
+
+                if (retryCount < errorHandlingStrategy.maxRetries) {
+                    handleAppendLoading(loadParams, retryCount + 1)
+                } else {
 
                     val error =
-                        Json.decodeFromString(registry.error.serializer(), pagingError.encodedError)
+                        Json.decodeFromString(
+                            registry.error.serializer(),
+                            pagingError.encodedError
+                        )
 
                     updateStateWithAppendError(error, pagingError.extras)
                 }
 
-                is ErrorHandlingStrategy.RetryLast -> {
-
-                    if (retryCount < errorHandlingStrategy.maxRetries) {
-                        handleAppendLoading(loadParams, retryCount + 1)
-                    } else {
-
-                        val error =
-                            Json.decodeFromString(
-                                registry.error.serializer(),
-                                pagingError.encodedError
-                            )
-
-                        updateStateWithAppendError(error, pagingError.extras)
-                    }
-
-                }
             }
         }
+
     }
 
     private fun handleLaunchEffects() {
@@ -318,51 +384,32 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
     }
 
 
-    @Composable
-    private fun PagingState<Id, E>.transform(): PagingState<Id, E> {
-        var state = this
-
-        LaunchedEffect(this.ids) {
-            val snapshot = mutablePagingBuffer.snapshot(ids)
-            onSnapshot(snapshot)
-            state = PagingState(
-                ids = snapshot.getAllIds(),
-                loadStates = loadStates
-            )
-        }
-
-
-        return state
-    }
-
-    private fun onSnapshot(snapshot: ItemSnapshotList<Id, V>) {
-        coroutineScope.launch {
-            sideEffects.forEach { sideEffect -> sideEffect.invoke(snapshot) }
-        }
-    }
-
-    private fun createPlaceholders(count: Int, key: K): PagingSource.LoadResult.Data<Id, K, V, E> {
-        TODO()
-    }
-
-    private fun updateStateWithAppendData(data: PagingSource.LoadResult.Data<Id, K, V, E>) {
+    private fun updateStateWithAppendData(data: LoadPageStatus.Success<Id, K, V, E>) {
         val prevState = _mutablePagingState.value
+
+        val transformedSnapshot = transformSnapshot(data.snapshot)
+
         _mutablePagingState.value = PagingState(
-            ids = prevState.ids + data.items.map { it.id },
+            ids = transformedSnapshot.getAllIds(),
             loadStates = prevState.loadStates.copy(
                 append = PagingLoadState.NotLoading(data.nextKey == null)
             )
         )
+
     }
 
-    private fun updateStateWithPrependData(data: PagingSource.LoadResult.Data<Id, K, V, E>) {
+    private fun updateStateWithPrependData(data: LoadPageStatus.Success<Id, K, V, E>) {
         val prevState = _mutablePagingState.value
+
+        val transformedSnapshot = transformSnapshot(data.snapshot)
+
         _mutablePagingState.value = PagingState(
-            ids = data.items.map { it.id } + prevState.ids,
+            ids = transformedSnapshot.getAllIds(),
             loadStates = prevState.loadStates.copy(
-                append = PagingLoadState.NotLoading(data.nextKey == null)
+                prepend = PagingLoadState.NotLoading(data.prevKey == null)
             )
         )
+
     }
 
     private fun updateStateWithAppendError(error: E, extras: JsonObject?) {

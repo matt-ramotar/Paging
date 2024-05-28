@@ -17,3 +17,6 @@ updateItem:
 UPDATE item
 SET data = :data
 WHERE id = :id;
+
+removeItem:
+DELETE FROM item WHERE id = :id;

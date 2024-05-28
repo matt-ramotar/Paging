@@ -20,6 +20,9 @@ interface PagingSource<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : A
 
             @Serializable
             data object SkipCache : Strategy
+
+            @Serializable
+            data object LocalOnly : Strategy
         }
 
         enum class Direction {

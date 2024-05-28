@@ -16,7 +16,9 @@ class RealFetchingStateHolder<Id : Comparable<Id>>(
     override val state: StateFlow<FetchingState<Id>> = _state.asStateFlow()
 
     override fun updateMaxItemAccessedSoFar(id: Id) {
-        _state.value = _state.value.copy(maxItemAccessedSoFar = id)
+        val maxItemAccessedSoFar = _state.value.maxItemAccessedSoFar?.let { maxOf(it, id) } ?: id
+
+        _state.value = _state.value.copy(maxItemAccessedSoFar = maxItemAccessedSoFar)
     }
 
     override fun update(nextState: FetchingState<Id>) {

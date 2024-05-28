@@ -3,6 +3,7 @@
 package org.mobilenativefoundation.storex.paging
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.InternalSerializationApi
@@ -32,12 +33,24 @@ import org.mobilenativefoundation.storex.paging.internal.impl.RealMutablePagingB
 import org.mobilenativefoundation.storex.paging.internal.impl.RealPager
 import kotlin.reflect.KClass
 
+
+@Composable
+fun <Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> rememberUpdatingItem(
+    pager: Pager<Id, K, V, E>,
+    id: Id
+): SelfUpdatingItem<Id, V, E> {
+    val updatingItem = remember(id) {
+        pager.selfUpdatingItem(id)
+    }
+
+    return updatingItem
+}
+
 interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
 
     @Composable
     fun pagingState(loadParams: StateFlow<PagingSource.LoadParams<K>>): PagingState<Id, E>
 
-    @Composable
     fun selfUpdatingItem(id: Id): SelfUpdatingItem<Id, V, E>
 
 
@@ -58,7 +71,7 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
         private lateinit var pagingSource: PagingSource<Id, K, V, E>
         private lateinit var middleware: List<Middleware<K>>
         private lateinit var fetchingStrategy: FetchingStrategy<Id, K, E>
-        private lateinit var pagingConfig: PagingConfig
+        private lateinit var pagingConfig: PagingConfig<Id>
         private lateinit var initialLoadParams: PagingSource.LoadParams<K>
         private var initialState: PagingState<Id, E> = PagingState.initial()
         private var initialFetchingState: FetchingState<Id> = FetchingState()
@@ -99,7 +112,7 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
             this.fetchingStrategy = fetchingStrategy
         }
 
-        fun pagingConfig(pagingConfig: PagingConfig) = apply {
+        fun pagingConfig(pagingConfig: PagingConfig<Id>) = apply {
             this.pagingConfig = pagingConfig
         }
 
@@ -182,21 +195,32 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
                     transformations
                 )
 
+            val normalizedStore = RealNormalizedStore(
+                pagingSource,
+                registry,
+                errorFactory,
+                itemFetcher,
+                driverFactory,
+                pagingBufferMaxSize,
+                fetchingStateHolder,
+                sideEffects,
+                pagingConfig,
+            )
+
             return RealPager<Id, K, V, E, P>(
                 coroutineDispatcher,
                 fetchingStateHolder,
                 launchEffects,
                 sideEffects,
-                mutablePagingBuffer,
                 errorHandlingStrategy,
                 middleware,
                 fetchingStrategy,
                 pagingConfig,
                 initialLoadParams,
-                itemStore,
-                pageStore,
                 errorFactory,
                 registry,
+                normalizedStore,
+                transformationParams, transformations,
                 initialState,
             )
         }
