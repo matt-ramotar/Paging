@@ -1,7 +1,7 @@
 package org.mobilenativefoundation.storex.paging
 
 class PagingState<Id : Comparable<Id>, E : Any>(
-    val ids: List<Id>,
+    val ids: List<Id?>,
     val loadStates: CombinedPagingLoadStates<E>
 ) {
     companion object {

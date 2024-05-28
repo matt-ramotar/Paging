@@ -52,22 +52,12 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
         var next: PageNode<K>? = null
     )
 
-    private data class ItemNode<Id : Comparable<Id>>(
-        val id: Id,
-        var prev: ItemNode<Id>? = null,
-        var next: ItemNode<Id>? = null
-    )
-
     private val idToKeyMap = mutableMapOf<Id, K>()
     private val keyToParamsMap = mutableMapOf<K, PagingSource.LoadParams<K>>()
 
     private var headPage: PageNode<K>? = null
     private var tailPage: PageNode<K>? = null
 
-    private var headItem: ItemNode<Id>? = null
-    private var tailItem: ItemNode<Id>? = null
-
-    private val itemNodeMap = mutableMapOf<Id, ItemNode<Id>>()
     private val pageNodeMap = mutableMapOf<K, PageNode<K>>()
 
     private var pageMemoryCache = mutableMapOf<K, List<Id>>()
@@ -109,37 +99,13 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
     }
 
     private fun removeItem(id: Id) {
-        itemNodeMap[id]?.let { node ->
-            removeItemNode(node)
-
-        }
-    }
-
-    private fun removeItemNode(node: ItemNode<Id>) {
-
-        if (node.id !in itemNodeMap) {
-            return
-        }
-
-        if (node.prev == null) {
-            headItem = node.next
-        } else {
-            node.prev?.next = node.next
-        }
-        if (node.next == null) {
-            tailItem = node.prev
-        } else {
-            node.next?.prev = node.prev
-        }
-        itemNodeMap.remove(node.id)
-
-        val key = idToKeyMap[node.id]
+        val key = idToKeyMap[id]
 
         if (key != null) {
             val pageItemIds = pageMemoryCache[key]
             if (pageItemIds != null) {
                 val mutableListCopy = pageItemIds.toMutableList()
-                mutableListCopy.remove(node.id)
+                mutableListCopy.remove(id)
                 if (mutableListCopy.isEmpty()) {
                     // Remove the page too
                     removePage(key)
@@ -150,12 +116,13 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
             }
         }
 
-        val encodedItemId = Json.encodeToString(registry.id.serializer(), node.id)
+        val encodedItemId = Json.encodeToString(registry.id.serializer(), id)
         db.itemQueries.removeItem(encodedItemId)
 
-        itemMemoryCache.remove(node.id)
+        itemMemoryCache.remove(id)
         sizeItems--
     }
+
 
     private fun removePageNode(node: PageNode<K>) {
         if (node.prev == null) {
@@ -199,19 +166,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
     private fun prependItem(item: V, localParams: String) {
         // save items to memory cache
 
-        val itemNode = ItemNode(item.id)
-
-        if (headItem == null) {
-            headItem = itemNode
-            tailItem = itemNode
-        } else {
-            headItem?.prev = itemNode
-            itemNode.next = headItem
-            headItem = itemNode
-        }
-
         itemMemoryCache[item.id] = item
-        itemNodeMap[item.id] = itemNode
         sizeItems++
 
         // save items to database
@@ -221,17 +176,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
     private fun appendItem(item: V, localParams: String) {
         // save items to memory cache
 
-        val itemNode = ItemNode(item.id)
-        if (tailItem == null) {
-            headItem = itemNode
-            tailItem = itemNode
-        } else {
-            tailItem?.next = itemNode
-            itemNode.prev = tailItem
-            tailItem = itemNode
-        }
         itemMemoryCache[item.id] = item
-        itemNodeMap[item.id] = itemNode
         sizeItems++
 
         // save items to database
@@ -398,7 +343,6 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
                 trimToMaxSize()
 
                 LoadPageStatus.Success(
-                    items = items,
                     snapshot = snapshot(),
                     terminal = true,
                     source = LoadPageStatus.Success.Source.Network
@@ -487,7 +431,6 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
                             val items = cachedPagingItems(params.key)
                             emit(
                                 LoadPageStatus.Success(
-                                    items = items,
                                     snapshot = snapshot(),
                                     terminal = false,
                                     source = LoadPageStatus.Success.Source.MemoryCache
@@ -499,7 +442,6 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
                             val items = persistedPagingItems(params.key)
                             emit(
                                 LoadPageStatus.Success(
-                                    items = items,
                                     snapshot = snapshot(),
                                     terminal = false,
                                     source = LoadPageStatus.Success.Source.Database
@@ -536,7 +478,6 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
                             val items = cachedPagingItems(params.key)
                             emit(
                                 LoadPageStatus.Success(
-                                    items = items,
                                     snapshot = snapshot(),
                                     terminal = true,
                                     source = LoadPageStatus.Success.Source.MemoryCache
@@ -548,7 +489,6 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
                             val items = persistedPagingItems(params.key)
                             emit(
                                 LoadPageStatus.Success(
-                                    items = items,
                                     snapshot = snapshot(),
                                     terminal = false,
                                     source = LoadPageStatus.Success.Source.Database
@@ -767,16 +707,20 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
         return itemMemoryCache[id]!!
     }
 
-    private fun cachedPagingItems(key: K): List<V> {
+    private fun cachedPagingItems(key: K): List<V?> {
         return pageMemoryCache[key]!!.let { ids ->
             ids.map { id ->
-                itemMemoryCache[id]!!
+                if (id == pagingConfig.placeholderId) {
+                    null
+                } else {
+                    itemMemoryCache[id]!!
+                }
             }
         }
     }
 
-    private fun getItemsInOrder(): List<V> {
-        val items = mutableListOf<V>()
+    private fun getItemsInOrder(): List<V?> {
+        val items = mutableListOf<V?>()
 
         var current = headPage
 
@@ -868,7 +812,6 @@ sealed interface LoadPageStatus<Id : Comparable<Id>, out K : Any, out V : Identi
 
     data class Success<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any>(
         override val terminal: Boolean = true,
-        val items: List<V>,
         val snapshot: ItemSnapshotList<Id, V>,
         val prevKey: K? = null,
         val nextKey: K? = null,

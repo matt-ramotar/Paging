@@ -8,13 +8,13 @@ import org.mobilenativefoundation.store5.core.Identifiable
  * has `placeholdersBefore` and `placeholdersAfter`, meaning placeholders are at the group-level.
  */
 class ItemSnapshotList<Id : Comparable<Id>, V : Identifiable<Id>>(
-    private val items: List<V>,
+    private val items: List<V?>,
 ) : AbstractList<V?>() {
 
     override val size: Int = items.size
     override fun get(index: Int): V? = items.getOrNull(index)
 
-    fun getAll(): List<V> = items
+    fun getAll(): List<V?> = items
 
-    fun getAllIds(): List<Id> = items.map { it.id }
+    fun getAllIds(): List<Id?> = items.map { it?.id }
 }

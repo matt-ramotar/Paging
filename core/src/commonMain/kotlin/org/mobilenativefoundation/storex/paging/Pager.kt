@@ -35,7 +35,7 @@ import kotlin.reflect.KClass
 
 
 @Composable
-fun <Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> rememberUpdatingItem(
+fun <Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> rememberSelfUpdatingItem(
     pager: Pager<Id, K, V, E>,
     id: Id
 ): SelfUpdatingItem<Id, V, E> {
