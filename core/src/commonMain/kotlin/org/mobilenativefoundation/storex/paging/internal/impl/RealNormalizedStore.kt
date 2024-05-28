@@ -1,4 +1,4 @@
-package org.mobilenativefoundation.storex.paging
+package org.mobilenativefoundation.storex.paging.internal.impl
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -20,13 +20,21 @@ import kotlinx.serialization.serializer
 import org.mobilenativefoundation.store.store5.Fetcher
 import org.mobilenativefoundation.store.store5.FetcherResult
 import org.mobilenativefoundation.store5.core.Identifiable
+import org.mobilenativefoundation.storex.paging.Item
+import org.mobilenativefoundation.storex.paging.ItemSnapshotList
+import org.mobilenativefoundation.storex.paging.ItemState
+import org.mobilenativefoundation.storex.paging.Page
+import org.mobilenativefoundation.storex.paging.PagingConfig
+import org.mobilenativefoundation.storex.paging.PagingDb
+import org.mobilenativefoundation.storex.paging.PagingSource
+import org.mobilenativefoundation.storex.paging.SelfUpdatingItem
+import org.mobilenativefoundation.storex.paging.SelfUpdatingPage
+import org.mobilenativefoundation.storex.paging.SingleLoadState
 import org.mobilenativefoundation.storex.paging.custom.ErrorFactory
 import org.mobilenativefoundation.storex.paging.custom.SideEffect
 import org.mobilenativefoundation.storex.paging.db.DriverFactory
 import org.mobilenativefoundation.storex.paging.internal.api.FetchingStateHolder
 import org.mobilenativefoundation.storex.paging.internal.api.NormalizedStore
-import org.mobilenativefoundation.storex.paging.internal.impl.KClassRegistry
-import org.mobilenativefoundation.storex.paging.internal.impl.PagingError
 
 
 @Suppress("UNCHECKED_CAST")
@@ -227,15 +235,23 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
         localParams: String,
         fetcherResult: FetcherResult.Data<PagingSource.LoadResult.Data<Id, K, V, E>>
     ) {
-        val pageNode = PageNode(key = params.key)
 
-        if (headPage == null) {
-            headPage = pageNode
-            tailPage = pageNode
+        val pageNode = if (params.key !in pageNodeMap) {
+            val node = PageNode(key = params.key)
+
+            if (headPage == null) {
+                headPage = node
+                tailPage = node
+            } else {
+                headPage?.prev = node
+                node.next = headPage
+                headPage = node
+            }
+
+            node
         } else {
-            headPage?.prev = pageNode
-            pageNode.next = headPage
-            headPage = pageNode
+            val node = pageNodeMap[params.key]!!
+            node.copy(placeholder = false)
         }
 
         pageMemoryCache[params.key] = fetcherResult.value.items.map { it.id }
@@ -251,15 +267,23 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
         localParams: String,
         fetcherResult: FetcherResult.Data<PagingSource.LoadResult.Data<Id, K, V, E>>
     ) {
-        val pageNode = PageNode(key = params.key)
-        if (tailPage == null) {
-            headPage = pageNode
-            tailPage = pageNode
+        val pageNode = if (params.key !in pageNodeMap) {
+            val node = PageNode(key = params.key)
+            if (tailPage == null) {
+                headPage = node
+                tailPage = node
+            } else {
+                tailPage?.next = node
+                node.prev = tailPage
+                tailPage = node
+            }
+            node
         } else {
-            tailPage?.next = pageNode
-            pageNode.prev = tailPage
-            tailPage = pageNode
+            val node = pageNodeMap[params.key]!!
+            node.copy(placeholder = false)
         }
+
+
         pageMemoryCache[params.key] = fetcherResult.value.items.map { it.id }
         pageNodeMap[params.key] = pageNode
         sizePages++
@@ -308,7 +332,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
     }
 
 
-    private suspend fun loadFromNetwork(params: PagingSource.LoadParams<K>): LoadPageStatus<Id, K, V, E> {
+    private suspend fun loadFromNetwork(params: PagingSource.LoadParams<K>): PageLoadStatus<Id, K, V, E> {
         return when (val fetcherResult = pageFetcher(params).first()) {
             is FetcherResult.Data -> {
 
@@ -342,10 +366,10 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
 
                 trimToMaxSize()
 
-                LoadPageStatus.Success(
+                PageLoadStatus.Success(
                     snapshot = snapshot(),
-                    terminal = true,
-                    source = LoadPageStatus.Success.Source.Network
+                    isTerminal = true,
+                    source = PageLoadStatus.Success.Source.Network
                 )
 
 
@@ -359,11 +383,11 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
                         pagingError.encodedError
                     )
                     val extras = pagingError.extras
-                    LoadPageStatus.Error(error, extras, true)
+                    PageLoadStatus.Error(error, extras, true)
                 } else {
                     val error = errorFactory.create(fetcherResult.error)
 
-                    LoadPageStatus.Error(
+                    PageLoadStatus.Error(
                         error,
                         fetcherResult.error.extras(),
                         true
@@ -375,17 +399,17 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
 
             is FetcherResult.Error.Custom<*> -> {
                 val error = fetcherResult.error as E
-                LoadPageStatus.Error(error, null, true)
+                PageLoadStatus.Error(error, null, true)
             }
 
             is FetcherResult.Error.Message -> {
                 val error = errorFactory.create(fetcherResult.message)
-                LoadPageStatus.Error(error, null, true)
+                PageLoadStatus.Error(error, null, true)
             }
         }
     }
 
-    override fun loadPage(params: PagingSource.LoadParams<K>): Flow<LoadPageStatus<Id, K, V, E>> =
+    override fun loadPage(params: PagingSource.LoadParams<K>): Flow<PageLoadStatus<Id, K, V, E>> =
         flow {
 
             keyToParamsMap[params.key] = params
@@ -397,24 +421,30 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
                         prependPlaceholders(params)
                     }
 
-                    PagingSource.LoadParams.Direction.Append -> TODO()
+                    PagingSource.LoadParams.Direction.Append -> {
+                        appendPlaceholders(params)
+                    }
                 }
             }
 
             fun inFlight(key: K): Boolean {
-                TODO()
+                return pageNodeMap[key]?.placeholder == true
             }
 
             fun isCached(key: K): Boolean {
-                TODO()
+                return pageMemoryCache[key]?.isNotEmpty() == true
             }
 
-            fun inDatabase(key: K): Boolean {
-                TODO()
+            fun inDatabase(params: PagingSource.LoadParams<K>): Boolean {
+                val localParams = Json.encodeToString(
+                    PagingSource.LoadParams.serializer(registry.key.serializer()),
+                    params
+                )
+                return db.pageQueries.getPage(localParams).executeAsOneOrNull() != null
             }
 
             // emit loading
-            emit(LoadPageStatus.Processing<Id, K, V, E>())
+            emit(PageLoadStatus.Processing())
 
             // fetch page
 
@@ -422,35 +452,33 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
                 is PagingSource.LoadParams.Strategy.CacheFirst -> {
 
                     if (inFlight(params.key)) {
-                        emit(LoadPageStatus.SkippingLoad.inFlight())
+                        emit(PageLoadStatus.SkippingLoad.inFlight())
                     } else {
 
                         if (isCached(params.key)) {
-                            emit(LoadPageStatus.Loading.memoryCache())
+                            emit(PageLoadStatus.Loading.memoryCache())
 
-                            val items = cachedPagingItems(params.key)
                             emit(
-                                LoadPageStatus.Success(
+                                PageLoadStatus.Success(
                                     snapshot = snapshot(),
-                                    terminal = false,
-                                    source = LoadPageStatus.Success.Source.MemoryCache
+                                    isTerminal = false,
+                                    source = PageLoadStatus.Success.Source.MemoryCache
                                 )
                             )
-                        } else if (inDatabase(params.key)) {
-                            emit(LoadPageStatus.Loading.database())
+                        } else if (inDatabase(params)) {
+                            emit(PageLoadStatus.Loading.database())
 
-                            val items = persistedPagingItems(params.key)
                             emit(
-                                LoadPageStatus.Success(
+                                PageLoadStatus.Success(
                                     snapshot = snapshot(),
-                                    terminal = false,
-                                    source = LoadPageStatus.Success.Source.Database
+                                    isTerminal = false,
+                                    source = PageLoadStatus.Success.Source.Database
                                 )
                             )
 
                         }
 
-                        emit(LoadPageStatus.Loading.remote())
+                        emit(PageLoadStatus.Loading.remote())
 
                         val status = loadFromNetwork(params)
                         emit(status)
@@ -460,9 +488,9 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
                 PagingSource.LoadParams.Strategy.SkipCache -> {
 
                     if (inFlight(params.key)) {
-                        emit(LoadPageStatus.SkippingLoad.inFlight())
+                        emit(PageLoadStatus.SkippingLoad.inFlight())
                     } else {
-                        emit(LoadPageStatus.Loading.remote())
+                        emit(PageLoadStatus.Loading.remote())
 
                         val status = loadFromNetwork(params)
                         emit(status)
@@ -472,34 +500,32 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
 
                 PagingSource.LoadParams.Strategy.LocalOnly -> {
                     if (inFlight(params.key)) {
-                        emit(LoadPageStatus.SkippingLoad.inFlight())
+                        emit(PageLoadStatus.SkippingLoad.inFlight())
                     } else {
                         if (isCached(params.key)) {
-                            val items = cachedPagingItems(params.key)
                             emit(
-                                LoadPageStatus.Success(
+                                PageLoadStatus.Success(
                                     snapshot = snapshot(),
-                                    terminal = true,
-                                    source = LoadPageStatus.Success.Source.MemoryCache
+                                    isTerminal = true,
+                                    source = PageLoadStatus.Success.Source.MemoryCache
                                 )
                             )
-                        } else if (inDatabase(params.key)) {
-                            emit(LoadPageStatus.Loading.database())
+                        } else if (inDatabase(params)) {
+                            emit(PageLoadStatus.Loading.database())
 
-                            val items = persistedPagingItems(params.key)
                             emit(
-                                LoadPageStatus.Success(
+                                PageLoadStatus.Success(
                                     snapshot = snapshot(),
-                                    terminal = false,
-                                    source = LoadPageStatus.Success.Source.Database
+                                    isTerminal = false,
+                                    source = PageLoadStatus.Success.Source.Database
                                 )
                             )
 
                         } else {
                             emit(
-                                LoadPageStatus.Empty(
+                                PageLoadStatus.Empty(
                                     true,
-                                    LoadPageStatus.Empty.Reason.LocalOnlyRequest
+                                    PageLoadStatus.Empty.Reason.LocalOnlyRequest
                                 )
                             )
                         }
@@ -510,7 +536,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
         }
 
     override fun selfUpdatingItem(id: Id): SelfUpdatingItem<Id, V, E> {
-        val presenter = @Composable { events: Flow<SelfUpdatingItemEvent<Id, V, E>> ->
+        val presenter = @Composable { events: Flow<SelfUpdatingItem.Event<Id, V, E>> ->
             selfUpdatingItem(id, events)
         }
 
@@ -520,7 +546,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
     @Composable
     private fun selfUpdatingItem(
         id: Id,
-        events: Flow<SelfUpdatingItemEvent<Id, V, E>>
+        events: Flow<SelfUpdatingItem.Event<Id, V, E>>
     ): ItemState<Id, V, E> {
         val encodedId = remember(id) { Json.encodeToString(registry.id.serializer(), id) }
 
@@ -551,7 +577,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
 
         val state by remember(v, singleLoadState, itemVersion) {
             derivedStateOf {
-                ItemState<Id, V, E>(v, singleLoadState, itemVersion)
+                ItemState(v, singleLoadState, itemVersion)
             }
         }
 
@@ -562,7 +588,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
         LaunchedEffect(id, events) {
             events.collect { event ->
                 when (event) {
-                    is SelfUpdatingItemEvent.Clear -> {
+                    is SelfUpdatingItem.Event.Clear -> {
                         // Remove from memory cache
                         // Remove from database
                         removeItem(id)
@@ -572,10 +598,9 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
                         // TODO(): Support network
                     }
 
-                    is SelfUpdatingItemEvent.Refresh -> {
+                    is SelfUpdatingItem.Event.Refresh -> {
                         // Load from network
 
-                        val prevState = state
                         singleLoadState = SingleLoadState.Refreshing
 
                         when (val fetcherResult = itemFetcher(id).first()) {
@@ -641,7 +666,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
 
                     }
 
-                    is SelfUpdatingItemEvent.Update -> {
+                    is SelfUpdatingItem.Event.Update -> {
                         // Save to memory cache
                         itemMemoryCache[id] = event.value
 
@@ -703,10 +728,6 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
         TODO()
     }
 
-    private fun cachedPagingItem(id: Id): V {
-        return itemMemoryCache[id]!!
-    }
-
     private fun cachedPagingItems(key: K): List<V?> {
         return pageMemoryCache[key]!!.let { ids ->
             ids.map { id ->
@@ -738,14 +759,6 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
         }
     }
 
-    private suspend fun persistedPagingItems(key: K): List<V> {
-        TODO()
-    }
-
-    private suspend fun persistedPagingItem(id: Id): V {
-        TODO()
-    }
-
     override fun invalidate() {
         TODO()
     }
@@ -757,92 +770,8 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
 
 }
 
-sealed interface LoadPageStatus<Id : Comparable<Id>, out K : Any, out V : Identifiable<Id>, out E : Any> {
 
-    val terminal: Boolean
-
-    data class Processing<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any>(
-        override val terminal: Boolean = false
-    ) : LoadPageStatus<Id, K, V, E>
-
-    data class Loading<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any>(
-        override val terminal: Boolean = false,
-        val source: Source
-    ) : LoadPageStatus<Id, K, V, E> {
-        enum class Source {
-            MemoryCache,
-            Database,
-            Remote
-        }
-
-        companion object {
-            fun <Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> memoryCache() =
-                Loading<Id, K, V, E>(
-                    source = Source.MemoryCache
-                )
-
-            fun <Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> database() =
-                Loading<Id, K, V, E>(
-                    source = Source.Database
-                )
-
-            fun <Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> remote() =
-                Loading<Id, K, V, E>(
-                    source = Source.Remote
-                )
-        }
-    }
-
-
-    data class SkippingLoad<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any>(
-        val reason: Reason,
-        override val terminal: Boolean = true
-    ) : LoadPageStatus<Id, K, V, E> {
-        enum class Reason {
-            AlreadyInFlight
-        }
-
-        companion object {
-            fun <Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> inFlight() =
-                SkippingLoad<Id, K, V, E>(
-                    Reason.AlreadyInFlight
-                )
-        }
-    }
-
-    data class Success<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any>(
-        override val terminal: Boolean = true,
-        val snapshot: ItemSnapshotList<Id, V>,
-        val prevKey: K? = null,
-        val nextKey: K? = null,
-        val source: Source
-    ) : LoadPageStatus<Id, K, V, E> {
-        enum class Source {
-            MemoryCache,
-            Database,
-            Network
-        }
-    }
-
-    data class Error<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any>(
-        val error: E,
-        val extras: JsonObject? = null,
-        override val terminal: Boolean
-    ) : LoadPageStatus<Id, K, V, E>
-
-    data class Empty<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any>(
-        override val terminal: Boolean = true,
-        val reason: Reason
-    ) : LoadPageStatus<Id, K, V, E> {
-        enum class Reason {
-            LocalOnlyRequest
-        }
-    }
-
-}
-
-
-fun Throwable.extras(): JsonObject = JsonObject(
+private fun Throwable.extras(): JsonObject = JsonObject(
     mapOf(
         "message" to JsonPrimitive(message.orEmpty()),
         "stackTrace" to JsonPrimitive(stackTraceToString()),
@@ -850,19 +779,3 @@ fun Throwable.extras(): JsonObject = JsonObject(
     )
 
 )
-
-
-sealed interface SelfUpdatingItemEvent<Id : Comparable<Id>, V : Identifiable<Id>, E : Any> {
-
-    data class Refresh<Id : Comparable<Id>, V : Identifiable<Id>, E : Any>(
-        val message: String? = null,
-    ) : SelfUpdatingItemEvent<Id, V, E>
-
-    data class Update<Id : Comparable<Id>, V : Identifiable<Id>, E : Any>(
-        val value: V,
-    ) : SelfUpdatingItemEvent<Id, V, E>
-
-    data class Clear<Id : Comparable<Id>, V : Identifiable<Id>, E : Any>(
-        val message: String? = null
-    ) : SelfUpdatingItemEvent<Id, V, E>
-}

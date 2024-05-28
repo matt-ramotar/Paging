@@ -16,20 +16,15 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.serializer
 import org.mobilenativefoundation.store5.core.Identifiable
 import org.mobilenativefoundation.storex.paging.ItemSnapshotList
-import org.mobilenativefoundation.storex.paging.LoadPageStatus
 import org.mobilenativefoundation.storex.paging.Pager
-import org.mobilenativefoundation.storex.paging.PagingConfig
 import org.mobilenativefoundation.storex.paging.PagingLoadState
 import org.mobilenativefoundation.storex.paging.PagingSource
 import org.mobilenativefoundation.storex.paging.PagingState
-import org.mobilenativefoundation.storex.paging.RealNormalizedStore
 import org.mobilenativefoundation.storex.paging.SelfUpdatingItem
-import org.mobilenativefoundation.storex.paging.custom.ErrorFactory
 import org.mobilenativefoundation.storex.paging.custom.ErrorHandlingStrategy
 import org.mobilenativefoundation.storex.paging.custom.FetchingStrategy
 import org.mobilenativefoundation.storex.paging.custom.LaunchEffect
 import org.mobilenativefoundation.storex.paging.custom.Middleware
-import org.mobilenativefoundation.storex.paging.custom.SideEffect
 import org.mobilenativefoundation.storex.paging.custom.TransformationStrategy
 import org.mobilenativefoundation.storex.paging.internal.api.FetchingStateHolder
 
@@ -40,13 +35,10 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
     coroutineDispatcher: CoroutineDispatcher,
     private val fetchingStateHolder: FetchingStateHolder<Id>,
     private val launchEffects: List<LaunchEffect>,
-    private val sideEffects: List<SideEffect<Id, V>>,
     private val errorHandlingStrategy: ErrorHandlingStrategy,
     private val middleware: List<Middleware<K>>,
     private val fetchingStrategy: FetchingStrategy<Id, K, E>,
-    private val pagingConfig: PagingConfig<Id>,
     private val initialLoadParams: PagingSource.LoadParams<K>,
-    private val errorFactory: ErrorFactory<E>,
     private val registry: KClassRegistry<Id, K, V, E>,
     private val normalizedStore: RealNormalizedStore<Id, K, V, E>,
     private val transformationParams: P,
@@ -180,32 +172,32 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
         try {
             normalizedStore.loadPage(loadParams).first {
                 when (it) {
-                    is LoadPageStatus.Empty -> {
+                    is PageLoadStatus.Empty -> {
                         // TODO(): Enable debug logging
                         true
                     }
 
-                    is LoadPageStatus.Error -> {
+                    is PageLoadStatus.Error -> {
                         val encodedError =
                             Json.encodeToString(registry.error.serializer(), it.error)
                         throw PagingError(encodedError, it.extras)
                     }
 
-                    is LoadPageStatus.Loading -> {
+                    is PageLoadStatus.Loading -> {
                         updateStateWithAppendLoading()
                         false
                     }
 
-                    is LoadPageStatus.Processing -> {
+                    is PageLoadStatus.Processing -> {
                         // TODO(): Enable debug logging
                         false
                     }
 
-                    is LoadPageStatus.SkippingLoad -> {
+                    is PageLoadStatus.SkippingLoad -> {
                         true
                     }
 
-                    is LoadPageStatus.Success -> {
+                    is PageLoadStatus.Success -> {
                         // Update state
                         updateStateWithPrependData(it)
 
@@ -277,32 +269,32 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
         try {
             normalizedStore.loadPage(loadParams).first {
                 when (it) {
-                    is LoadPageStatus.Empty -> {
+                    is PageLoadStatus.Empty -> {
                         // TODO(): Enable debug logging
                         true
                     }
 
-                    is LoadPageStatus.Error -> {
+                    is PageLoadStatus.Error -> {
                         val encodedError =
                             Json.encodeToString(registry.error.serializer(), it.error)
                         throw PagingError(encodedError, it.extras)
                     }
 
-                    is LoadPageStatus.Loading -> {
+                    is PageLoadStatus.Loading -> {
                         updateStateWithAppendLoading()
                         false
                     }
 
-                    is LoadPageStatus.Processing -> {
+                    is PageLoadStatus.Processing -> {
                         // TODO(): Enable debug logging
                         false
                     }
 
-                    is LoadPageStatus.SkippingLoad -> {
+                    is PageLoadStatus.SkippingLoad -> {
                         true
                     }
 
-                    is LoadPageStatus.Success -> {
+                    is PageLoadStatus.Success -> {
                         // Update state
                         updateStateWithAppendData(it)
 
@@ -384,7 +376,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
     }
 
 
-    private fun updateStateWithAppendData(data: LoadPageStatus.Success<Id, K, V, E>) {
+    private fun updateStateWithAppendData(data: PageLoadStatus.Success<Id, K, V, E>) {
         val prevState = _mutablePagingState.value
 
         val transformedSnapshot = transformSnapshot(data.snapshot)
@@ -398,7 +390,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
 
     }
 
-    private fun updateStateWithPrependData(data: LoadPageStatus.Success<Id, K, V, E>) {
+    private fun updateStateWithPrependData(data: PageLoadStatus.Success<Id, K, V, E>) {
         val prevState = _mutablePagingState.value
 
         val transformedSnapshot = transformSnapshot(data.snapshot)

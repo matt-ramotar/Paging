@@ -3,7 +3,6 @@
 package org.mobilenativefoundation.storex.paging
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.InternalSerializationApi
@@ -30,21 +29,10 @@ import org.mobilenativefoundation.storex.paging.internal.impl.PageStoreFactory
 import org.mobilenativefoundation.storex.paging.internal.impl.PagingError
 import org.mobilenativefoundation.storex.paging.internal.impl.RealFetchingStateHolder
 import org.mobilenativefoundation.storex.paging.internal.impl.RealMutablePagingBuffer
+import org.mobilenativefoundation.storex.paging.internal.impl.RealNormalizedStore
 import org.mobilenativefoundation.storex.paging.internal.impl.RealPager
 import kotlin.reflect.KClass
 
-
-@Composable
-fun <Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> rememberSelfUpdatingItem(
-    pager: Pager<Id, K, V, E>,
-    id: Id
-): SelfUpdatingItem<Id, V, E> {
-    val updatingItem = remember(id) {
-        pager.selfUpdatingItem(id)
-    }
-
-    return updatingItem
-}
 
 interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
 
@@ -211,13 +199,10 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
                 coroutineDispatcher,
                 fetchingStateHolder,
                 launchEffects,
-                sideEffects,
                 errorHandlingStrategy,
                 middleware,
                 fetchingStrategy,
-                pagingConfig,
                 initialLoadParams,
-                errorFactory,
                 registry,
                 normalizedStore,
                 transformationParams, transformations,
