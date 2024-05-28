@@ -200,7 +200,11 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
                 errorHandlingStrategy = errorHandlingStrategy,
                 middleware = middleware,
                 fetchingStrategy = fetchingStrategy,
-                initialLoadParams = pagingConfig.initialLoadParams,
+                initialLoadParams = PagingSource.LoadParams(
+                    pagingConfig.initialKey,
+                    strategy = PagingSource.LoadParams.Strategy.Refresh,
+                    direction = PagingSource.LoadParams.Direction.Append
+                ),
                 registry = registry,
                 normalizedStore = normalizedStore,
                 operations = operations,

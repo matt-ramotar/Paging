@@ -4,7 +4,7 @@ import org.mobilenativefoundation.storex.paging.custom.ErrorHandlingStrategy
 
 data class PagingConfig<Id: Comparable<Id>, K: Any>(
     val placeholderId: Id?,
-    val initialLoadParams: PagingSource.LoadParams<K>,
+    val initialKey: K,
     val pageSize: Int = DEFAULT_PAGE_SIZE,
     val prefetchDistance: Int = pageSize * DEFAULT_PREFETCH_DISTANCE_MULTIPLIER,
     val maxSize: Int = MAX_SIZE_UNBOUNDED,
