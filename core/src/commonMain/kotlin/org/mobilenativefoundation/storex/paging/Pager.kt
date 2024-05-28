@@ -57,7 +57,6 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
         private var coroutineDispatcher: CoroutineDispatcher = Dispatchers.IO
         private var launchEffects: List<LaunchEffect> = emptyList()
         private var sideEffects: List<SideEffect<Id, V>> = emptyList()
-        private var pagingBufferMaxSize: Int = 500
         private var errorHandlingStrategy: ErrorHandlingStrategy = ErrorHandlingStrategy.RetryLast()
         private var middleware: List<Middleware<K>> = emptyList()
         private var initialState: PagingState<Id, E> = PagingState.initial()
@@ -96,10 +95,6 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
 
         fun initialFetchingState(initialFetchingState: FetchingState<Id>) = apply {
             this.initialFetchingState = initialFetchingState
-        }
-
-        fun pagingBufferMaxSize(maxSize: Int) = apply {
-            this.pagingBufferMaxSize = maxSize
         }
 
         fun storexPagingSource(storexPagingSource: PagingSource<Id, K, V, E>) = apply {
@@ -192,7 +187,7 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
                 errorFactory = errorFactory,
                 itemFetcher = itemFetcher,
                 driverFactory = driverFactory,
-                maxSize = pagingBufferMaxSize,
+                maxSize = pagingConfig.maxSize,
                 fetchingStateHolder = fetchingStateHolder,
                 sideEffects = sideEffects,
                 pagingConfig = pagingConfig,
