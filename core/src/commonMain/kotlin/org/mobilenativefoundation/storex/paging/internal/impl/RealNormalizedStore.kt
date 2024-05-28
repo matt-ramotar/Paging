@@ -40,7 +40,7 @@ import org.mobilenativefoundation.storex.paging.internal.api.NormalizedStore
 @Suppress("UNCHECKED_CAST")
 @OptIn(InternalSerializationApi::class)
 class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any>(
-    private val pagingSource: PagingSource<Id, K, V, E>,
+    private val pageFetcher: Fetcher<PagingSource.LoadParams<K>, PagingSource.LoadResult.Data<Id, K, V, E>>,
     private val registry: KClassRegistry<Id, K, V, E>,
     private val errorFactory: ErrorFactory<E>,
     private val itemFetcher: Fetcher<Id, V>,
@@ -73,26 +73,6 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
 
     private var sizeItems = 0
     private var sizePages = 0
-
-
-    private val pageFetcher =
-        Fetcher.ofResult<PagingSource.LoadParams<K>, PagingSource.LoadResult.Data<Id, K, V, E>> {
-            when (val loadResult = pagingSource.load(it)) {
-                is PagingSource.LoadResult.Data -> FetcherResult.Data(loadResult)
-                is PagingSource.LoadResult.Error -> {
-                    FetcherResult.Error.Exception(
-                        PagingError(
-                            encodedError = Json.encodeToString(
-                                registry.error.serializer(),
-                                loadResult.error
-                            ),
-                            extras = loadResult.extras
-                        )
-                    )
-                }
-            }
-        }
-
 
     private fun trimToMaxSize() {
         while (itemMemoryCache.size > maxSize) {
@@ -531,6 +511,10 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
                         }
                     }
                 }
+
+                PagingSource.LoadParams.Strategy.Refresh -> {
+                    // TODO(): Support refresh
+                }
             }
 
         }
@@ -769,13 +753,3 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
 
 
 }
-
-
-private fun Throwable.extras(): JsonObject = JsonObject(
-    mapOf(
-        "message" to JsonPrimitive(message.orEmpty()),
-        "stackTrace" to JsonPrimitive(stackTraceToString()),
-        "cause" to JsonPrimitive(cause?.message.orEmpty())
-    )
-
-)

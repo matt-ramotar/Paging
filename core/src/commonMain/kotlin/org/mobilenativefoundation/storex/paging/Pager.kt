@@ -8,10 +8,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
-import org.mobilenativefoundation.store.cache5.CacheBuilder
 import org.mobilenativefoundation.store.store5.Fetcher
 import org.mobilenativefoundation.store.store5.FetcherResult
-import org.mobilenativefoundation.store5.cache.RealNormalizedCache
 import org.mobilenativefoundation.store5.core.Identifiable
 import org.mobilenativefoundation.storex.paging.custom.ErrorFactory
 import org.mobilenativefoundation.storex.paging.custom.ErrorHandlingStrategy
@@ -22,15 +20,12 @@ import org.mobilenativefoundation.storex.paging.custom.SideEffect
 import org.mobilenativefoundation.storex.paging.custom.TransformationStrategy
 import org.mobilenativefoundation.storex.paging.db.DriverFactory
 import org.mobilenativefoundation.storex.paging.internal.api.FetchingState
-import org.mobilenativefoundation.storex.paging.internal.api.MutablePagingBuffer
-import org.mobilenativefoundation.storex.paging.internal.impl.ItemStoreFactory
 import org.mobilenativefoundation.storex.paging.internal.impl.KClassRegistry
-import org.mobilenativefoundation.storex.paging.internal.impl.PageStoreFactory
 import org.mobilenativefoundation.storex.paging.internal.impl.PagingError
 import org.mobilenativefoundation.storex.paging.internal.impl.RealFetchingStateHolder
-import org.mobilenativefoundation.storex.paging.internal.impl.RealMutablePagingBuffer
 import org.mobilenativefoundation.storex.paging.internal.impl.RealNormalizedStore
 import org.mobilenativefoundation.storex.paging.internal.impl.RealPager
+import org.mobilenativefoundation.storex.paging.internal.impl.extras
 import kotlin.reflect.KClass
 
 
@@ -42,6 +37,7 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
     fun selfUpdatingItem(id: Id): SelfUpdatingItem<Id, V, E>
 
 
+    @OptIn(InternalSerializationApi::class)
     class Builder<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P : Any>(
         private val idKClass: KClass<Id>,
         private val keyKClass: KClass<K>,
@@ -50,13 +46,13 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
     ) {
 
         private lateinit var coroutineDispatcher: CoroutineDispatcher
-        private lateinit var transformationParams: P
+        private lateinit var transformationParams: P // TODO(): This shouldn't be required
         private var transformations: List<TransformationStrategy<Id, V, P>> = emptyList()
         private var launchEffects: List<LaunchEffect> = emptyList()
         private var sideEffects: List<SideEffect<Id, V>> = emptyList()
         private var pagingBufferMaxSize: Int = 500
         private lateinit var errorHandlingStrategy: ErrorHandlingStrategy
-        private lateinit var pagingSource: PagingSource<Id, K, V, E>
+        private var pagingSource: PagingSource<Id, K, V, E>? = null
         private lateinit var middleware: List<Middleware<K>>
         private lateinit var fetchingStrategy: FetchingStrategy<Id, K, E>
         private lateinit var pagingConfig: PagingConfig<Id>
@@ -67,6 +63,8 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
         private lateinit var itemFetcher: Fetcher<Id, V>
         private lateinit var driverFactory: DriverFactory
         private lateinit var errorFactory: ErrorFactory<E>
+
+        private var androidxPagingSource: androidx.paging.PagingSource<K, V>? = null
 
         fun coroutineDispatcher(coroutineDispatcher: CoroutineDispatcher) = apply {
             this.coroutineDispatcher = coroutineDispatcher
@@ -120,6 +118,71 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
             this.pagingBufferMaxSize = maxSize
         }
 
+        fun storexPagingSource(pagingSource: PagingSource<Id, K, V, E>) = apply {
+            this.pagingSource = pagingSource
+        }
+
+        fun androidxPagingSource(pagingSource: androidx.paging.PagingSource<K, V>) = apply {
+            this.androidxPagingSource = pagingSource
+        }
+
+        private fun createFetcherFromAndroidxPagingSource(androidxPagingSource: androidx.paging.PagingSource<K, V>): Fetcher<PagingSource.LoadParams<K>, PagingSource.LoadResult.Data<Id, K, V, E>> {
+            return Fetcher.ofResult<PagingSource.LoadParams<K>, PagingSource.LoadResult.Data<Id, K, V, E>> {
+                val androidxLoadParams =
+                    it.androidx(pagingConfig.pageSize, pagingConfig.placeholderId != null)
+
+                when (val androidxLoadResult = androidxPagingSource.load(androidxLoadParams)) {
+                    is androidx.paging.PagingSource.LoadResult.Error -> {
+                        FetcherResult.Error.Exception(
+                            PagingError(
+                                encodedError = Json.encodeToString(
+                                    errorKClass.serializer(),
+                                    errorFactory.create(androidxLoadResult.throwable)
+                                ),
+                                extras = androidxLoadResult.throwable.extras()
+                            )
+                        )
+                    }
+
+                    is androidx.paging.PagingSource.LoadResult.Invalid -> {
+                        FetcherResult.Error.Exception(
+                            PagingError(
+                                encodedError = Json.encodeToString(
+                                    errorKClass.serializer(),
+                                    errorFactory.create(Throwable("Invalid")) // TODO() use types
+                                ),
+                                extras = null
+                            )
+                        )
+                    }
+
+                    is androidx.paging.PagingSource.LoadResult.Page -> {
+                        FetcherResult.Data(androidxLoadResult.storex(it))
+                    }
+                }
+            }
+        }
+
+        private fun createFetcherFromStorexPagingSource(pagingSource: PagingSource<Id, K, V, E>): Fetcher<PagingSource.LoadParams<K>, PagingSource.LoadResult.Data<Id, K, V, E>> {
+            return Fetcher.ofResult<PagingSource.LoadParams<K>, PagingSource.LoadResult.Data<Id, K, V, E>> {
+                when (val loadResult = pagingSource.load(it)) {
+                    is PagingSource.LoadResult.Data -> FetcherResult.Data(loadResult)
+                    is PagingSource.LoadResult.Error -> {
+                        FetcherResult.Error.Exception(
+                            PagingError(
+                                encodedError = Json.encodeToString(
+                                    errorKClass.serializer(),
+                                    loadResult.error
+                                ),
+                                extras = loadResult.extras
+                            )
+                        )
+                    }
+                }
+            }
+
+        }
+
 
         fun build(): Pager<Id, K, V, E> {
 
@@ -130,61 +193,17 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
                 error = errorKClass,
             )
 
-            val delegateItemCache = CacheBuilder<Id, V>().build()
-            val normalizedCache = RealNormalizedCache<Id, K, V>(delegateItemCache)
-
-            val pageFetcher =
-                Fetcher.ofResult<PagingSource.LoadParams<K>, PagingSource.LoadResult.Data<Id, K, V, E>> {
-                    when (val loadResult = pagingSource.load(it)) {
-                        is PagingSource.LoadResult.Data -> FetcherResult.Data(loadResult)
-                        is PagingSource.LoadResult.Error -> {
-                            FetcherResult.Error.Exception(
-                                PagingError(
-                                    encodedError = Json.encodeToString(
-                                        errorKClass.serializer(),
-                                        loadResult.error
-                                    ),
-                                    extras = loadResult.extras
-                                )
-                            )
-                        }
-                    }
-                }
-
-
-            val pageStoreFactory = PageStoreFactory<Id, K, V, E>(
-                fetcher = pageFetcher,
-                driverFactory = driverFactory,
-                registry = registry,
-                normalizedCache = normalizedCache
-            )
-
-            val itemStoreFactory = ItemStoreFactory<Id, K, V>(
-                fetcher = itemFetcher,
-                driverFactory = driverFactory,
-                registry = registry,
-                normalizedCache = normalizedCache
-            )
-
-            val pageStore = pageStoreFactory.create()
-            val itemStore = itemStoreFactory.create()
-
+            val pageFetcher = pagingSource?.let { createFetcherFromStorexPagingSource(it) }
+                ?: androidxPagingSource?.let { createFetcherFromAndroidxPagingSource(it) }
+                ?: throw IllegalArgumentException("You must provide a paging source, either from storex or androidx!")
 
             val fetchingStateHolder = RealFetchingStateHolder<Id>(
                 initialFetchingState
             )
 
-            val mutablePagingBuffer: MutablePagingBuffer<Id, K, V, E> =
-                RealMutablePagingBuffer(
-                    pagingBufferMaxSize,
-                    pageStore,
-                    itemStore,
-                    transformationParams,
-                    transformations
-                )
 
             val normalizedStore = RealNormalizedStore(
-                pagingSource,
+                pageFetcher,
                 registry,
                 errorFactory,
                 itemFetcher,

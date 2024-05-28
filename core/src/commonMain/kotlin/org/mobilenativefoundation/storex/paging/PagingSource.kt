@@ -23,6 +23,9 @@ interface PagingSource<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : A
 
             @Serializable
             data object LocalOnly : Strategy
+
+            @Serializable
+            data object Refresh: Strategy
         }
 
         enum class Direction {
@@ -40,6 +43,8 @@ interface PagingSource<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : A
             val params: LoadParams<K>,
             val nextKey: K?,
             val origin: Origin,
+            val itemsBefore: Int? = null,
+            val itemsAfter: Int? = null,
             val extras: JsonObject? = null
         ) : LoadResult<Id, K, V, E> {
             @Serializable
