@@ -51,19 +51,20 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
         private val errorFactory: ErrorFactory<E>,
         private val operations: List<Operation<Id, K, V, P, P>>
     ) {
+        private var storexPagingSource: PagingSource<Id, K, V, E>? = null
+        private var androidxPagingSource: androidx.paging.PagingSource<K, V>? = null
 
         private var coroutineDispatcher: CoroutineDispatcher = Dispatchers.IO
         private var launchEffects: List<LaunchEffect> = emptyList()
         private var sideEffects: List<SideEffect<Id, V>> = emptyList()
         private var pagingBufferMaxSize: Int = 500
         private var errorHandlingStrategy: ErrorHandlingStrategy = ErrorHandlingStrategy.RetryLast()
-        private var pagingSource: PagingSource<Id, K, V, E>? = null
         private var middleware: List<Middleware<K>> = emptyList()
         private var initialState: PagingState<Id, E> = PagingState.initial()
         private var initialFetchingState: FetchingState<Id> = FetchingState()
-        private var androidxPagingSource: androidx.paging.PagingSource<K, V>? = null
         private var itemFetcher: Fetcher<Id, V>? = null
-        private var fetchingStrategy: FetchingStrategy<Id, K, E> = DefaultFetchingStrategy(pagingConfig)
+        private var fetchingStrategy: FetchingStrategy<Id, K, E> =
+            DefaultFetchingStrategy(pagingConfig)
 
         fun coroutineDispatcher(coroutineDispatcher: CoroutineDispatcher) = apply {
             this.coroutineDispatcher = coroutineDispatcher
@@ -101,12 +102,12 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
             this.pagingBufferMaxSize = maxSize
         }
 
-        fun storexPagingSource(pagingSource: PagingSource<Id, K, V, E>) = apply {
-            this.pagingSource = pagingSource
+        fun storexPagingSource(storexPagingSource: PagingSource<Id, K, V, E>) = apply {
+            this.storexPagingSource = storexPagingSource
         }
 
-        fun androidxPagingSource(pagingSource: androidx.paging.PagingSource<K, V>) = apply {
-            this.androidxPagingSource = pagingSource
+        fun androidxPagingSource(storexPagingSource: androidx.paging.PagingSource<K, V>) = apply {
+            this.androidxPagingSource = storexPagingSource
         }
 
         private fun createFetcherFromAndroidxPagingSource(androidxPagingSource: androidx.paging.PagingSource<K, V>): Fetcher<PagingSource.LoadParams<K>, PagingSource.LoadResult.Data<Id, K, V, E>> {
@@ -146,9 +147,9 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
             }
         }
 
-        private fun createFetcherFromStorexPagingSource(pagingSource: PagingSource<Id, K, V, E>): Fetcher<PagingSource.LoadParams<K>, PagingSource.LoadResult.Data<Id, K, V, E>> {
+        private fun createFetcherFromStorexPagingSource(storexPagingSource: PagingSource<Id, K, V, E>): Fetcher<PagingSource.LoadParams<K>, PagingSource.LoadResult.Data<Id, K, V, E>> {
             return Fetcher.ofResult {
-                when (val loadResult = pagingSource.load(it)) {
+                when (val loadResult = storexPagingSource.load(it)) {
                     is PagingSource.LoadResult.Data -> FetcherResult.Data(loadResult)
                     is PagingSource.LoadResult.Error -> {
                         FetcherResult.Error.Exception(
@@ -176,7 +177,7 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
                 error = errorKClass,
             )
 
-            val pageFetcher = pagingSource?.let { createFetcherFromStorexPagingSource(it) }
+            val pageFetcher = storexPagingSource?.let { createFetcherFromStorexPagingSource(it) }
                 ?: androidxPagingSource?.let { createFetcherFromAndroidxPagingSource(it) }
                 ?: throw IllegalArgumentException("You must provide a paging source, either from storex or androidx!")
 
