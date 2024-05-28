@@ -14,8 +14,6 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.serializer
 import org.mobilenativefoundation.store.store5.Fetcher
 import org.mobilenativefoundation.store.store5.FetcherResult
@@ -43,12 +41,12 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
     private val pageFetcher: Fetcher<PagingSource.LoadParams<K>, PagingSource.LoadResult.Data<Id, K, V, E>>,
     private val registry: KClassRegistry<Id, K, V, E>,
     private val errorFactory: ErrorFactory<E>,
-    private val itemFetcher: Fetcher<Id, V>,
+    private val itemFetcher: Fetcher<Id, V>?,
     driverFactory: DriverFactory,
     private val maxSize: Int = 500,
     private val fetchingStateHolder: FetchingStateHolder<Id>,
     private val sideEffects: List<SideEffect<Id, V>>,
-    private val pagingConfig: PagingConfig<Id>
+    private val pagingConfig: PagingConfig<Id, K>
 ) : NormalizedStore<Id, K, V, E> {
 
     private val db = PagingDb(driverFactory.createDriver())
@@ -587,7 +585,11 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
 
                         singleLoadState = SingleLoadState.Refreshing
 
-                        when (val fetcherResult = itemFetcher(id).first()) {
+                        if (itemFetcher == null) {
+                            throw IllegalStateException("Item fetcher is null")
+                        }
+
+                        when (val fetcherResult = itemFetcher.invoke(id).first()) {
                             is FetcherResult.Data -> {
                                 val item = fetcherResult.value
 
@@ -595,7 +597,8 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
                                 itemMemoryCache[item.id] = item
 
                                 // Update database
-                                val itemId = Json.encodeToString(registry.id.serializer(), item.id)
+                                val itemId =
+                                    Json.encodeToString(registry.id.serializer(), item.id)
                                 val updatedData =
                                     Json.encodeToString(registry.value.serializer(), item)
                                 db.itemQueries.updateItem(updatedData, itemId)
@@ -647,6 +650,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
                                 )
                             }
                         }
+
 
                     }
 

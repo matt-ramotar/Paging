@@ -4,6 +4,7 @@ package org.mobilenativefoundation.storex.paging
 
 import androidx.compose.runtime.Composable
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.json.Json
@@ -20,6 +21,8 @@ import org.mobilenativefoundation.storex.paging.custom.Operation
 import org.mobilenativefoundation.storex.paging.custom.SideEffect
 import org.mobilenativefoundation.storex.paging.db.DriverFactory
 import org.mobilenativefoundation.storex.paging.internal.api.FetchingState
+import org.mobilenativefoundation.storex.paging.internal.impl.DefaultErrorFactory
+import org.mobilenativefoundation.storex.paging.internal.impl.DefaultFetchingStrategy
 import org.mobilenativefoundation.storex.paging.internal.impl.KClassRegistry
 import org.mobilenativefoundation.storex.paging.internal.impl.PagingError
 import org.mobilenativefoundation.storex.paging.internal.impl.RealFetchingStateHolder
@@ -42,35 +45,28 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
         private val idKClass: KClass<Id>,
         private val keyKClass: KClass<K>,
         private val valueKClass: KClass<V>,
-        private val errorKClass: KClass<E>
+        private val errorKClass: KClass<E>,
+        private val pagingConfig: PagingConfig<Id, K>,
+        private val driverFactory: DriverFactory,
+        private val errorFactory: ErrorFactory<E>,
+        private val operations: List<Operation<Id, K, V, P, P>>
     ) {
 
-        private lateinit var coroutineDispatcher: CoroutineDispatcher
-        private var operations: List<Operation<Id, K, V, P, P>> = emptyList()
+        private var coroutineDispatcher: CoroutineDispatcher = Dispatchers.IO
         private var launchEffects: List<LaunchEffect> = emptyList()
         private var sideEffects: List<SideEffect<Id, V>> = emptyList()
         private var pagingBufferMaxSize: Int = 500
-        private lateinit var errorHandlingStrategy: ErrorHandlingStrategy
+        private var errorHandlingStrategy: ErrorHandlingStrategy = ErrorHandlingStrategy.RetryLast()
         private var pagingSource: PagingSource<Id, K, V, E>? = null
-        private lateinit var middleware: List<Middleware<K>>
-        private lateinit var fetchingStrategy: FetchingStrategy<Id, K, E>
-        private lateinit var pagingConfig: PagingConfig<Id>
-        private lateinit var initialLoadParams: PagingSource.LoadParams<K>
+        private var middleware: List<Middleware<K>> = emptyList()
         private var initialState: PagingState<Id, E> = PagingState.initial()
         private var initialFetchingState: FetchingState<Id> = FetchingState()
-
-        private lateinit var itemFetcher: Fetcher<Id, V>
-        private lateinit var driverFactory: DriverFactory
-        private lateinit var errorFactory: ErrorFactory<E>
-
         private var androidxPagingSource: androidx.paging.PagingSource<K, V>? = null
+        private var itemFetcher: Fetcher<Id, V>? = null
+        private var fetchingStrategy: FetchingStrategy<Id, K, E> = DefaultFetchingStrategy(pagingConfig)
 
         fun coroutineDispatcher(coroutineDispatcher: CoroutineDispatcher) = apply {
             this.coroutineDispatcher = coroutineDispatcher
-        }
-
-        fun operations(operations: List<Operation<Id, K, V, P, P>>) = apply {
-            this.operations = operations
         }
 
         fun launchEffects(launchEffects: List<LaunchEffect>) = apply {
@@ -91,14 +87,6 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
 
         fun fetchingStrategy(fetchingStrategy: FetchingStrategy<Id, K, E>) = apply {
             this.fetchingStrategy = fetchingStrategy
-        }
-
-        fun pagingConfig(pagingConfig: PagingConfig<Id>) = apply {
-            this.pagingConfig = pagingConfig
-        }
-
-        fun initialLoadParams(initialLoadParams: PagingSource.LoadParams<K>) = apply {
-            this.initialLoadParams = initialLoadParams
         }
 
         fun initialState(initialState: PagingState<Id, E>) = apply {
@@ -216,7 +204,7 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
                 errorHandlingStrategy = errorHandlingStrategy,
                 middleware = middleware,
                 fetchingStrategy = fetchingStrategy,
-                initialLoadParams = initialLoadParams,
+                initialLoadParams = pagingConfig.initialLoadParams,
                 registry = registry,
                 normalizedStore = normalizedStore,
                 operations = operations,
@@ -225,9 +213,59 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
         }
 
         companion object {
-            inline operator fun <reified Id : Comparable<Id>, reified K : Any, reified V : Identifiable<Id>, reified E : Any, P : Any> invoke(): Builder<Id, K, V, E, P> {
-                return Builder(Id::class, K::class, V::class, E::class)
+            inline operator fun <reified Id : Comparable<Id>, reified K : Any, reified V : Identifiable<Id>, reified E : Any, P : Any> invoke(
+                pagingConfig: PagingConfig<Id, K>,
+                driverFactory: DriverFactory,
+                errorFactory: ErrorFactory<E>,
+                operations: List<Operation<Id, K, V, P, P>>,
+            ): Builder<Id, K, V, E, P> {
+                return Builder(
+                    Id::class,
+                    K::class,
+                    V::class,
+                    E::class,
+                    pagingConfig,
+                    driverFactory,
+                    errorFactory,
+                    operations
+                )
+            }
+
+            inline operator fun <reified Id : Comparable<Id>, reified K : Any, reified V : Identifiable<Id>, reified E : Any> invoke(
+                pagingConfig: PagingConfig<Id, K>,
+                driverFactory: DriverFactory,
+                errorFactory: ErrorFactory<E>,
+            ): Builder<Id, K, V, E, Any> {
+                return Builder(
+                    Id::class,
+                    K::class,
+                    V::class,
+                    E::class,
+                    pagingConfig,
+                    driverFactory,
+                    errorFactory,
+                    emptyList()
+                )
+            }
+
+            inline operator fun <reified Id : Comparable<Id>, reified K : Any, reified V : Identifiable<Id>> invoke(
+                pagingConfig: PagingConfig<Id, K>,
+                driverFactory: DriverFactory,
+            ): Builder<Id, K, V, Throwable, Any> {
+                return Builder(
+                    Id::class,
+                    K::class,
+                    V::class,
+                    Throwable::class,
+                    pagingConfig,
+                    driverFactory,
+                    DefaultErrorFactory(),
+                    emptyList()
+                )
             }
         }
     }
 }
+
+
+
