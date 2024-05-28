@@ -25,7 +25,7 @@ import org.mobilenativefoundation.storex.paging.custom.ErrorHandlingStrategy
 import org.mobilenativefoundation.storex.paging.custom.FetchingStrategy
 import org.mobilenativefoundation.storex.paging.custom.LaunchEffect
 import org.mobilenativefoundation.storex.paging.custom.Middleware
-import org.mobilenativefoundation.storex.paging.custom.TransformationStrategy
+import org.mobilenativefoundation.storex.paging.custom.Operation
 import org.mobilenativefoundation.storex.paging.internal.api.FetchingStateHolder
 
 // TODO(): Design decision to support initial state (e.g., hardcoded)
@@ -41,8 +41,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
     private val initialLoadParams: PagingSource.LoadParams<K>,
     private val registry: KClassRegistry<Id, K, V, E>,
     private val normalizedStore: RealNormalizedStore<Id, K, V, E>,
-    private val transformationParams: P,
-    private val transformations: List<TransformationStrategy<Id, V, P>>,
+    private val operations: List<Operation<Id, K, V, P, P>>,
     initialState: PagingState<Id, E> = PagingState.initial()
 ) : Pager<Id, K, V, E> {
 
@@ -126,14 +125,23 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
         processPrependQueue()
     }
 
-    private fun transformSnapshot(snapshot: ItemSnapshotList<Id, V>): ItemSnapshotList<Id, V> {
-        var transformed = snapshot
+    private fun transformSnapshot(
+        snapshot: ItemSnapshotList<Id, V>,
+        key: K?,
+    ): ItemSnapshotList<Id, V> {
 
-        transformations.forEach { transformation ->
-            transformed = transformation(transformed, transformationParams)
+        if (operations.isEmpty()) {
+            return snapshot
         }
 
-        return transformed
+        val pagingState = _mutablePagingState.value
+        val fetchingState = fetchingStateHolder.state.value
+
+        return operations.fold(snapshot) { acc, operation ->
+            operation.shouldApply(key, pagingState, fetchingState)?.let { params ->
+                operation.strategy.invoke(acc, params)
+            } ?: acc
+        }
     }
 
     private fun processAppendQueue() {
@@ -199,7 +207,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
 
                     is PageLoadStatus.Success -> {
                         // Update state
-                        updateStateWithPrependData(it)
+                        updateStateWithPrependData(it, loadParams.key)
 
                         // Clear prepend queue
                         prependLoadParamsQueue.clear()
@@ -296,7 +304,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
 
                     is PageLoadStatus.Success -> {
                         // Update state
-                        updateStateWithAppendData(it)
+                        updateStateWithAppendData(it, loadParams.key)
 
                         // Load next key, if not null
                         // TODO(): Design decision to skip cache on incremental loads
@@ -376,10 +384,10 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
     }
 
 
-    private fun updateStateWithAppendData(data: PageLoadStatus.Success<Id, K, V, E>) {
+    private fun updateStateWithAppendData(data: PageLoadStatus.Success<Id, K, V, E>, key: K?) {
         val prevState = _mutablePagingState.value
 
-        val transformedSnapshot = transformSnapshot(data.snapshot)
+        val transformedSnapshot = transformSnapshot(data.snapshot, key)
 
         _mutablePagingState.value = PagingState(
             ids = transformedSnapshot.getAllIds(),
@@ -390,10 +398,10 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
 
     }
 
-    private fun updateStateWithPrependData(data: PageLoadStatus.Success<Id, K, V, E>) {
+    private fun updateStateWithPrependData(data: PageLoadStatus.Success<Id, K, V, E>, key: K?) {
         val prevState = _mutablePagingState.value
 
-        val transformedSnapshot = transformSnapshot(data.snapshot)
+        val transformedSnapshot = transformSnapshot(data.snapshot, key)
 
         _mutablePagingState.value = PagingState(
             ids = transformedSnapshot.getAllIds(),
