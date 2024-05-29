@@ -72,6 +72,7 @@ kotlin {
                 implementation(libs.kotlin.test.annotations.common)
                 implementation(libs.turbine)
                 implementation(libs.kotlinx.coroutines.test)
+                implementation(libs.molecule.runtime)
             }
         }
     }

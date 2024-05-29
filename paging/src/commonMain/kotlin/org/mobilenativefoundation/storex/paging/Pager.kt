@@ -2,6 +2,7 @@
 
 package org.mobilenativefoundation.storex.paging
 
+import androidx.compose.runtime.Composable
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,9 +34,8 @@ import kotlin.reflect.KClass
 
 interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
 
-    val pagingState: StateFlow<PagingState<Id, E>>
-
-    operator fun invoke(loadParams: Flow<PagingSource.LoadParams<K>>)
+    @Composable
+    fun pagingState(loadParams: Flow<PagingSource.LoadParams<K>>): PagingState<Id, E>
 
     fun selfUpdatingItem(id: Quantifiable<Id>): SelfUpdatingItem<Id, V, E>
 

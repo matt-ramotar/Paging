@@ -1,13 +1,14 @@
 package org.mobilenativefoundation.storex.paging
 
 import androidx.compose.runtime.BroadcastFrameClock
+import app.cash.molecule.RecompositionMode
+import app.cash.molecule.moleculeFlow
 import app.cash.turbine.test
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.mobilenativefoundation.storex.paging.utils.timeline.TimelinePagerFactory
 import org.mobilenativefoundation.storex.paging.utils.timeline.models.GetFeedRequest
@@ -36,22 +37,17 @@ class RealPagerTest {
     @Test
     fun test() = testScope.runTest {
 
-        pager.invoke(emptyFlow())
 
-        val state = pager.pagingState
-
-        advanceUntilIdle()
+        val state = moleculeFlow(RecompositionMode.Immediate) {
+            pager.pagingState(emptyFlow())
+        }
 
         state.test {
-
-            advanceUntilIdle()
-
             // BECAUSE OF EAGER LOADING WE DON'T COLLECT THE OTHER EMISSIONS, JUST THE LAST WHICH IS ALL LOADED DATA AND NOT LOADING STATUS
             val eagerLoading = awaitItem()
+            println("ITEM = $eagerLoading")
             assertIs<PagingLoadState.NotLoading>(eagerLoading.loadStates.append)
             assertEquals(100, eagerLoading.ids.size)
-
-            advanceUntilIdle()
 
             expectNoEvents()
         }

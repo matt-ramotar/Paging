@@ -1,11 +1,13 @@
 package org.mobilenativefoundation.storex.paging.internal.impl
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -49,7 +51,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
 
     // TODO(): This is not thread safe!
     private val _mutablePagingState = MutableStateFlow(initialState)
-    override val pagingState: StateFlow<PagingState<Id, E>> = _mutablePagingState.asStateFlow()
+
 
     private val appendLoadParamsQueue: LoadParamsQueue<K> = LoadParamsQueue()
     private val prependLoadParamsQueue: LoadParamsQueue<K> = LoadParamsQueue()
@@ -61,56 +63,51 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
     }
 
     override fun selfUpdatingItem(id: Quantifiable<Id>): SelfUpdatingItem<Id, V, E> {
+        println("SELF UPDATING ITEM CALLED")
         return normalizedStore.selfUpdatingItem(id)
     }
 
-    override fun invoke(loadParams: Flow<PagingSource.LoadParams<K>>) {
-        coroutineScope.launch {
-            loadParams.collect {
-                println(it)
-            }
-        }
-    }
+    @Composable
+    override fun pagingState(loadParams: Flow<PagingSource.LoadParams<K>>): PagingState<Id, E> {
 
-//    @Composable
-//    override fun pagingState(loadParams: Flow<PagingSource.LoadParams<K>>): PagingState<Id, E> {
-//        val composableCoroutineScope = rememberCoroutineScope { DispatcherProvider.io }
+
+        val fetchingState by fetchingStateHolder.state.collectAsState()
+
+        val pagingState by _mutablePagingState.collectAsState()
+
+        println("TAG = ${pagingState.loadStates.append}")
+        println("TAG= ${pagingState.ids}")
+
+        LaunchedEffect(Unit) {
+
+            println("LAUNCHING 1")
+            loadParams.collect { params ->
+                println("COLLECTING 1 $params")
+                when (params.direction) {
+                    PagingSource.LoadParams.Direction.Prepend -> {
+                        prependLoadParamsQueue.addLast(params)
+                        processPrependQueue()
+                    }
+
+                    PagingSource.LoadParams.Direction.Append -> {
+                        appendLoadParamsQueue.addLast(params)
+                        processAppendQueue()
+                    }
+                }
+            }
+
+        }
+
+//        LaunchedEffect(fetchingState) {
+//            println("LAUNCHING 2")
 //
-//        val params by loadParams.collectAsState(initialLoadParams)
-//
-//        val fetchingState by fetchingStateHolder.state.collectAsState()
-//
-//        val pagingState by _pagingState.collectAsState()
-//
-//        println("TAG = ${pagingState.loadStates.append}")
-//        println("TAG= ${pagingState.ids}")
-//
-////        LaunchedEffect(params) {
-////
-////            println("LAUNCHING 1")
-////            when (params.direction) {
-////                PagingSource.LoadParams.Direction.Prepend -> {
-////                    prependLoadParamsQueue.addLast(params)
-////                    processPrependQueue()
-////                }
-////
-////                PagingSource.LoadParams.Direction.Append -> {
-////                    appendLoadParamsQueue.addLast(params)
-////                    processAppendQueue()
-////                }
-////            }
-////        }
-//
-////        LaunchedEffect(fetchingState) {
-////            println("LAUNCHING 2")
-////
-////            handleForwardPrefetching()
-////            handleBackwardPrefetching()
-////        }
-//
-//
-//        return pagingState
-//    }
+//            handleForwardPrefetching()
+//            handleBackwardPrefetching()
+//        }
+
+
+        return pagingState
+    }
 
     // TODO(): Design decision to get the most recent prepend load params
     private fun processPrependQueue() {
@@ -151,6 +148,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
 
     private suspend fun processAppendQueue() {
 
+        println("ENTERED WHILE LOOP")
         var keepFetching = true
 
         while (appendLoadParamsQueue.isNotEmpty() && keepFetching) {
@@ -179,6 +177,8 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
             }
 
         }
+
+        println("EXITED WHILE LOOP")
     }
 
     private suspend fun handlePrependLoading(
@@ -283,6 +283,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
         retryCount: Int = 0
     ) {
 
+        println("HANDLE APPEND LOADING!!!!")
         updateStateWithAppendLoading()
 
         try {
@@ -350,8 +351,11 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
             }
 
         } catch (pagingError: PagingError) {
+            println("HITTING IN HANDLE APPEND ERROR")
             handleAppendPagingError(pagingError, loadParams, retryCount)
         }
+
+        println("FINISHED!!!!")
     }
 
     private suspend fun handleAppendPagingError(
@@ -397,6 +401,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
     private fun handleLaunchEffects() {
         coroutineScope.launch {
             launchEffects.forEach { launchEffect -> launchEffect.invoke() }
+            println("COMPLETED COROUTINE FOR LAUNCH EFFECTS")
         }
     }
 
@@ -406,6 +411,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
         coroutineScope.launch {
             appendLoadParamsQueue.addLast(initialLoadParams)
             processAppendQueue()
+            println("COMPLETED COROUTINE FOR EAGER LOADING")
         }
     }
 
