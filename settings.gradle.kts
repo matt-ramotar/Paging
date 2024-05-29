@@ -1,5 +1,5 @@
 
-rootProject.name = "Paging"
+rootProject.name = "storex-paging"
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 pluginManagement {
@@ -23,4 +23,4 @@ dependencyResolutionManagement {
     }
 }
 
-include(":core")
+include(":paging")
