@@ -14,6 +14,8 @@ import org.mobilenativefoundation.storex.paging.utils.timeline.models.GetFeedReq
 import org.mobilenativefoundation.storex.paging.utils.timeline.models.Post
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class RealPagerTest {
@@ -38,16 +40,16 @@ class RealPagerTest {
 
         val state = pager.pagingState
 
-//        val state = launchMolecule(mode = RecompositionMode.Immediate) {
-//            pager.pagingState(emptyFlow())
-//        }
+        advanceUntilIdle()
 
         state.test {
 
             advanceUntilIdle()
 
+            // BECAUSE OF EAGER LOADING WE DON'T COLLECT THE OTHER EMISSIONS, JUST THE LAST WHICH IS ALL LOADED DATA AND NOT LOADING STATUS
             val eagerLoading = awaitItem()
-            println(eagerLoading)
+            assertIs<PagingLoadState.NotLoading>(eagerLoading.loadStates.append)
+            assertEquals(100, eagerLoading.ids.size)
 
             advanceUntilIdle()
 

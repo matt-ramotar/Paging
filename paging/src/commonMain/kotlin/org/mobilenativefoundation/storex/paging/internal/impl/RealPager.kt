@@ -301,7 +301,20 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
                     }
 
                     is PageLoadStatus.Loading -> {
-                        updateStateWithAppendLoading()
+
+                        println("HITTING IN UPDATE WITH LOADING")
+
+                        suspend {
+                            _mutablePagingState.value = PagingState(
+                                ids = _mutablePagingState.value.ids,
+                                loadStates = _mutablePagingState.value.loadStates.copy(
+                                    append = PagingLoadState.Loading(_mutablePagingState.value.loadStates.append.extras)
+                                )
+                            )
+                            println("UPDATED LOADING STATE")
+
+                        }
+
                         false
                     }
 
@@ -460,6 +473,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
     }
 
     private fun updateStateWithAppendLoading() {
+
         _mutablePagingState.update {
             PagingState(
                 ids = it.ids,
@@ -468,6 +482,8 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
                 )
             )
         }
+
+        println("UPDATED LOADING STATE")
     }
 
 
