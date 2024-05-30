@@ -9,29 +9,9 @@ fun interface PagingSource<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E
     @Serializable
     data class LoadParams<K : Any>(
         val key: K,
-        val strategy: Strategy,
-        val direction: Direction
-    ) {
-        @Serializable
-        sealed interface Strategy {
-            @Serializable
-            data class CacheFirst(val refresh: Boolean) : Strategy
-
-            @Serializable
-            data object SkipCache : Strategy
-
-            @Serializable
-            data object LocalOnly : Strategy
-
-            @Serializable
-            data object Refresh : Strategy
-        }
-
-        enum class Direction {
-            Prepend,
-            Append
-        }
-    }
+        val strategy: LoadStrategy,
+        val direction: LoadDirection
+    )
 
     @Serializable
     sealed interface LoadResult<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
@@ -79,4 +59,24 @@ fun interface PagingSource<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E
             val extras: JsonObject? = null
         )
     }
+}
+
+enum class LoadDirection {
+    Prepend,
+    Append
+}
+
+@Serializable
+sealed interface LoadStrategy {
+    @Serializable
+    data class CacheFirst(val refresh: Boolean) : LoadStrategy
+
+    @Serializable
+    data object SkipCache : LoadStrategy
+
+    @Serializable
+    data object LocalOnly : LoadStrategy
+
+    @Serializable
+    data object Refresh : LoadStrategy
 }

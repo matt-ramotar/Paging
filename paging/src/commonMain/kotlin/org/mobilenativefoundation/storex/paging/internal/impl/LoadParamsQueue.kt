@@ -13,6 +13,12 @@ class LoadParamsQueue<K : Any> {
         processed.add(params)
     }
 
+    fun addFirst(params: PagingSource.LoadParams<K>) {
+        if (processed.contains(params)) return
+        queue.addFirst(params)
+        processed.add(params)
+    }
+
     fun first(): PagingSource.LoadParams<K> = queue.first()
     fun removeFirst(): PagingSource.LoadParams<K> = queue.removeFirst()
     fun last(): PagingSource.LoadParams<K> = queue.last()

@@ -21,12 +21,12 @@ interface FetchingStrategy<Id : Comparable<Id>, K : Any, E: Any> {
     fun shouldFetchForward(
         params: PagingSource.LoadParams<K>,
         pagingState: PagingState<Id, E>,
-        fetchingState: FetchingState<Id>,
+        fetchingState: FetchingState<Id, K>,
     ): Boolean
 
     fun shouldFetchBackward(
         params: PagingSource.LoadParams<K>,
         pagingState: PagingState<Id, E>,
-        fetchingState: FetchingState<Id>,
+        fetchingState: FetchingState<Id, K>,
     ): Boolean
 }

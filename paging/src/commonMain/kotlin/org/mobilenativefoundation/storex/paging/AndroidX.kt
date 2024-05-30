@@ -5,15 +5,15 @@ import org.mobilenativefoundation.storex.paging.custom.Operation
 import org.mobilenativefoundation.storex.paging.db.DriverFactory
 
 fun <Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any>
-        androidx.paging.PagingSource.LoadParams<K>.storex(strategy: PagingSource.LoadParams.Strategy): PagingSource.LoadParams<K> {
+        androidx.paging.PagingSource.LoadParams<K>.storex(strategy: LoadStrategy): PagingSource.LoadParams<K> {
     val direction = when (this) {
         is androidx.paging.PagingSource.LoadParams.Refresh -> {
             // Refresh is always Append
-            PagingSource.LoadParams.Direction.Append
+            LoadDirection.Append
         }
 
-        is androidx.paging.PagingSource.LoadParams.Prepend -> PagingSource.LoadParams.Direction.Prepend
-        is androidx.paging.PagingSource.LoadParams.Append -> PagingSource.LoadParams.Direction.Append
+        is androidx.paging.PagingSource.LoadParams.Prepend -> LoadDirection.Prepend
+        is androidx.paging.PagingSource.LoadParams.Append -> LoadDirection.Append
     }
 
     return PagingSource.LoadParams(
@@ -28,7 +28,7 @@ fun <K : Any> PagingSource.LoadParams<K>.androidx(
     placeholdersEnabled: Boolean
 ): androidx.paging.PagingSource.LoadParams<K> {
     return when (direction) {
-        PagingSource.LoadParams.Direction.Prepend -> {
+        LoadDirection.Prepend -> {
             androidx.paging.PagingSource.LoadParams.Prepend(
                 key = key,
                 loadSize = loadSize,
@@ -36,7 +36,7 @@ fun <K : Any> PagingSource.LoadParams<K>.androidx(
             )
         }
 
-        PagingSource.LoadParams.Direction.Append -> {
+        LoadDirection.Append -> {
             androidx.paging.PagingSource.LoadParams.Append(
                 key = key,
                 loadSize = loadSize,

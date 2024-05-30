@@ -4,8 +4,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -17,8 +19,11 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.serializer
 import org.mobilenativefoundation.storex.paging.Identifiable
 import org.mobilenativefoundation.storex.paging.ItemSnapshotList
+import org.mobilenativefoundation.storex.paging.LoadDirection
+import org.mobilenativefoundation.storex.paging.LoadStrategy
 import org.mobilenativefoundation.storex.paging.Pager
 import org.mobilenativefoundation.storex.paging.PagingLoadState
+import org.mobilenativefoundation.storex.paging.PagingRequest
 import org.mobilenativefoundation.storex.paging.PagingSource
 import org.mobilenativefoundation.storex.paging.PagingState
 import org.mobilenativefoundation.storex.paging.Quantifiable
@@ -35,7 +40,7 @@ import org.mobilenativefoundation.storex.paging.internal.api.FetchingStateHolder
 @OptIn(InternalSerializationApi::class)
 class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P : Any>(
     coroutineDispatcher: CoroutineDispatcher,
-    private val fetchingStateHolder: FetchingStateHolder<Id>,
+    private val fetchingStateHolder: FetchingStateHolder<Id, K>,
     private val launchEffects: List<LaunchEffect>,
     private val errorHandlingStrategy: ErrorHandlingStrategy,
     private val middleware: List<Middleware<K>>,
@@ -51,7 +56,14 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
 
     // TODO(): This is not thread safe!
     private val _mutablePagingState = MutableStateFlow(initialState)
+    private val _processingAppendQueue = MutableStateFlow(false)
 
+    private val pendingSkipQueueJobs = mutableMapOf<K, PendingSkipQueueJob<K>>()
+
+    data class PendingSkipQueueJob<K : Any>(
+        val key: K,
+        val inFlight: Boolean,
+    )
 
     private val appendLoadParamsQueue: LoadParamsQueue<K> = LoadParamsQueue()
     private val prependLoadParamsQueue: LoadParamsQueue<K> = LoadParamsQueue()
@@ -67,10 +79,25 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
         return normalizedStore.selfUpdatingItem(id)
     }
 
+    private fun PagingRequest.Enqueue<K>.toPagingSourceLoadParams(): PagingSource.LoadParams<K> {
+        return PagingSource.LoadParams(
+            key = key,
+            strategy = strategy,
+            direction = direction
+        )
+    }
+
+    private fun PagingRequest.SkipQueue<K>.toPagingSourceLoadParams(): PagingSource.LoadParams<K> {
+        return PagingSource.LoadParams(
+            key = key,
+            strategy = strategy,
+            direction = direction
+        )
+    }
+
+
     @Composable
-    override fun pagingState(loadParams: Flow<PagingSource.LoadParams<K>>): PagingState<Id, E> {
-
-
+    override fun pagingState(requests: Flow<PagingRequest<K>>): PagingState<Id, E> {
         val fetchingState by fetchingStateHolder.state.collectAsState()
 
         val pagingState by _mutablePagingState.collectAsState()
@@ -78,24 +105,61 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
         println("TAG = ${pagingState.loadStates.append}")
         println("TAG= ${pagingState.ids}")
 
+        val scope = rememberCoroutineScope()
+
         LaunchedEffect(Unit) {
 
             println("LAUNCHING 1")
-            loadParams.collect { params ->
-                println("COLLECTING 1 $params")
-                when (params.direction) {
-                    PagingSource.LoadParams.Direction.Prepend -> {
-                        prependLoadParamsQueue.addLast(params)
-                        processPrependQueue()
+
+            requests.collect { request ->
+                println("RECEIVED REQUEST $request")
+                when (request) {
+                    is PagingRequest.ProcessQueue -> {
+                        when (request.direction) {
+                            LoadDirection.Prepend -> {
+                                processPrependQueue()
+                            }
+
+                            LoadDirection.Append -> {
+                                processAppendQueue()
+                            }
+                        }
                     }
 
-                    PagingSource.LoadParams.Direction.Append -> {
-                        appendLoadParamsQueue.addLast(params)
-                        processAppendQueue()
+                    is PagingRequest.SkipQueue -> {
+
+                        updatePendingSkipQueueJob(request.key, inFlight = false, completed = false)
+
+                        when (request.direction) {
+                            LoadDirection.Prepend -> {
+                                handlePrependLoading(request.toPagingSourceLoadParams())
+                            }
+
+                            // We don't add next to queue, because we are only agreeing to skip the queue for this key
+                            LoadDirection.Append -> {
+                                handleAppendLoading(
+                                    request.toPagingSourceLoadParams(),
+                                    addNextToQueue = false
+                                )
+                            }
+                        }
+                    }
+
+                    is PagingRequest.Enqueue -> {
+                        when (request.direction) {
+                            LoadDirection.Prepend -> {
+                                prependLoadParamsQueue.addLast(request.toPagingSourceLoadParams())
+                                processPrependQueue()
+                            }
+
+                            LoadDirection.Append -> {
+                                appendLoadParamsQueue.addLast(request.toPagingSourceLoadParams())
+                                processAppendQueue()
+                            }
+                        }
                     }
                 }
             }
-
         }
 
 //        LaunchedEffect(fetchingState) {
@@ -106,6 +170,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
 //        }
 
 
+        println("RETURNING PAGING STATE ${pagingState.ids.size}")
         return pagingState
     }
 
@@ -149,9 +214,23 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
     private suspend fun processAppendQueue() {
 
         println("ENTERED WHILE LOOP")
+
+        _processingAppendQueue.update { true }
+
         var keepFetching = true
 
         while (appendLoadParamsQueue.isNotEmpty() && keepFetching) {
+
+
+            if (pendingSkipQueueJobs.isNotEmpty()) {
+                println("PENDING SKIP QUEUE JOBS = $pendingSkipQueueJobs")
+                // TODO(): Design decision to let existing process queue job complete but wait to continue until the skip queue request(s) is completed
+                // Need to wait until the skip queue request is completed
+                delay(100)
+                continue
+            }
+
+
             val pagingState = _mutablePagingState.value
             val fetchingState = fetchingStateHolder.state.value
 
@@ -178,6 +257,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
 
         }
 
+        _processingAppendQueue.update { false }
         println("EXITED WHILE LOOP")
     }
 
@@ -227,8 +307,8 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
                             prependLoadParamsQueue.addLast(
                                 PagingSource.LoadParams(
                                     key,
-                                    PagingSource.LoadParams.Strategy.SkipCache,
-                                    PagingSource.LoadParams.Direction.Prepend
+                                    LoadStrategy.SkipCache,
+                                    LoadDirection.Prepend
                                 )
                             )
                         }
@@ -278,21 +358,36 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
         }
     }
 
+    private fun updatePendingSkipQueueJob(key: K, inFlight: Boolean, completed: Boolean) {
+        if (completed) {
+            pendingSkipQueueJobs.remove(key)
+        } else {
+            pendingSkipQueueJobs[key] = PendingSkipQueueJob(key, inFlight)
+        }
+    }
+
     private suspend fun handleAppendLoading(
         loadParams: PagingSource.LoadParams<K>,
-        retryCount: Int = 0
+        retryCount: Int = 0,
+        addNextToQueue: Boolean = true
     ) {
 
-        println("HANDLE APPEND LOADING!!!!")
+        println("HANDLE APPEND LOADING!!!! ${loadParams.key}")
         updateStateWithAppendLoading()
 
         try {
+
+
             normalizedStore.loadPage(loadParams).first {
-                println("FIRST $it")
+                println("FIRST for ${loadParams.key} - $it")
                 when (it) {
                     is PageLoadStatus.Empty -> {
                         // TODO(): Enable debug logging
+
+                        updatePendingSkipQueueJob(loadParams.key, inFlight = true, completed = true)
+
                         true
+
                     }
 
                     is PageLoadStatus.Error -> {
@@ -303,18 +398,22 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
 
                     is PageLoadStatus.Loading -> {
 
+                        updatePendingSkipQueueJob(
+                            loadParams.key,
+                            inFlight = true,
+                            completed = false
+                        )
+
+
                         println("HITTING IN UPDATE WITH LOADING")
 
-                        suspend {
-                            _mutablePagingState.value = PagingState(
-                                ids = _mutablePagingState.value.ids,
-                                loadStates = _mutablePagingState.value.loadStates.copy(
-                                    append = PagingLoadState.Loading(_mutablePagingState.value.loadStates.append.extras)
-                                )
+                        _mutablePagingState.value = PagingState(
+                            ids = _mutablePagingState.value.ids,
+                            loadStates = _mutablePagingState.value.loadStates.copy(
+                                append = PagingLoadState.Loading(_mutablePagingState.value.loadStates.append.extras)
                             )
-                            println("UPDATED LOADING STATE")
-
-                        }
+                        )
+                        println("UPDATED LOADING STATE")
 
                         false
                     }
@@ -325,6 +424,8 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
                     }
 
                     is PageLoadStatus.SkippingLoad -> {
+                        updatePendingSkipQueueJob(loadParams.key, inFlight = true, completed = true)
+
                         true
                     }
 
@@ -335,15 +436,21 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
 
                         // Load next key, if not null
                         // TODO(): Design decision to skip cache on incremental loads
-                        it.nextKey?.let { key ->
-                            appendLoadParamsQueue.addLast(
-                                PagingSource.LoadParams(
-                                    key,
-                                    PagingSource.LoadParams.Strategy.SkipCache,
-                                    PagingSource.LoadParams.Direction.Append
+                        if (addNextToQueue) {
+                            it.nextKey?.let { key ->
+                                appendLoadParamsQueue.addLast(
+                                    PagingSource.LoadParams(
+                                        key,
+                                        LoadStrategy.SkipCache,
+                                        LoadDirection.Append
+                                    )
                                 )
-                            )
+                            }
+
                         }
+
+                        updatePendingSkipQueueJob(loadParams.key, inFlight = true, completed = true)
+
 
                         true
                     }
@@ -352,20 +459,24 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
 
         } catch (pagingError: PagingError) {
             println("HITTING IN HANDLE APPEND ERROR")
-            handleAppendPagingError(pagingError, loadParams, retryCount)
+            handleAppendPagingError(pagingError, loadParams, retryCount, addNextToQueue)
         }
 
-        println("FINISHED!!!!")
+        println("FINISHED!!!! ${loadParams.key}")
     }
 
     private suspend fun handleAppendPagingError(
         pagingError: PagingError,
         loadParams: PagingSource.LoadParams<K>,
-        retryCount: Int
+        retryCount: Int,
+        addNextToQueue: Boolean
     ) {
         when (errorHandlingStrategy) {
             ErrorHandlingStrategy.Ignore -> {
                 // Ignore
+
+                updatePendingSkipQueueJob(loadParams.key, inFlight = true, completed = true)
+
             }
 
             ErrorHandlingStrategy.PassThrough -> {
@@ -375,13 +486,15 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
                 val error =
                     Json.decodeFromString(registry.error.serializer(), pagingError.encodedError)
 
+                updatePendingSkipQueueJob(loadParams.key, inFlight = true, completed = true)
+
                 updateStateWithAppendError(error, pagingError.extras)
             }
 
             is ErrorHandlingStrategy.RetryLast -> {
 
                 if (retryCount < errorHandlingStrategy.maxRetries) {
-                    handleAppendLoading(loadParams, retryCount + 1)
+                    handleAppendLoading(loadParams, retryCount + 1, addNextToQueue = addNextToQueue)
                 } else {
 
                     val error =
@@ -389,6 +502,8 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
                             registry.error.serializer(),
                             pagingError.encodedError
                         )
+
+                    updatePendingSkipQueueJob(loadParams.key, inFlight = true, completed = true)
 
                     updateStateWithAppendError(error, pagingError.extras)
                 }
@@ -427,7 +542,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
             )
         )
 
-        println(_mutablePagingState.value.ids.toString())
+        println("UPDATED APPEND DATA STATE ${_mutablePagingState.value.ids.size}")
 
     }
 
@@ -489,7 +604,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
             )
         }
 
-        println("UPDATED LOADING STATE")
+        println("UPDATED LOADING STATE ${_mutablePagingState.value.ids.size}")
     }
 
 

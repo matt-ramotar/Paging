@@ -5,7 +5,6 @@ package org.mobilenativefoundation.storex.paging
 import androidx.compose.runtime.Composable
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
@@ -34,8 +33,10 @@ import kotlin.reflect.KClass
 
 interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
 
+    // TODO(): Design decision to support incremental/decremental loading as well as manually force fetching by explicitly providing params
+
     @Composable
-    fun pagingState(loadParams: Flow<PagingSource.LoadParams<K>>): PagingState<Id, E>
+    fun pagingState(requests: Flow<PagingRequest<K>>): PagingState<Id, E>
 
     fun selfUpdatingItem(id: Quantifiable<Id>): SelfUpdatingItem<Id, V, E>
 
@@ -60,7 +61,7 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
         private var errorHandlingStrategy: ErrorHandlingStrategy = ErrorHandlingStrategy.RetryLast()
         private var middleware: List<Middleware<K>> = emptyList()
         private var initialState: PagingState<Id, E> = PagingState.initial()
-        private var initialFetchingState: FetchingState<Id> = FetchingState()
+        private var initialFetchingState: FetchingState<Id, K> = FetchingState()
         private var itemFetcher: Fetcher<Id, V>? = null
         private var fetchingStrategy: FetchingStrategy<Id, K, E> =
             DefaultFetchingStrategy(pagingConfig)
@@ -93,7 +94,7 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
             this.initialState = initialState
         }
 
-        fun initialFetchingState(initialFetchingState: FetchingState<Id>) = apply {
+        fun initialFetchingState(initialFetchingState: FetchingState<Id, K>) = apply {
             this.initialFetchingState = initialFetchingState
         }
 
@@ -209,8 +210,8 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
                 fetchingStrategy = fetchingStrategy,
                 initialLoadParams = PagingSource.LoadParams(
                     pagingConfig.initialKey,
-                    strategy = PagingSource.LoadParams.Strategy.SkipCache,
-                    direction = PagingSource.LoadParams.Direction.Append
+                    strategy = LoadStrategy.SkipCache,
+                    direction = LoadDirection.Append
                 ),
                 registry = registry,
                 normalizedStore = normalizedStore,
@@ -290,4 +291,36 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
 }
 
 
+sealed class PagingRequest<out K : Any> {
 
+    abstract val direction: LoadDirection
+
+    data class ProcessQueue internal constructor(
+        override val direction: LoadDirection
+    ) : PagingRequest<Nothing>()
+
+    data class SkipQueue<K : Any> internal constructor(
+        val key: K,
+        override val direction: LoadDirection,
+        val strategy: LoadStrategy,
+    ) : PagingRequest<K>()
+
+    data class Enqueue<K : Any> internal constructor(
+        val key: K,
+        override val direction: LoadDirection,
+        val strategy: LoadStrategy,
+    ) : PagingRequest<K>()
+
+    companion object {
+        fun <K : Any> skipQueue(
+            key: K,
+            direction: LoadDirection,
+            strategy: LoadStrategy = LoadStrategy.SkipCache
+        ) =
+            SkipQueue(key, direction, strategy)
+
+        fun processQueue(direction: LoadDirection) = ProcessQueue(direction)
+        fun <K : Any> enqueue(key: K, strategy: LoadStrategy = LoadStrategy.SkipCache) =
+            Enqueue(key, LoadDirection.Append, strategy)
+    }
+}

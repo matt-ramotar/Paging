@@ -20,7 +20,7 @@ class DefaultFetchingStrategy<Id : Comparable<Id>, K : Any, V : Identifiable<Id>
     override fun shouldFetchForward(
         params: PagingSource.LoadParams<K>,
         pagingState: PagingState<Id, E>,
-        fetchingState: FetchingState<Id>
+        fetchingState: FetchingState<Id, K>
     ): Boolean {
         println("SHOULD FETCH FOWRARD HITTING")
 
@@ -39,7 +39,7 @@ class DefaultFetchingStrategy<Id : Comparable<Id>, K : Any, V : Identifiable<Id>
     override fun shouldFetchBackward(
         params: PagingSource.LoadParams<K>,
         pagingState: PagingState<Id, E>,
-        fetchingState: FetchingState<Id>
+        fetchingState: FetchingState<Id, K>
     ): Boolean {
         TODO()
     }

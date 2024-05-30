@@ -10,12 +10,14 @@ import org.mobilenativefoundation.storex.paging.utils.timeline.models.Post
 import org.mobilenativefoundation.storex.paging.utils.timeline.models.PostId
 import org.mobilenativefoundation.storex.paging.utils.timeline.server.Server
 
-class TimelinePagerFactory {
+class TimelinePagerFactory(
+    private val pageSize: Int = 20,
+    private val prefetchDistance: Int = 100
+) {
 
     private val server = Server()
     private val api = TimelineApi(server)
 
-    private val pageSize = 20
     fun create(
         coroutineDispatcher: CoroutineDispatcher
     ): Pager<String, GetFeedRequest, Post, Throwable> {
@@ -24,7 +26,7 @@ class TimelinePagerFactory {
             pagingConfig = PagingConfig(
                 placeholderId = PostId.Placeholder,
                 initialKey = GetFeedRequest(PostId("1"), pageSize),
-                prefetchDistance = 100
+                prefetchDistance = prefetchDistance
             )
         )
             .storexPagingSource(storexPagingSource())

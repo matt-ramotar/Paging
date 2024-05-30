@@ -21,6 +21,8 @@ import org.mobilenativefoundation.storex.paging.Identifiable
 import org.mobilenativefoundation.storex.paging.Item
 import org.mobilenativefoundation.storex.paging.ItemSnapshotList
 import org.mobilenativefoundation.storex.paging.ItemState
+import org.mobilenativefoundation.storex.paging.LoadDirection
+import org.mobilenativefoundation.storex.paging.LoadStrategy
 import org.mobilenativefoundation.storex.paging.Page
 import org.mobilenativefoundation.storex.paging.PagingConfig
 import org.mobilenativefoundation.storex.paging.PagingDb
@@ -45,7 +47,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
     private val itemFetcher: Fetcher<Id, V>?,
     driverFactory: DriverFactory?,
     private val maxSize: Int = 500,
-    private val fetchingStateHolder: FetchingStateHolder<Id>,
+    private val fetchingStateHolder: FetchingStateHolder<Id, K>,
     private val sideEffects: List<SideEffect<Id, V>>,
     private val pagingConfig: PagingConfig<Id, K>
 ) : NormalizedStore<Id, K, V, E> {
@@ -338,7 +340,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
 
 
                 when (params.direction) {
-                    PagingSource.LoadParams.Direction.Prepend -> {
+                    LoadDirection.Prepend -> {
                         items.asReversed().forEach { item ->
                             prependItem(item, localParams)
                         }
@@ -347,7 +349,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
                         prependPage(params, localParams, fetcherResult)
                     }
 
-                    PagingSource.LoadParams.Direction.Append -> {
+                    LoadDirection.Append -> {
                         println("HITTING IN APPEND")
                         items.forEach { item ->
                             appendItem(item, localParams)
@@ -413,14 +415,14 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
             println("PARAMS = $params")
             keyToParamsMap[params.key] = params
 
-            if (pagingConfig.placeholderId != null && params.strategy != PagingSource.LoadParams.Strategy.LocalOnly) {
+            if (pagingConfig.placeholderId != null && params.strategy != LoadStrategy.LocalOnly) {
                 // Add placeholders
                 when (params.direction) {
-                    PagingSource.LoadParams.Direction.Prepend -> {
+                    LoadDirection.Prepend -> {
                         prependPlaceholders(params)
                     }
 
-                    PagingSource.LoadParams.Direction.Append -> {
+                    LoadDirection.Append -> {
                         appendPlaceholders(params)
                     }
                 }
@@ -449,7 +451,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
 
             println("GOING TO FETCH PAGE")
             when (params.strategy) {
-                is PagingSource.LoadParams.Strategy.CacheFirst -> {
+                is LoadStrategy.CacheFirst -> {
 
                     if (inFlight(params.key)) {
                         emit(PageLoadStatus.SkippingLoad.inFlight())
@@ -489,7 +491,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
                     }
                 }
 
-                PagingSource.LoadParams.Strategy.SkipCache -> {
+                LoadStrategy.SkipCache -> {
                     println("HITTING")
 
                     if (inFlight(params.key)) {
@@ -504,7 +506,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
 
                 }
 
-                PagingSource.LoadParams.Strategy.LocalOnly -> {
+                LoadStrategy.LocalOnly -> {
                     if (inFlight(params.key)) {
                         emit(PageLoadStatus.SkippingLoad.inFlight())
                     } else {
@@ -542,7 +544,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
                     }
                 }
 
-                PagingSource.LoadParams.Strategy.Refresh -> {
+                LoadStrategy.Refresh -> {
                     // TODO(): Support refresh
                 }
             }

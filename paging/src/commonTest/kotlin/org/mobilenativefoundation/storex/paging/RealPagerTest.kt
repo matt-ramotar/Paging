@@ -1,19 +1,19 @@
 package org.mobilenativefoundation.storex.paging
 
-import androidx.compose.runtime.BroadcastFrameClock
 import app.cash.molecule.RecompositionMode
 import app.cash.molecule.moleculeFlow
 import app.cash.turbine.test
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.mobilenativefoundation.storex.paging.utils.timeline.TimelinePagerFactory
 import org.mobilenativefoundation.storex.paging.utils.timeline.models.GetFeedRequest
-import org.mobilenativefoundation.storex.paging.utils.timeline.models.Post
-import kotlin.test.BeforeTest
+import org.mobilenativefoundation.storex.paging.utils.timeline.models.PostId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -22,21 +22,23 @@ import kotlin.test.assertIs
 class RealPagerTest {
     private val coroutineDispatcher = StandardTestDispatcher()
 
-    private val job = Job()
-    private val clock = BroadcastFrameClock()
+    private val testScope = TestScope(coroutineDispatcher)
 
-    private val testScope = TestScope(coroutineDispatcher + job + clock)
-
-    private lateinit var pager: Pager<String, GetFeedRequest, Post, Throwable>
-
-    @BeforeTest
-    fun setup() {
-        pager = TimelinePagerFactory().create(coroutineDispatcher)
-    }
+    private fun loadParams(cursor: String, pageSize: Int) = PagingSource.LoadParams(
+        GetFeedRequest(
+            PostId(cursor),
+            pageSize,
+        ),
+        strategy = LoadStrategy.SkipCache,
+        direction = LoadDirection.Append
+    )
 
     @Test
-    fun test() = testScope.runTest {
+    fun pagingState_givenEmptyFlow_shouldEagerLoad() = testScope.runTest {
 
+        val pager = TimelinePagerFactory().create(coroutineDispatcher)
+
+        advanceUntilIdle()
 
         val state = moleculeFlow(RecompositionMode.Immediate) {
             pager.pagingState(emptyFlow())
@@ -52,5 +54,108 @@ class RealPagerTest {
             expectNoEvents()
         }
     }
+
+    @Test
+    fun pagingState_givenCompletedEagerLoad_whenProcessQueueRequest_shouldNotBypassFetchingStrategy() =
+        testScope.runTest {
+
+            val pageSize = 20
+            val prefetchDistance = 100
+
+            val flow = flowOf(
+                PagingRequest.processQueue(LoadDirection.Append),
+            )
+
+            val pager = TimelinePagerFactory(pageSize, prefetchDistance).create(coroutineDispatcher)
+
+            advanceUntilIdle()
+
+            val state = moleculeFlow(RecompositionMode.Immediate) {
+                pager.pagingState(flow)
+            }
+
+            state.test {
+                val eagerLoading = awaitItem()
+                assertIs<PagingLoadState.NotLoading>(eagerLoading.loadStates.append)
+                assertEquals(100, eagerLoading.ids.size)
+
+                // Doesn't fetch further because of prefetchDistance
+
+                expectNoEvents()
+            }
+
+
+        }
+
+    @Test
+    fun pagingState_givenCompletedEagerLoad_whenSkipQueueRequest_shouldBypassFetchingStrategy() =
+        testScope.runTest {
+
+            val pageSize = 20
+            val prefetchDistance = 100
+
+            fun nextCursor(prefetchDistance: Int, request: Int) =
+                (prefetchDistance + 1 + (pageSize * (request - 1))).toString()
+
+            fun nextKey(prefetchDistance: Int, request: Int) =
+                GetFeedRequest(PostId(nextCursor(prefetchDistance, request)), pageSize)
+
+            val requests = MutableSharedFlow<PagingRequest<GetFeedRequest>>(replay = 5)
+
+            val pager = TimelinePagerFactory(pageSize, prefetchDistance).create(coroutineDispatcher)
+
+            advanceUntilIdle()
+
+            val state = moleculeFlow(RecompositionMode.Immediate) {
+                pager.pagingState(requests)
+            }
+
+            state.test {
+                val eagerLoading = awaitItem()
+                assertIs<PagingLoadState.NotLoading>(eagerLoading.loadStates.append)
+                assertEquals(100, eagerLoading.ids.size)
+
+
+//                pager.lazyLoad(loadParams(nextCursor(prefetchDistance, 2), pageSize))
+
+                advanceUntilIdle()
+
+                requests.emit(
+                    PagingRequest.skipQueue(
+                        nextKey(prefetchDistance, 1),
+                        LoadDirection.Append
+                    ),
+                )
+
+
+                // We don't emit processing state
+
+                val loading1 = awaitItem()
+                println("loading1 = $loading1")
+                assertIs<PagingLoadState.Loading>(loading1.loadStates.append)
+                assertEquals(100, loading1.ids.size)
+                assertEquals(List(100) { PostId((it + 1).toString()) }, loading1.ids)
+
+
+                val success1 = awaitItem()
+                assertIs<PagingLoadState.NotLoading>(success1.loadStates.append)
+                assertEquals(120, success1.ids.size)
+                assertEquals(List(120) { PostId((it + 1).toString()) }, success1.ids)
+                println("success1 = $success1")
+
+
+//                val processing2 = awaitItem()
+//                println("processing2 = $processing2")
+//                val loading2 = awaitItem()
+//                println("loading2 = $loading2")
+//                val success2 = awaitItem()
+//                println("success2 = $success2")
+
+
+            }
+
+
+        }
+
 
 }
