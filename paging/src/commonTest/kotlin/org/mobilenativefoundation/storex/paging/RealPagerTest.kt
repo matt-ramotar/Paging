@@ -1,12 +1,8 @@
 package org.mobilenativefoundation.storex.paging
 
-import app.cash.molecule.RecompositionMode
-import app.cash.molecule.moleculeFlow
 import app.cash.turbine.test
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -40,9 +36,7 @@ class RealPagerTest {
 
         advanceUntilIdle()
 
-        val state = moleculeFlow(RecompositionMode.Immediate) {
-            pager.pagingState(emptyFlow())
-        }
+        val state = pager.pagingFlow()
 
         state.test {
             // BECAUSE OF EAGER LOADING WE DON'T COLLECT THE OTHER EMISSIONS, JUST THE LAST WHICH IS ALL LOADED DATA AND NOT LOADING STATUS
@@ -62,16 +56,12 @@ class RealPagerTest {
             val pageSize = 20
             val prefetchDistance = 100
 
-            val flow = flowOf(
-                PagingRequest.processQueue(LoadDirection.Append),
-            )
-
             val pager = TimelinePagerFactory(pageSize, prefetchDistance).create(coroutineDispatcher)
 
             advanceUntilIdle()
 
-            val state = moleculeFlow(RecompositionMode.Immediate) {
-                pager.pagingState(flow)
+            val state = pager.pagingFlow {
+                PagingRequest.processQueue(LoadDirection.Append)
             }
 
             state.test {
@@ -106,9 +96,7 @@ class RealPagerTest {
 
             advanceUntilIdle()
 
-            val state = moleculeFlow(RecompositionMode.Immediate) {
-                pager.pagingState(requests)
-            }
+            val state = pager.pagingFlow(requests)
 
             state.test {
                 val eagerLoading = awaitItem()

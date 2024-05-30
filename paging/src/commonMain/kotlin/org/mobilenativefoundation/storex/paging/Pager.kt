@@ -293,23 +293,23 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
 
 sealed class PagingRequest<out K : Any> {
 
-    abstract val direction: LoadDirection
-
     data class ProcessQueue internal constructor(
-        override val direction: LoadDirection
+        val direction: LoadDirection
     ) : PagingRequest<Nothing>()
 
     data class SkipQueue<K : Any> internal constructor(
         val key: K,
-        override val direction: LoadDirection,
+        val direction: LoadDirection,
         val strategy: LoadStrategy,
     ) : PagingRequest<K>()
 
     data class Enqueue<K : Any> internal constructor(
         val key: K,
-        override val direction: LoadDirection,
+        val direction: LoadDirection,
         val strategy: LoadStrategy,
     ) : PagingRequest<K>()
+
+    data object Invalidate : PagingRequest<Nothing>()
 
     companion object {
         fun <K : Any> skipQueue(
@@ -322,5 +322,7 @@ sealed class PagingRequest<out K : Any> {
         fun processQueue(direction: LoadDirection) = ProcessQueue(direction)
         fun <K : Any> enqueue(key: K, strategy: LoadStrategy = LoadStrategy.SkipCache) =
             Enqueue(key, LoadDirection.Append, strategy)
+
+        fun invalidate() = Invalidate
     }
 }

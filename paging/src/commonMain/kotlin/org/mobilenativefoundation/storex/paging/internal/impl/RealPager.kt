@@ -158,6 +158,10 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
                             }
                         }
                     }
+
+                    PagingRequest.Invalidate -> {
+                        // TODO()
+                    }
                 }
             }
         }
