@@ -2,9 +2,9 @@
 
 package org.mobilenativefoundation.storex.paging
 
-import androidx.compose.runtime.Composable
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
@@ -35,8 +35,13 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
 
     // TODO(): Design decision to support incremental/decremental loading as well as manually force fetching by explicitly providing params
 
-    @Composable
-    fun pagingState(requests: Flow<PagingRequest<K>>): PagingState<Id, E>
+//    @Composable
+//    fun pagingState(requests: Flow<PagingRequest<K>>): PagingState<Id, E>
+
+    fun pagingFlow(
+        requests: Flow<PagingRequest<K>>,
+        recompositionMode: RecompositionMode = RecompositionMode.ContextClock
+    ): Flow<PagingState<Id, E>>
 
     fun selfUpdatingItem(id: Quantifiable<Id>): SelfUpdatingItem<Id, V, E>
 

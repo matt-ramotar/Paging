@@ -5,11 +5,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
+import app.cash.molecule.launchMolecule
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -27,6 +29,7 @@ import org.mobilenativefoundation.storex.paging.PagingRequest
 import org.mobilenativefoundation.storex.paging.PagingSource
 import org.mobilenativefoundation.storex.paging.PagingState
 import org.mobilenativefoundation.storex.paging.Quantifiable
+import org.mobilenativefoundation.storex.paging.RecompositionMode
 import org.mobilenativefoundation.storex.paging.SelfUpdatingItem
 import org.mobilenativefoundation.storex.paging.custom.ErrorHandlingStrategy
 import org.mobilenativefoundation.storex.paging.custom.FetchingStrategy
@@ -34,6 +37,7 @@ import org.mobilenativefoundation.storex.paging.custom.LaunchEffect
 import org.mobilenativefoundation.storex.paging.custom.Middleware
 import org.mobilenativefoundation.storex.paging.custom.Operation
 import org.mobilenativefoundation.storex.paging.internal.api.FetchingStateHolder
+import org.mobilenativefoundation.storex.paging.toCashRecompositionMode
 
 // TODO(): Design decision to support initial state (e.g., hardcoded)
 
@@ -95,9 +99,17 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
         )
     }
 
+    override fun pagingFlow(
+        requests: Flow<PagingRequest<K>>,
+        recompositionMode: RecompositionMode
+    ): StateFlow<PagingState<Id, E>> =
+        coroutineScope.launchMolecule(recompositionMode.toCashRecompositionMode()) {
+            pagingState(requests)
+        }
+
 
     @Composable
-    override fun pagingState(requests: Flow<PagingRequest<K>>): PagingState<Id, E> {
+    private fun pagingState(requests: Flow<PagingRequest<K>>): PagingState<Id, E> {
         val fetchingState by fetchingStateHolder.state.collectAsState()
 
         val pagingState by _mutablePagingState.collectAsState()

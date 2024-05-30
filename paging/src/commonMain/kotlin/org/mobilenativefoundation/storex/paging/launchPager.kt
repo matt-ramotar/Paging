@@ -18,12 +18,8 @@ package org.mobilenativefoundation.storex.paging
  */
 
 import androidx.compose.runtime.MonotonicFrameClock
-import app.cash.molecule.launchMolecule
-import app.cash.molecule.moleculeFlow
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
 import kotlin.coroutines.CoroutineContext
@@ -51,48 +47,42 @@ fun RecompositionMode.toCashRecompositionMode() = when (this) {
     RecompositionMode.Immediate -> app.cash.molecule.RecompositionMode.Immediate
 }
 
-
-fun <Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> CoroutineScope.launchPager(
-    pager: Pager<Id, K, V, E>,
-    requests: Flow<PagingRequest<K>>,
-    recompositionMode: RecompositionMode = RecompositionMode.ContextClock
-): StateFlow<PagingState<Id, E>> =
-    this.launchMolecule(recompositionMode.toCashRecompositionMode()) {
-        pager.pagingState(requests)
-    }
-
-fun <Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> CoroutineScope.launchPager(
-    pager: Pager<Id, K, V, E>,
-    requests: Flow<PagingRequest<K>>,
-): StateFlow<PagingState<Id, E>> =
-    this.launchMolecule(RecompositionMode.Immediate.toCashRecompositionMode()) {
-        pager.pagingState(requests)
-    }
-
-fun <Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> Pager<Id, K, V, E>.pagingFlow(
-    requests: Flow<PagingRequest<K>>,
-    recompositionMode: RecompositionMode = RecompositionMode.ContextClock
-): Flow<PagingState<Id, E>> =
-    moleculeFlow(recompositionMode.toCashRecompositionMode()) {
-        pagingState(requests)
-    }
-
-
+//
+//fun <Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> CoroutineScope.launchPager(
+//    pager: Pager<Id, K, V, E>,
+//    requests: Flow<PagingRequest<K>>,
+//    recompositionMode: RecompositionMode = RecompositionMode.ContextClock
+//): StateFlow<PagingState<Id, E>> =
+//    this.launchMolecule(recompositionMode.toCashRecompositionMode()) {
+//        pager.pagingState(requests)
+//    }
+//
+//fun <Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> CoroutineScope.launchPager(
+//    pager: Pager<Id, K, V, E>,
+//    requests: Flow<PagingRequest<K>>,
+//): StateFlow<PagingState<Id, E>> =
+//    this.launchMolecule(RecompositionMode.Immediate.toCashRecompositionMode()) {
+//        pager.pagingState(requests)
+//    }
+//
+//fun <Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> Pager<Id, K, V, E>.pagingFlow(
+//    requests: Flow<PagingRequest<K>>,
+//    recompositionMode: RecompositionMode = RecompositionMode.ContextClock
+//): Flow<PagingState<Id, E>> =
+//    moleculeFlow(recompositionMode.toCashRecompositionMode()) {
+//        pagingState(requests)
+//    }
+//
+//
 fun <Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> Pager<Id, K, V, E>.pagingFlow(
     requests: Flow<PagingRequest<K>> = emptyFlow(),
-): Flow<PagingState<Id, E>> =
-    moleculeFlow(RecompositionMode.Immediate.toCashRecompositionMode()) {
-        pagingState(requests)
-    }
+): Flow<PagingState<Id, E>> = this.pagingFlow(requests, RecompositionMode.Immediate)
 
 
 @OptIn(ExperimentalTypeInference::class)
 fun <Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> Pager<Id, K, V, E>.pagingFlow(
     @BuilderInference block: suspend FlowCollector<PagingRequest<K>>.() -> Unit
-): Flow<PagingState<Id, E>> =
-    moleculeFlow(RecompositionMode.Immediate.toCashRecompositionMode()) {
-        pagingState(flow(block))
-    }
+): Flow<PagingState<Id, E>> = this.pagingFlow(flow(block), RecompositionMode.Immediate)
 
 
 

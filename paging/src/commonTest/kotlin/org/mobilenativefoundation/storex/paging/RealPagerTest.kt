@@ -96,7 +96,7 @@ class RealPagerTest {
 
             advanceUntilIdle()
 
-            val state = pager.pagingFlow(requests)
+            val state = pager.pagingFlow(requests, RecompositionMode.Immediate)
 
             state.test {
                 val eagerLoading = awaitItem()
@@ -115,6 +115,7 @@ class RealPagerTest {
                     ),
                 )
 
+                advanceUntilIdle()
 
                 // We don't emit processing state
 
