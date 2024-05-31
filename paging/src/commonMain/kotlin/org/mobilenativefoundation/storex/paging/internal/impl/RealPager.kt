@@ -18,7 +18,7 @@ import org.mobilenativefoundation.storex.paging.internal.api.FetchingStateHolder
 // TODO(): Design decision to support initial state (e.g., hardcoded)
 
 @OptIn(InternalSerializationApi::class)
-class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P : Any>(
+class RealPager<Id : Comparable<Id>, K : Comparable<K>, V : Identifiable<Id>, E : Any, P : Any>(
     coroutineDispatcher: CoroutineDispatcher,
     private val fetchingStateHolder: FetchingStateHolder<Id, K>,
     private val launchEffects: List<LaunchEffect>,
@@ -95,7 +95,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
 
         val scope = rememberCoroutineScope()
 
-        LaunchedEffect(Unit) {
+        LaunchedEffect(requests) {
 
             println("LAUNCHING 1")
 
@@ -115,8 +115,10 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
                     }
 
                     is PagingRequest.SkipQueue -> {
+                        println("SKIP QUEUE HITTING HERE")
 
-                        updatePendingSkipQueueJob(request.key, inFlight = false, completed = false)
+
+                        addPendingQueueJob(request.key)
 
                         when (request.direction) {
                             LoadDirection.Prepend -> {
@@ -149,17 +151,29 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
                                     params = request.toPagingSourceLoadParams(),
                                     mechanism = LoadParamsQueueElement.Mechanism.EnqueueRequest
                                 )
-                                appendLoadParamsQueue.addLast(queueElement)
+
+                                if (request.jump) {
+                                    println("HITTING IN JUMP")
+                                    appendLoadParamsQueue.jump(queueElement)
+                                } else {
+                                    appendLoadParamsQueue.addLast(queueElement)
+                                }
+                                println("APPENDED ENQUEUE REQUEST, ABOUT TO PROCESS APPEND QUEUE")
                                 processAppendQueue()
                             }
                         }
                     }
 
                     PagingRequest.Invalidate -> {
-                        // TODO()
+                        pendingSkipQueueJobs.clear()
+                        appendLoadParamsQueue.clear()
+                        prependLoadParamsQueue.clear()
+
+                        normalizedStore.invalidate()
                     }
                 }
             }
+            println("END OF LAUNCHED EFFECT")
         }
 
 //        LaunchedEffect(fetchingState) {
@@ -238,7 +252,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
 
 
             // TODO(): Design decision
-            // If enqueued by the user, then we want to fetch it and update max request
+            // If enqueued by the user, then we want to update max request and fetch
             // We want to track the load positions separate from access positions
 
 
@@ -373,7 +387,15 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
         }
     }
 
-    private fun updatePendingSkipQueueJob(key: K, inFlight: Boolean, completed: Boolean) {
+    private fun addPendingQueueJob(key: K) {
+        pendingSkipQueueJobs[key] = PendingSkipQueueJob(key, false)
+    }
+
+
+    private fun updateExistingPendingQueueJob(key: K, inFlight: Boolean, completed: Boolean) {
+
+        if (key !in pendingSkipQueueJobs) return
+
         if (completed) {
             pendingSkipQueueJobs.remove(key)
         } else {
@@ -400,7 +422,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
                     is PageLoadStatus.Empty -> {
                         // TODO(): Enable debug logging
 
-                        updatePendingSkipQueueJob(loadParams.key, inFlight = true, completed = true)
+                        updateExistingPendingQueueJob(loadParams.key, inFlight = true, completed = true)
 
                         true
 
@@ -414,7 +436,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
 
                     is PageLoadStatus.Loading -> {
 
-                        updatePendingSkipQueueJob(
+                        updateExistingPendingQueueJob(
                             loadParams.key,
                             inFlight = true,
                             completed = false
@@ -440,7 +462,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
                     }
 
                     is PageLoadStatus.SkippingLoad -> {
-                        updatePendingSkipQueueJob(loadParams.key, inFlight = true, completed = true)
+                        updateExistingPendingQueueJob(loadParams.key, inFlight = true, completed = true)
 
                         true
                     }
@@ -468,7 +490,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
 
                         }
 
-                        updatePendingSkipQueueJob(loadParams.key, inFlight = true, completed = true)
+                        updateExistingPendingQueueJob(loadParams.key, inFlight = true, completed = true)
 
 
                         true
@@ -494,7 +516,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
             ErrorHandlingStrategy.Ignore -> {
                 // Ignore
 
-                updatePendingSkipQueueJob(loadParams.key, inFlight = true, completed = true)
+                updateExistingPendingQueueJob(loadParams.key, inFlight = true, completed = true)
 
             }
 
@@ -505,7 +527,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
                 val error =
                     Json.decodeFromString(registry.error.serializer(), pagingError.encodedError)
 
-                updatePendingSkipQueueJob(loadParams.key, inFlight = true, completed = true)
+                updateExistingPendingQueueJob(loadParams.key, inFlight = true, completed = true)
 
                 updateStateWithAppendError(error, pagingError.extras)
             }
@@ -522,7 +544,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
                             pagingError.encodedError
                         )
 
-                    updatePendingSkipQueueJob(loadParams.key, inFlight = true, completed = true)
+                    updateExistingPendingQueueJob(loadParams.key, inFlight = true, completed = true)
 
                     updateStateWithAppendError(error, pagingError.extras)
                 }
@@ -643,4 +665,6 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
             this
         }
     }
+
+
 }

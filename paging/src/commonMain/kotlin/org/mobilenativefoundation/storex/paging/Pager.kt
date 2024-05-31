@@ -299,6 +299,7 @@ sealed class PagingRequest<out K : Any> {
         val key: K,
         val direction: LoadDirection,
         val strategy: LoadStrategy,
+        val jump: Boolean
     ) : PagingRequest<K>()
 
     data object Invalidate : PagingRequest<Nothing>()
@@ -312,8 +313,8 @@ sealed class PagingRequest<out K : Any> {
             SkipQueue(key, direction, strategy)
 
         fun processQueue(direction: LoadDirection) = ProcessQueue(direction)
-        fun <K : Any> enqueue(key: K, strategy: LoadStrategy = LoadStrategy.SkipCache) =
-            Enqueue(key, LoadDirection.Append, strategy)
+        fun <K : Any> enqueue(key: K, jump: Boolean, strategy: LoadStrategy = LoadStrategy.SkipCache) =
+            Enqueue(key, LoadDirection.Append, strategy, jump)
 
         fun invalidate() = Invalidate
     }

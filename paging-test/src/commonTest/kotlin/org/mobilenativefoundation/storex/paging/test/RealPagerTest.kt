@@ -39,7 +39,7 @@ class RealPagerTest {
 
         advanceUntilIdle()
 
-        val state = pager.pagingFlow()
+        val state = pager.launchPagingFlow()
 
         state.test {
             // BECAUSE OF EAGER LOADING WE DON'T COLLECT THE OTHER EMISSIONS, JUST THE LAST WHICH IS ALL LOADED DATA AND NOT LOADING STATUS
@@ -69,7 +69,7 @@ class RealPagerTest {
 
         advanceUntilIdle()
 
-        val state = pager.pagingFlow()
+        val state = pager.launchPagingFlow()
 
         state.test {
             // BECAUSE OF EAGER LOADING WE DON'T COLLECT THE OTHER EMISSIONS, JUST THE LAST WHICH IS ALL LOADED DATA AND NOT LOADING STATUS
@@ -96,7 +96,7 @@ class RealPagerTest {
 
             advanceUntilIdle()
 
-            val state = pager.pagingFlow {
+            val state = pager.launchPagingFlow {
                 PagingRequest.processQueue(LoadDirection.Append)
             }
 

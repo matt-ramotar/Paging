@@ -786,10 +786,30 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
         }
     }
 
-    override fun invalidate() {
-        TODO()
-    }
 
+
+    override fun invalidate() {
+        // Clear memory caches
+        idToKeyMap.clear()
+        keyToParamsMap.clear()
+        pageNodeMap.clear()
+        pageMemoryCache.clear()
+        itemMemoryCache.clear()
+
+        // Reset head and tail pages
+        headPage = null
+        tailPage = null
+
+        // Reset size counters
+        sizeItems = 0
+        sizePages = 0
+
+        // Clear the database (if applicable)
+        db?.let {
+            // it.itemQueries.removeAllItems()
+            // it.pageQueries.removeAllPages()
+        }
+    }
     override fun clear(key: K) {
         removePage(key)
     }
