@@ -1,43 +1,19 @@
 package org.mobilenativefoundation.storex.paging.internal.impl
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.*
 import app.cash.molecule.launchMolecule
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.serializer
-import org.mobilenativefoundation.storex.paging.Identifiable
-import org.mobilenativefoundation.storex.paging.ItemSnapshotList
-import org.mobilenativefoundation.storex.paging.LoadDirection
-import org.mobilenativefoundation.storex.paging.LoadStrategy
-import org.mobilenativefoundation.storex.paging.Pager
-import org.mobilenativefoundation.storex.paging.PagingLoadState
-import org.mobilenativefoundation.storex.paging.PagingRequest
-import org.mobilenativefoundation.storex.paging.PagingSource
-import org.mobilenativefoundation.storex.paging.PagingState
-import org.mobilenativefoundation.storex.paging.Quantifiable
-import org.mobilenativefoundation.storex.paging.RecompositionMode
-import org.mobilenativefoundation.storex.paging.SelfUpdatingItem
-import org.mobilenativefoundation.storex.paging.custom.ErrorHandlingStrategy
-import org.mobilenativefoundation.storex.paging.custom.FetchingStrategy
-import org.mobilenativefoundation.storex.paging.custom.LaunchEffect
-import org.mobilenativefoundation.storex.paging.custom.Middleware
-import org.mobilenativefoundation.storex.paging.custom.Operation
+import org.mobilenativefoundation.storex.paging.*
+import org.mobilenativefoundation.storex.paging.custom.*
 import org.mobilenativefoundation.storex.paging.internal.api.FetchingStateHolder
-import org.mobilenativefoundation.storex.paging.toCashRecompositionMode
 
 // TODO(): Design decision to support initial state (e.g., hardcoded)
 
@@ -160,12 +136,20 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
                     is PagingRequest.Enqueue -> {
                         when (request.direction) {
                             LoadDirection.Prepend -> {
-                                prependLoadParamsQueue.addLast(request.toPagingSourceLoadParams())
+                                val queueElement = LoadParamsQueueElement(
+                                    params = request.toPagingSourceLoadParams(),
+                                    mechanism = LoadParamsQueueElement.Mechanism.EnqueueRequest
+                                )
+                                prependLoadParamsQueue.addLast(queueElement)
                                 processPrependQueue()
                             }
 
                             LoadDirection.Append -> {
-                                appendLoadParamsQueue.addLast(request.toPagingSourceLoadParams())
+                                val queueElement = LoadParamsQueueElement(
+                                    params = request.toPagingSourceLoadParams(),
+                                    mechanism = LoadParamsQueueElement.Mechanism.EnqueueRequest
+                                )
+                                appendLoadParamsQueue.addLast(queueElement)
                                 processAppendQueue()
                             }
                         }
@@ -194,7 +178,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
     private fun processPrependQueue() {
 
         while (prependLoadParamsQueue.isNotEmpty()) {
-            val latestPrependLoadParams = prependLoadParamsQueue.removeLast()
+            val lastQueueElement = prependLoadParamsQueue.removeLast()
 
             // TODO(): Design decision not to check whether to fetch for prepend loads
 
@@ -202,7 +186,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
 
             // Apply middleware only once, if any
             coroutineScope.launch {
-                handlePrependLoading(latestPrependLoadParams.applyMiddleware())
+                handlePrependLoading(lastQueueElement.params)
             }
         }
     }
@@ -250,21 +234,29 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
             val pagingState = _mutablePagingState.value
             val fetchingState = fetchingStateHolder.state.value
 
-            if (fetchingStrategy.shouldFetchForward(
-                    appendLoadParamsQueue.first(),
+            val firstQueueElement = appendLoadParamsQueue.first()
+
+
+            // TODO(): Design decision
+            // If enqueued by the user, then we want to fetch it and update max request
+            // We want to track the load positions separate from access positions
+
+
+            if (firstQueueElement.mechanism == LoadParamsQueueElement.Mechanism.EnqueueRequest || fetchingStrategy.shouldFetchForward(
+                    firstQueueElement.params,
                     pagingState,
                     fetchingState
                 )
             ) {
                 println("SHOULD FETCH")
 
-                val loadParams = appendLoadParamsQueue.removeFirst()
+                val queueElement = appendLoadParamsQueue.removeFirst()
 
 
                 // TODO(): Do we need to use JobCoordinator?
 
                 // Apply middleware only once, if any
-                handleAppendLoading(loadParams.applyMiddleware())
+                handleAppendLoading(queueElement.params.applyMiddleware())
 
             } else {
                 println("SHOULD NOT FETCH")
@@ -320,11 +312,18 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
                         prependLoadParamsQueue.clear()
 
                         it.prevKey?.let { key ->
+
+                            val loadParams = PagingSource.LoadParams(
+                                key,
+                                LoadStrategy.SkipCache,
+                                LoadDirection.Prepend
+                            )
+
+
+
                             prependLoadParamsQueue.addLast(
-                                PagingSource.LoadParams(
-                                    key,
-                                    LoadStrategy.SkipCache,
-                                    LoadDirection.Prepend
+                                LoadParamsQueueElement(
+                                    loadParams, mechanism = LoadParamsQueueElement.Mechanism.NetworkLoadResponse
                                 )
                             )
                         }
@@ -393,6 +392,7 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
 
         try {
 
+            fetchingStateHolder.updateMaxRequestSoFar(loadParams.key)
 
             normalizedStore.loadPage(loadParams).first {
                 println("FIRST for ${loadParams.key} - $it")
@@ -455,10 +455,13 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
                         if (addNextToQueue) {
                             it.nextKey?.let { key ->
                                 appendLoadParamsQueue.addLast(
-                                    PagingSource.LoadParams(
-                                        key,
-                                        LoadStrategy.SkipCache,
-                                        LoadDirection.Append
+                                    LoadParamsQueueElement(
+                                        PagingSource.LoadParams(
+                                            key,
+                                            LoadStrategy.SkipCache,
+                                            LoadDirection.Append
+                                        ),
+                                        mechanism = LoadParamsQueueElement.Mechanism.NetworkLoadResponse
                                     )
                                 )
                             }
@@ -540,7 +543,12 @@ class RealPager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any, P :
     // TODO(): Design decision to separate fetching state from eager loading
     private fun handleEagerLoading() {
         coroutineScope.launch {
-            appendLoadParamsQueue.addLast(initialLoadParams)
+            appendLoadParamsQueue.addLast(
+                LoadParamsQueueElement(
+                    initialLoadParams,
+                    LoadParamsQueueElement.Mechanism.InitialLoad
+                )
+            )
             processAppendQueue()
             println("COMPLETED COROUTINE FOR EAGER LOADING")
         }

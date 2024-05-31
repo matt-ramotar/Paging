@@ -3,26 +3,37 @@ package org.mobilenativefoundation.storex.paging.internal.impl
 import org.mobilenativefoundation.storex.paging.PagingSource
 
 
-class LoadParamsQueue<K : Any> {
-    private val queue: ArrayDeque<PagingSource.LoadParams<K>> = ArrayDeque()
-    private val processed = linkedSetOf<PagingSource.LoadParams<K>>()
+data class LoadParamsQueueElement<K: Any>(
+    val params: PagingSource.LoadParams<K>,
+    val mechanism: Mechanism
+) {
+    enum class Mechanism {
+        EnqueueRequest,
+        NetworkLoadResponse,
+        InitialLoad
+    }
+}
 
-    fun addLast(params: PagingSource.LoadParams<K>) {
+class LoadParamsQueue<K : Any> {
+    private val queue: ArrayDeque<LoadParamsQueueElement<K>> = ArrayDeque()
+    private val processed = linkedSetOf<LoadParamsQueueElement<K>>()
+
+    fun addLast(params: LoadParamsQueueElement<K>) {
         if (processed.contains(params)) return
         queue.addLast(params)
         processed.add(params)
     }
 
-    fun addFirst(params: PagingSource.LoadParams<K>) {
+    fun addFirst(params: LoadParamsQueueElement<K>) {
         if (processed.contains(params)) return
         queue.addFirst(params)
         processed.add(params)
     }
 
-    fun first(): PagingSource.LoadParams<K> = queue.first()
-    fun removeFirst(): PagingSource.LoadParams<K> = queue.removeFirst()
-    fun last(): PagingSource.LoadParams<K> = queue.last()
-    fun removeLast(): PagingSource.LoadParams<K> = queue.removeLast()
+    fun first(): LoadParamsQueueElement<K> = queue.first()
+    fun removeFirst(): LoadParamsQueueElement<K> = queue.removeFirst()
+    fun last(): LoadParamsQueueElement<K> = queue.last()
+    fun removeLast(): LoadParamsQueueElement<K> = queue.removeLast()
 
     fun clear() = queue.clear()
 
