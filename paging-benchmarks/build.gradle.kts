@@ -24,6 +24,7 @@ kotlin {
                 implementation(libs.kotlinx.benchmark.runtime)
                 implementation(projects.paging)
                 implementation(projects.pagingTest)
+                implementation(libs.androidx.paging.testing)
             }
         }
     }

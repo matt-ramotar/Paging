@@ -73,6 +73,7 @@ kotlin {
                 implementation(libs.turbine)
                 implementation(libs.kotlinx.coroutines.test)
                 implementation(libs.molecule.runtime)
+                implementation(libs.androidx.paging.testing)
             }
         }
     }
