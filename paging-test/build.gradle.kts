@@ -38,6 +38,7 @@ kotlin {
                 implementation(libs.sqldelight.coroutines)
                 implementation(libs.sqldelight.paging)
                 implementation(libs.sqldelight.primitive)
+                implementation(projects.paging)
             }
         }
 
@@ -80,7 +81,7 @@ kotlin {
 }
 
 android {
-    namespace = "org.mobilenativefoundation.paging.core"
+    namespace = "org.mobilenativefoundation.storex.paging.test"
 
     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
 

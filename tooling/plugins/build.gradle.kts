@@ -1,0 +1,35 @@
+plugins {
+    `kotlin-dsl`
+}
+
+group = "org.mobilenativefoundation.storex.paging"
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(17))
+    }
+}
+
+dependencies {
+    compileOnly(libs.android.gradle.plugin)
+    compileOnly(libs.kotlin.gradle.plugin)
+}
+
+gradlePlugin {
+    plugins {
+        register("kotlinMultiplatformConventionPlugin") {
+            id = "storex.multiplatform"
+            implementationClass =
+                "org.mobilenativefoundation.storex.paging.tooling.plugins.KotlinMultiplatformConventionPlugin"
+        }
+
+        register("kotlinAndroidLibraryConventionPlugin") {
+            id = "storex.android.library"
+            implementationClass =
+                "org.mobilenativefoundation.storex.paging.tooling.plugins.KotlinAndroidLibraryConventionPlugin"
+        }
+    }
+}

@@ -107,8 +107,8 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
             this.storexPagingSource = storexPagingSource
         }
 
-        fun androidxPagingSource(storexPagingSource: androidx.paging.PagingSource<K, V>) = apply {
-            this.androidxPagingSource = storexPagingSource
+        fun androidxPagingSource(androidxPagingSource: androidx.paging.PagingSource<K, V>) = apply {
+            this.androidxPagingSource = androidxPagingSource
         }
 
         private fun createFetcherFromAndroidxPagingSource(androidxPagingSource: androidx.paging.PagingSource<K, V>): Fetcher<PagingSource.LoadParams<K>, PagingSource.LoadResult.Data<Id, K, V, E>> {
