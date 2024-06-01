@@ -20,3 +20,6 @@ WHERE id = :id;
 
 removeItem:
 DELETE FROM item WHERE id = :id;
+
+removeAllItems:
+DELETE FROM item;

@@ -14,6 +14,7 @@ import kotlinx.serialization.serializer
 import org.mobilenativefoundation.storex.paging.*
 import org.mobilenativefoundation.storex.paging.custom.*
 import org.mobilenativefoundation.storex.paging.internal.api.FetchingStateHolder
+import org.mobilenativefoundation.storex.paging.internal.api.NormalizedStore
 
 // TODO(): Design decision to support initial state (e.g., hardcoded)
 
@@ -27,7 +28,7 @@ class RealPager<Id : Comparable<Id>, K : Comparable<K>, V : Identifiable<Id>, E 
     private val fetchingStrategy: FetchingStrategy<Id, K, E>,
     private val initialLoadParams: PagingSource.LoadParams<K>,
     private val registry: KClassRegistry<Id, K, V, E>,
-    private val normalizedStore: RealNormalizedStore<Id, K, V, E>,
+    private val normalizedStore: NormalizedStore<Id, K, V, E>,
     private val operations: List<Operation<Id, K, V, P, P>>,
     private val initialState: PagingState<Id, E> = PagingState.initial()
 ) : Pager<Id, K, V, E> {

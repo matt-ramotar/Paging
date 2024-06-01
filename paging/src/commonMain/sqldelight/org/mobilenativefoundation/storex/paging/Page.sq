@@ -21,3 +21,6 @@ INSERT INTO page(params, prevKey, nextKey, extras) VALUES ?;
 
 removePage:
 DELETE FROM page WHERE params = :params;
+
+removeAllPages:
+DELETE FROM page;
