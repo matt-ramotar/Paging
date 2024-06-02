@@ -81,21 +81,21 @@ fun <Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any
 ) {
     val items = remember(ids) {
         ids.map { id ->
-            if (id == null) NullableQ.Null
-            else NullableQ.NonNull(id)
+            if (id == null) Nullable.Null
+            else Nullable.NonNull(id)
         }
     }
 
     LazyColumn(modifier) {
         items(items, key = {
             when (it) {
-                is NullableQ.NonNull -> it.data.value
-                NullableQ.Null -> Unit
+                is Nullable.NonNull -> it.data.value
+                Nullable.Null -> Unit
             }
         }) {
             val id = when (it) {
-                is NullableQ.NonNull -> it.data
-                NullableQ.Null -> null
+                is Nullable.NonNull -> it.data
+                Nullable.Null -> null
             }
 
             SelfUpdatingItemContent<Id, Q, V, E>(id) { itemState ->
@@ -105,14 +105,14 @@ fun <Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any
     }
 }
 
-sealed class NullableQ<Id : Comparable<Id>, Q : Quantifiable<Id>> {
-    abstract val data: Q?
+sealed class Nullable<T: Any> {
+    abstract val data: T?
 
-    data class NonNull<Id : Comparable<Id>, Q : Quantifiable<Id>>(
-        override val data: Q
-    ) : NullableQ<Id, Q>()
+    data class NonNull<T: Any>(
+        override val data: T
+    ) : Nullable<T>()
 
-    data object Null : NullableQ<Nothing, Nothing>() {
+    data object Null : Nullable<Nothing>() {
         override val data = null
     }
 }
