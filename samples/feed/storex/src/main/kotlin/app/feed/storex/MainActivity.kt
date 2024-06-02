@@ -6,14 +6,20 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.twotone.Home
-import androidx.compose.material.icons.twotone.Person
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import app.feed.common.AppTheme
 import com.slack.circuit.backstack.rememberSaveableBackStack
 import com.slack.circuit.foundation.*
+import com.slack.circuit.runtime.screen.Screen
 
 class MainActivity : ComponentActivity() {
 
@@ -33,6 +39,7 @@ class MainActivity : ComponentActivity() {
 
             val backStack = rememberSaveableBackStack(root = homeTab)
             val navigator = rememberCircuitNavigator(backStack)
+            var activeTab by remember { mutableStateOf<Screen>(HomeTab) }
 
             CircuitCompositionLocals(circuit) {
 
@@ -41,14 +48,28 @@ class MainActivity : ComponentActivity() {
                         bottomBar = {
                             BottomAppBar {
                                 IconButton(onClick = {
+                                    activeTab = HomeTab
                                     navigator.goTo(HomeTab)
                                 }) {
-                                    Icon(Icons.TwoTone.Home, "Home")
+
+                                    if (activeTab == HomeTab) {
+
+                                        Icon(Icons.Filled.Home, "Home")
+                                    } else {
+                                        Icon(Icons.Outlined.Home, "Home")
+                                    }
+
                                 }
                                 IconButton(onClick = {
+                                    activeTab = AccountTab
                                     navigator.goTo(AccountTab)
                                 }) {
-                                    Icon(Icons.TwoTone.Person, "Person")
+                                    if (activeTab == AccountTab) {
+
+                                        Icon(Icons.Filled.Person, "Person")
+                                    } else {
+                                        Icon(Icons.Outlined.Person, "Person")
+                                    }
                                 }
                             }
                         }
