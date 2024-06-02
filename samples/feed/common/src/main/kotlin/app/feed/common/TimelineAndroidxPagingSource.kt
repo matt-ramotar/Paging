@@ -23,7 +23,7 @@ class TimelineAndroidxPagingSource(
 
     override suspend fun load(params: LoadParams<GetFeedRequest>): LoadResult<GetFeedRequest, Post> {
         return try {
-            val key = params.key ?: GetFeedRequest(PostId("1"), pageSize)
+            val key = params.key ?: GetFeedRequest(null, pageSize)
             val response = api.getFeed(key)
 
             val nextKey = response.nextCursor?.let {

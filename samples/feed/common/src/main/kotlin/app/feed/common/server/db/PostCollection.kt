@@ -38,16 +38,16 @@ class PostCollection {
 
     val userIds = listOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
     val createdAtDates = listOf(
-        createdAt(Month.JUNE, 7),
-        createdAt(Month.JUNE, 6),
-        createdAt(Month.JUNE, 5),
-        createdAt(Month.JUNE, 4),
-        createdAt(Month.JUNE, 3),
-        createdAt(Month.JUNE, 2),
-        createdAt(Month.JUNE, 1),
-        createdAt(Month.MAY, 31),
-        createdAt(Month.MAY, 30),
         createdAt(Month.MAY, 29),
+        createdAt(Month.MAY, 30),
+        createdAt(Month.MAY, 31),
+        createdAt(Month.JUNE, 1),
+        createdAt(Month.JUNE, 2),
+        createdAt(Month.JUNE, 3),
+        createdAt(Month.JUNE, 4),
+        createdAt(Month.JUNE, 5),
+        createdAt(Month.JUNE, 6),
+        createdAt(Month.JUNE, 7),
     )
 
     val ids = (0..499).toList()

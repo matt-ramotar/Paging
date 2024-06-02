@@ -11,7 +11,7 @@ class FeedService(
 
 
         println("GETTING FEED $key")
-        val posts = db.postCollection().getAll()
+        val posts = db.postCollection().getAll().reversed()
 
         println("POSTS = $posts")
         val indexOfFirst = if (key.cursor == null) 0 else posts.indexOfFirst { it.id == key.cursor }

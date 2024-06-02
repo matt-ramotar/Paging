@@ -30,7 +30,7 @@ class TimelinePagerFactory(
         val builder = Pager.Builder<String, PostId, GetFeedRequest, Post>(
             pagingConfig = PagingConfig(
                 placeholderId = PostId.Placeholder,
-                initialKey = GetFeedRequest(PostId("1"), pageSize),
+                initialKey = GetFeedRequest(null, pageSize),
                 prefetchDistance = prefetchDistance
             )
         ).coroutineDispatcher(coroutineDispatcher)

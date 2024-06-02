@@ -73,7 +73,7 @@ fun PostListUi(post: Post) {
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            Text("#p${post.id.value} #g${post.id.value.toInt().mod(10)}", color = Color(0xff229BF0))
+            Text("#p${post.id.value} #g${1 + (10 - post.id.value.toInt().mod(10)).mod(10)}", color = Color(0xff229BF0))
 
             Spacer(modifier = Modifier.width(16.dp))
 
