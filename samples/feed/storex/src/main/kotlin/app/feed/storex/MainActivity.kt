@@ -21,6 +21,7 @@ import app.feed.common.TimelineAndroidxPagingSource
 import com.slack.circuit.backstack.rememberSaveableBackStack
 import com.slack.circuit.foundation.*
 import com.slack.circuit.runtime.screen.Screen
+import org.mobilenativefoundation.storex.paging.StoreCompositionLocals
 
 class MainActivity : ComponentActivity() {
 
@@ -51,45 +52,48 @@ class MainActivity : ComponentActivity() {
             val navigator = rememberCircuitNavigator(backStack)
             var activeTab by remember { mutableStateOf<Screen>(HomeTab) }
 
-            CircuitCompositionLocals(circuit) {
 
-                AppTheme {
-                    Scaffold(
-                        bottomBar = {
-                            BottomAppBar {
-                                IconButton(onClick = {
-                                    activeTab = HomeTab
-                                    navigator.goTo(HomeTab)
-                                }) {
+            StoreCompositionLocals(pager) {
+                CircuitCompositionLocals(circuit) {
+                    AppTheme {
+                        Scaffold(
+                            bottomBar = {
+                                BottomAppBar {
+                                    IconButton(onClick = {
+                                        activeTab = HomeTab
+                                        navigator.goTo(HomeTab)
+                                    }) {
 
-                                    if (activeTab == HomeTab) {
+                                        if (activeTab == HomeTab) {
 
-                                        Icon(Icons.Filled.Home, "Home")
-                                    } else {
-                                        Icon(Icons.Outlined.Home, "Home")
+                                            Icon(Icons.Filled.Home, "Home")
+                                        } else {
+                                            Icon(Icons.Outlined.Home, "Home")
+                                        }
+
                                     }
+                                    IconButton(onClick = {
+                                        activeTab = AccountTab
+                                        navigator.goTo(AccountTab)
+                                    }) {
+                                        if (activeTab == AccountTab) {
 
-                                }
-                                IconButton(onClick = {
-                                    activeTab = AccountTab
-                                    navigator.goTo(AccountTab)
-                                }) {
-                                    if (activeTab == AccountTab) {
-
-                                        Icon(Icons.Filled.Person, "Person")
-                                    } else {
-                                        Icon(Icons.Outlined.Person, "Person")
+                                            Icon(Icons.Filled.Person, "Person")
+                                        } else {
+                                            Icon(Icons.Outlined.Person, "Person")
+                                        }
                                     }
                                 }
                             }
+                        ) { innerPadding ->
+                            NavigableCircuitContent(
+                                navigator,
+                                backStack,
+                                modifier = Modifier.padding(innerPadding)
+                                    .background(MaterialTheme.colorScheme.background),
+                                decoration = NavigatorDefaults.EmptyDecoration
+                            )
                         }
-                    ) { innerPadding ->
-                        NavigableCircuitContent(
-                            navigator,
-                            backStack,
-                            modifier = Modifier.padding(innerPadding).background(MaterialTheme.colorScheme.background),
-                            decoration = NavigatorDefaults.EmptyDecoration
-                        )
                     }
                 }
             }

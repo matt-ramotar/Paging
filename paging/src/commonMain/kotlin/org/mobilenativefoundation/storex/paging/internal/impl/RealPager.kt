@@ -25,10 +25,10 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
     private val launchEffects: List<LaunchEffect>,
     private val errorHandlingStrategy: ErrorHandlingStrategy,
     private val middleware: List<Middleware<K>>,
-    private val fetchingStrategy: FetchingStrategy<Id,Q, K, E>,
+    private val fetchingStrategy: FetchingStrategy<Id, Q, K, E>,
     private val initialLoadParams: PagingSource.LoadParams<K>,
     private val registry: KClassRegistry<Id, Q, K, V, E>,
-    private val normalizedStore: NormalizedStore<Id,Q, K, V, E>,
+    private val normalizedStore: NormalizedStore<Id, Q, K, V, E>,
     private val operations: List<Operation<Id, Q, K, V, P, P>>,
     private val initialState: PagingState<Id, Q, E> = PagingState.initial()
 ) : Pager<Id, Q, K, V, E> {
@@ -81,17 +81,17 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
         recompositionMode: RecompositionMode
     ): Flow<PagingState<Id, Q, E>> =
         coroutineScope.launchMolecule(recompositionMode.toCashRecompositionMode()) {
-            presentPagingState(requests)
+            pagingState(requests)
         }
 
-    override fun pagingState(requests: Flow<PagingRequest<K>>): StateFlow<PagingState<Id, Q, E>> =
-        coroutineScope.launchMolecule(RecompositionMode.ContextClock.toCashRecompositionMode()) {
-            presentPagingState(requests)
+    override fun pagingStateFlow(composableCoroutineScope: CoroutineScope, requests: Flow<PagingRequest<K>>): StateFlow<PagingState<Id, Q, E>> =
+        composableCoroutineScope.launchMolecule(RecompositionMode.ContextClock.toCashRecompositionMode()) {
+            pagingState(requests)
         }
 
 
     @Composable
-    private fun presentPagingState(requests: Flow<PagingRequest<K>>): PagingState<Id, Q, E> {
+    private fun pagingState(requests: Flow<PagingRequest<K>>): PagingState<Id, Q, E> {
         val fetchingState by fetchingStateHolder.state.collectAsState()
 
         val pagingState by _mutablePagingState.collectAsState()
@@ -583,7 +583,7 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
     }
 
 
-    private fun updateStateWithAppendData(data: PageLoadStatus.Success<Id,Q, K, V, E>, key: K?) {
+    private fun updateStateWithAppendData(data: PageLoadStatus.Success<Id, Q, K, V, E>, key: K?) {
 
         val transformedSnapshot = transformSnapshot(data.snapshot, key)
 
@@ -598,7 +598,7 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
 
     }
 
-    private fun updateStateWithPrependData(data: PageLoadStatus.Success<Id,Q, K, V, E>, key: K?) {
+    private fun updateStateWithPrependData(data: PageLoadStatus.Success<Id, Q, K, V, E>, key: K?) {
         val prevState = _mutablePagingState.value
 
         println("PREV STATE = $prevState")

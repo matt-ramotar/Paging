@@ -23,11 +23,11 @@ class TimelinePagerFactory(
 
     fun create(
         coroutineDispatcher: CoroutineDispatcher = DispatcherProvider.io,
-        storexPagingSourceFactory: ((api: TimelineApi) -> org.mobilenativefoundation.storex.paging.PagingSource<String, GetFeedRequest, Post, Throwable>)? = null,
+        storexPagingSourceFactory: ((api: TimelineApi) -> org.mobilenativefoundation.storex.paging.PagingSource<String, PostId, GetFeedRequest, Post, Throwable>)? = null,
         androidxPagingSourceFactory: ((api: TimelineApi) -> androidx.paging.PagingSource<GetFeedRequest, Post>)? = null,
-    ): Pager<String, GetFeedRequest, Post, Throwable> {
+    ): Pager<String, PostId, GetFeedRequest, Post, Throwable> {
 
-        val builder = Pager.Builder<String, GetFeedRequest, Post>(
+        val builder = Pager.Builder<String, PostId, GetFeedRequest, Post>(
             pagingConfig = PagingConfig(
                 placeholderId = PostId.Placeholder,
                 initialKey = GetFeedRequest(PostId("1"), pageSize),
@@ -48,7 +48,7 @@ class TimelinePagerFactory(
 
 
     private fun storexPagingSource() =
-        PagingSource<String, GetFeedRequest, Post, Throwable> { params ->
+        PagingSource<String, PostId, GetFeedRequest, Post, Throwable> { params ->
             val response = api.getFeed(params.key)
 
             val nextKey = response.nextCursor?.let { nextCursor ->
@@ -70,7 +70,9 @@ class TimelinePagerFactory(
 
     private val cursorHistory = LinkedHashMap<PostId, PostId>()
 
-    private fun getPreviousCursor(currentCursor: PostId): PostId? {
+    private fun getPreviousCursor(currentCursor: PostId?): PostId? {
+        if (currentCursor == null) return null
+
         val prevCursor = cursorHistory[currentCursor]
         if (prevCursor != null) {
             cursorHistory.remove(currentCursor)

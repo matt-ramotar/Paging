@@ -7,4 +7,4 @@ import org.mobilenativefoundation.storex.paging.Identifiable
 data class Post(
     override val id: PostId,
     val title: String,
-) : Identifiable<String>
+) : Identifiable<String, PostId>

@@ -2,7 +2,9 @@
 
 package org.mobilenativefoundation.storex.paging
 
+import androidx.compose.runtime.Composable
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.InternalSerializationApi
@@ -37,7 +39,8 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
         recompositionMode: RecompositionMode = RecompositionMode.ContextClock
     ): Flow<PagingState<Id, Q, E>>
 
-    fun pagingState(
+    fun pagingStateFlow(
+        coroutineScope: CoroutineScope,
         requests: Flow<PagingRequest<K>>
     ): StateFlow<PagingState<Id, Q, E>>
 

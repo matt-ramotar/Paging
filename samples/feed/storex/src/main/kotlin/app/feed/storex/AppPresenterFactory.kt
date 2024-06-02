@@ -5,16 +5,18 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.rememberCoroutineScope
 import app.feed.common.models.GetFeedRequest
 import app.feed.common.models.Post
+import app.feed.common.models.PostId
 import com.slack.circuit.runtime.CircuitContext
 import com.slack.circuit.runtime.Navigator
 import com.slack.circuit.runtime.presenter.Presenter
 import com.slack.circuit.runtime.screen.Screen
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import org.mobilenativefoundation.storex.paging.*
 
 data class AppPresenterFactory(
-    private val pager: Pager<String, GetFeedRequest, Post, Throwable>
+    private val pager: Pager<String, PostId, GetFeedRequest, Post, Throwable>
 ) : Presenter.Factory {
     override fun create(screen: Screen, navigator: Navigator, context: CircuitContext): Presenter<*>? {
         return when (screen) {
@@ -27,7 +29,8 @@ data class AppPresenterFactory(
 }
 
 
-class HomeTabPresenter(private val pager: Pager<String, GetFeedRequest, Post, Throwable>) : Presenter<HomeTab.State> {
+class HomeTabPresenter(private val pager: Pager<String, PostId, GetFeedRequest, Post, Throwable>) :
+    Presenter<HomeTab.State> {
 
     private val requests = MutableSharedFlow<PagingRequest<GetFeedRequest>>(replay = 1)
 
@@ -36,9 +39,9 @@ class HomeTabPresenter(private val pager: Pager<String, GetFeedRequest, Post, Th
 
         val scope = rememberCoroutineScope()
 
-        val pagingState = pager.pagingState(requests).collectAsState()
+        val pagingState = pager.pagingStateFlow(scope, requests).collectAsState()
 
-        return HomeTab.State("", pagingState.value.ids) { event ->
+        return HomeTab.State("", pagingState.value.ids.toImmutableList()) { event ->
 
             when (event) {
                 HomeTab.Event.Refresh -> {

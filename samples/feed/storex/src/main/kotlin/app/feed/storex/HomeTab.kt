@@ -5,6 +5,7 @@ import app.feed.common.models.PostId
 import com.slack.circuit.runtime.CircuitUiEvent
 import com.slack.circuit.runtime.CircuitUiState
 import com.slack.circuit.runtime.screen.Screen
+import kotlinx.collections.immutable.ImmutableList
 import kotlinx.parcelize.Parcelize
 
 
@@ -12,7 +13,7 @@ import kotlinx.parcelize.Parcelize
 data object HomeTab : Screen, Parcelable {
     data class State(
         val userId: String,
-        val postIds: List<PostId>,
+        val postIds: ImmutableList<PostId?>,
         val eventSink: (event: Event) -> Unit
     ) : CircuitUiState
 
