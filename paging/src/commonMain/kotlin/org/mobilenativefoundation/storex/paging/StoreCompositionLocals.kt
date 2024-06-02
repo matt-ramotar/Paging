@@ -37,9 +37,27 @@ inline fun <Id : Comparable<Id>, Q: Quantifiable<Id>, V : Identifiable<Id, Q>, E
 
 
 @Composable
-inline fun <Id : Comparable<Id>, Q: Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any> SelfUpdatingItem<Id, Q, V, E>?.stateIn(scope: CoroutineScope): StateFlow<ItemState<Id, Q, V, E>> {
+inline fun <Id : Comparable<Id>, Q: Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any> SelfUpdatingItem<Id, Q, V, E>?.stateIn(scope: CoroutineScope, key: Any? = null): StateFlow<ItemState<Id, Q, V, E>> {
 
-    return scope.launchMolecule(RecompositionMode.ContextClock) {
-        this?.invoke() ?: ItemState.initial()
+    return remember(key) {
+        scope.launchMolecule(RecompositionMode.ContextClock) {
+            this?.invoke() ?: ItemState.initial()
+        }
+    }
+}
+
+@Suppress("UNCHECKED_CAST")
+@Composable
+inline fun <Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any> selfUpdatingItem(
+    id: Q?,
+    key: Any? = null
+): SelfUpdatingItem<Id, Q, V, E>? {
+    if (id == null) {
+        return null
+    }
+
+    val selfUpdatingItemFactory = LocalSelfUpdatingItemFactory.current as SelfUpdatingItemFactory<Id, Q, V, E>
+    return remember(key) {
+        selfUpdatingItemFactory.createSelfUpdatingItem(id)
     }
 }

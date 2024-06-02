@@ -45,9 +45,9 @@ data object HomeTabUi : Ui<HomeTab.State> {
 }
 
 @Composable
-fun PostUi(id: PostId?, modifier: Modifier = Modifier, model: SelfUpdatingItem<String, PostId, Post, Throwable>? = selfUpdatingItem(id)) {
+fun PostUi(id: PostId?, modifier: Modifier = Modifier, model: SelfUpdatingItem<String, PostId, Post, Throwable>? = selfUpdatingItem(id, key = id)) {
     val scope = rememberCoroutineScope()
-    val state = model.stateIn(scope)
+    val state = model.stateIn(scope, key = model)
 
     when (state.value.loadState) {
         SingleLoadState.Cleared -> Text("SingleLoadState.Cleared")
@@ -76,9 +76,7 @@ fun PagingLazyColumn(
     }
 
     LazyColumn {
-        items(items, key = {
-            it
-        }) {
+        items(items) {
             val id = when (it) {
                 is PagingId.Data -> it.data
                 PagingId.Placeholder -> null
