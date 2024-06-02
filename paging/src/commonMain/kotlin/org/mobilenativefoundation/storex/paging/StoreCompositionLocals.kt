@@ -24,16 +24,6 @@ val LocalSelfUpdatingItemFactory: ProvidableCompositionLocal<SelfUpdatingItemFac
     staticCompositionLocalOf { throw IllegalStateException("SelfUpdatingItemFactory not provided") }
 
 
-@Suppress("UNCHECKED_CAST")
-@Composable
-inline fun <Id : Comparable<Id>, Q: Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any> selfUpdatingItem(id: Q?): SelfUpdatingItem<Id, Q, V, E>? {
-    if (id == null) {
-        return null
-    }
-
-    val selfUpdatingItemFactory = LocalSelfUpdatingItemFactory.current as SelfUpdatingItemFactory<Id, Q, V, E>
-    return selfUpdatingItemFactory.createSelfUpdatingItem(id)
-}
 
 
 @Composable
@@ -48,16 +38,15 @@ inline fun <Id : Comparable<Id>, Q: Quantifiable<Id>, V : Identifiable<Id, Q>, E
 
 @Suppress("UNCHECKED_CAST")
 @Composable
-inline fun <Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any> selfUpdatingItem(
-    id: Q?,
-    key: Any? = null
+inline fun <Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any> rememberSelfUpdatingItem(
+    id: Q?
 ): SelfUpdatingItem<Id, Q, V, E>? {
     if (id == null) {
         return null
     }
 
     val selfUpdatingItemFactory = LocalSelfUpdatingItemFactory.current as SelfUpdatingItemFactory<Id, Q, V, E>
-    return remember(key) {
+    return remember(id) {
         selfUpdatingItemFactory.createSelfUpdatingItem(id)
     }
 }
