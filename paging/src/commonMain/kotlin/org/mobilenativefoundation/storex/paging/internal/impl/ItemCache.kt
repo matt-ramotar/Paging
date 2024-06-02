@@ -9,7 +9,7 @@ import org.mobilenativefoundation.storex.paging.PagingConfig
 import org.mobilenativefoundation.storex.paging.Quantifiable
 
 
-class ItemCache<Id : Comparable<Id>, V : Identifiable<Id>> {
+class ItemCache<Id : Comparable<Id>, Q: Quantifiable<Id>, V : Identifiable<Id, Q>> {
     private val itemMemoryCache =
         CacheBuilder<Quantifiable<Id>, V>().build()
 
@@ -30,10 +30,10 @@ class ItemCache<Id : Comparable<Id>, V : Identifiable<Id>> {
     }
 }
 
-class PageCache<Id : Comparable<Id>, K : Any, V : Identifiable<Id>>(
+class PageCache<Id : Comparable<Id>, Q: Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>>(
     maxSize: Int,
     pagingConfig: PagingConfig<Id, K>,
-    private val itemCache: ItemCache<Id, V>
+    private val itemCache: ItemCache<Id,Q, V>
 ) {
 
     private val maxPages = (maxSize / pagingConfig.pageSize).toLong()

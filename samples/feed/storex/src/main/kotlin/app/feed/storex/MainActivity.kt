@@ -17,15 +17,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import app.feed.common.AppTheme
+import app.feed.common.TimelineAndroidxPagingSource
 import com.slack.circuit.backstack.rememberSaveableBackStack
 import com.slack.circuit.foundation.*
 import com.slack.circuit.runtime.screen.Screen
 
 class MainActivity : ComponentActivity() {
 
+
+    private val pager = TimelinePagerFactory().create(
+        androidxPagingSourceFactory = { api ->
+            TimelineAndroidxPagingSource(api, 20)
+        }
+    )
+
+    private val appPresenterFactory = AppPresenterFactory(pager)
+
     private val circuit: Circuit by lazy {
         Circuit.Builder()
-            .addPresenterFactory(AppPresenterFactory)
+            .addPresenterFactory(appPresenterFactory)
             .addUiFactory(AppUiFactory)
             .build()
     }

@@ -26,6 +26,7 @@ dependencies {
     api(libs.ktor.client.android)
     api(libs.ktor.serialization.json)
     api(libs.ktor.negotiation)
+    api(libs.androidx.paging)
 
     implementation(projects.paging)
 

@@ -17,20 +17,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
 import org.mobilenativefoundation.store.store5.Fetcher
 import org.mobilenativefoundation.store.store5.FetcherResult
-import org.mobilenativefoundation.storex.paging.Identifiable
-import org.mobilenativefoundation.storex.paging.Item
-import org.mobilenativefoundation.storex.paging.ItemSnapshotList
-import org.mobilenativefoundation.storex.paging.ItemState
-import org.mobilenativefoundation.storex.paging.LoadDirection
-import org.mobilenativefoundation.storex.paging.LoadStrategy
-import org.mobilenativefoundation.storex.paging.Page
-import org.mobilenativefoundation.storex.paging.PagingConfig
-import org.mobilenativefoundation.storex.paging.PagingDb
-import org.mobilenativefoundation.storex.paging.PagingSource
-import org.mobilenativefoundation.storex.paging.Quantifiable
-import org.mobilenativefoundation.storex.paging.SelfUpdatingItem
-import org.mobilenativefoundation.storex.paging.SelfUpdatingPage
-import org.mobilenativefoundation.storex.paging.SingleLoadState
+import org.mobilenativefoundation.storex.paging.*
 import org.mobilenativefoundation.storex.paging.custom.ErrorFactory
 import org.mobilenativefoundation.storex.paging.custom.SideEffect
 import org.mobilenativefoundation.storex.paging.db.DriverFactory
@@ -40,17 +27,17 @@ import org.mobilenativefoundation.storex.paging.internal.api.NormalizedStore
 
 @Suppress("UNCHECKED_CAST")
 @OptIn(InternalSerializationApi::class)
-class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any>(
-    private val pageFetcher: Fetcher<PagingSource.LoadParams<K>, PagingSource.LoadResult.Data<Id, K, V, E>>,
-    private val registry: KClassRegistry<Id, K, V, E>,
+class RealNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any>(
+    private val pageFetcher: Fetcher<PagingSource.LoadParams<K>, PagingSource.LoadResult.Data<Id, Q, K, V, E>>,
+    private val registry: KClassRegistry<Id, Q, K, V, E>,
     private val errorFactory: ErrorFactory<E>,
     private val itemFetcher: Fetcher<Id, V>?,
     driverFactory: DriverFactory?,
     private val maxSize: Int = 500,
     private val fetchingStateHolder: FetchingStateHolder<Id, K>,
-    private val sideEffects: List<SideEffect<Id, V>>,
+    private val sideEffects: List<SideEffect<Id, Q, V>>,
     private val pagingConfig: PagingConfig<Id, K>
-) : NormalizedStore<Id, K, V, E> {
+) : NormalizedStore<Id, Q, K, V, E> {
 
     private val db = driverFactory?.let { PagingDb(driverFactory.createDriver()) }
 
@@ -150,7 +137,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
         }
     }
 
-    private fun onSnapshot(snapshot: ItemSnapshotList<Id, V>) {
+    private fun onSnapshot(snapshot: ItemSnapshotList<Id, Q, V>) {
         sideEffects.forEach { sideEffect -> sideEffect.invoke(snapshot) }
     }
 
@@ -216,7 +203,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
     private fun prependPage(
         params: PagingSource.LoadParams<K>,
         localParams: String,
-        fetcherResult: FetcherResult.Data<PagingSource.LoadResult.Data<Id, K, V, E>>
+        fetcherResult: FetcherResult.Data<PagingSource.LoadResult.Data<Id, Q, K, V, E>>
     ) {
 
         val pageNode = if (params.key !in pageNodeMap) {
@@ -248,7 +235,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
     private fun appendPage(
         params: PagingSource.LoadParams<K>,
         localParams: String,
-        fetcherResult: FetcherResult.Data<PagingSource.LoadResult.Data<Id, K, V, E>>
+        fetcherResult: FetcherResult.Data<PagingSource.LoadResult.Data<Id, Q, K, V, E>>
     ) {
         val pageNode = if (params.key !in pageNodeMap) {
             val node = PageNode(key = params.key)
@@ -291,7 +278,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
 
     private fun saveNormalizedPageToDb(
         localParams: String,
-        fetcherResult: FetcherResult.Data<PagingSource.LoadResult.Data<Id, K, V, E>>
+        fetcherResult: FetcherResult.Data<PagingSource.LoadResult.Data<Id, Q, K, V, E>>
     ) {
         val localPage = Page(
             params = localParams,
@@ -315,7 +302,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
     }
 
 
-    private suspend fun loadFromNetwork(params: PagingSource.LoadParams<K>): PageLoadStatus<Id, K, V, E> {
+    private suspend fun loadFromNetwork(params: PagingSource.LoadParams<K>): PageLoadStatus<Id, Q, K, V, E> {
         println("HITTING IN LOAD FROM NETWORK")
 
         return when (val fetcherResult = pageFetcher.invoke(params).first()) {
@@ -410,7 +397,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
         }
     }
 
-    override fun loadPage(params: PagingSource.LoadParams<K>): Flow<PageLoadStatus<Id, K, V, E>> =
+    override fun loadPage(params: PagingSource.LoadParams<K>): Flow<PageLoadStatus<Id, Q, K, V, E>> =
         flow {
             println("PARAMS = $params")
             keyToParamsMap[params.key] = params
@@ -545,14 +532,15 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
                 }
 
                 LoadStrategy.Refresh -> {
+                    // TODO(): Update - do we need this? can just configure with others (e.g., invalidate or skip queue with prepend)
                     // TODO(): Support refresh
                 }
             }
 
         }
 
-    override fun selfUpdatingItem(id: Quantifiable<Id>): SelfUpdatingItem<Id, V, E> {
-        val presenter = @Composable { events: Flow<SelfUpdatingItem.Event<Id, V, E>> ->
+    override fun selfUpdatingItem(id: Q): SelfUpdatingItem<Id, Q, V, E> {
+        val presenter = @Composable { events: Flow<SelfUpdatingItem.Event<Id, Q, V, E>> ->
             selfUpdatingItem(id, events)
         }
 
@@ -561,9 +549,9 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
 
     @Composable
     private fun selfUpdatingItem(
-        id: Quantifiable<Id>,
-        events: Flow<SelfUpdatingItem.Event<Id, V, E>>
-    ): ItemState<Id, V, E> {
+        id: Q,
+        events: Flow<SelfUpdatingItem.Event<Id, Q, V, E>>
+    ): ItemState<Id, Q, V, E> {
         val encodedId = remember(id) { Json.encodeToString(registry.id.serializer(), id.value) }
 
         val v by remember {
@@ -751,7 +739,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
     }
 
 
-    override fun selfUpdatingPage(key: K): SelfUpdatingPage<Id, K, V, E> {
+    override fun selfUpdatingPage(key: K): SelfUpdatingPage<Id, Q, K, V, E> {
         TODO()
     }
 
@@ -780,12 +768,11 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
         return items
     }
 
-    private fun snapshot(): ItemSnapshotList<Id, V> {
+    private fun snapshot(): ItemSnapshotList<Id, Q, V> {
         return ItemSnapshotList(getItemsInOrder()).also {
             onSnapshot(it)
         }
     }
-
 
 
     override fun invalidate() {
@@ -810,6 +797,7 @@ class RealNormalizedStore<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E 
             // it.pageQueries.removeAllPages()
         }
     }
+
     override fun clear(key: K) {
         removePage(key)
     }

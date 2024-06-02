@@ -4,7 +4,7 @@ import org.mobilenativefoundation.storex.paging.custom.ErrorFactory
 import org.mobilenativefoundation.storex.paging.custom.Operation
 import org.mobilenativefoundation.storex.paging.db.DriverFactory
 
-fun <Id : Comparable<Id>, K: Comparable<K>, V : Identifiable<Id>, E : Any>
+fun <Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V : Identifiable<Id, Q>, E : Any>
         androidx.paging.PagingSource.LoadParams<K>.storex(strategy: LoadStrategy): PagingSource.LoadParams<K> {
     val direction = when (this) {
         is androidx.paging.PagingSource.LoadParams.Refresh -> {
@@ -23,7 +23,7 @@ fun <Id : Comparable<Id>, K: Comparable<K>, V : Identifiable<Id>, E : Any>
     )
 }
 
-fun <K: Comparable<K>> PagingSource.LoadParams<K>.androidx(
+fun <K : Comparable<K>> PagingSource.LoadParams<K>.androidx(
     loadSize: Int,
     placeholdersEnabled: Boolean
 ): androidx.paging.PagingSource.LoadParams<K> {
@@ -46,9 +46,9 @@ fun <K: Comparable<K>> PagingSource.LoadParams<K>.androidx(
     }
 }
 
-fun <Id : Comparable<Id>, K: Comparable<K>, V : Identifiable<Id>, E : Any> androidx.paging.PagingSource.LoadResult.Page<K, V>.storex(
+fun <Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V : Identifiable<Id, Q>, E : Any> androidx.paging.PagingSource.LoadResult.Page<K, V>.storex(
     params: PagingSource.LoadParams<K>,
-): PagingSource.LoadResult.Data<Id, K, V, E> {
+): PagingSource.LoadResult.Data<Id, Q, K, V, E> {
     return PagingSource.LoadResult.Data(
         items = data,
         prevKey = prevKey,
@@ -61,32 +61,32 @@ fun <Id : Comparable<Id>, K: Comparable<K>, V : Identifiable<Id>, E : Any> andro
 }
 
 
-inline fun <reified Id : Comparable<Id>, reified K: Comparable<K>, reified V : Identifiable<Id>> androidx.paging.PagingSource<K, V>.storex(
+inline fun <reified Id : Comparable<Id>, reified Q : Quantifiable<Id>, reified K : Comparable<K>, reified V : Identifiable<Id, Q>> androidx.paging.PagingSource<K, V>.storex(
     pagingConfig: PagingConfig<Id, K>,
-): Pager<Id, K, V, Throwable> {
-    return Pager.Builder<Id, K, V>(
+): Pager<Id, Q, K, V, Throwable> {
+    return Pager.Builder<Id, Q, K, V>(
         pagingConfig = pagingConfig,
     ).androidxPagingSource(this).build()
 }
 
 
-inline fun <reified Id : Comparable<Id>, reified K: Comparable<K>, reified V : Identifiable<Id>> androidx.paging.PagingSource<K, V>.storex(
+inline fun <reified Id : Comparable<Id>, reified Q : Quantifiable<Id>, reified K : Comparable<K>, reified V : Identifiable<Id, Q>> androidx.paging.PagingSource<K, V>.storex(
     pagingConfig: PagingConfig<Id, K>,
     driverFactory: DriverFactory
-): Pager<Id, K, V, Throwable> {
-    return Pager.Builder<Id, K, V>(
+): Pager<Id, Q, K, V, Throwable> {
+    return Pager.Builder<Id, Q, K, V>(
         pagingConfig = pagingConfig,
         driverFactory = driverFactory
     ).androidxPagingSource(this).build()
 }
 
 
-inline fun <reified Id : Comparable<Id>, reified K: Comparable<K>, reified V : Identifiable<Id>, reified E : Any> androidx.paging.PagingSource<K, V>.storex(
+inline fun <reified Id : Comparable<Id>, reified Q : Quantifiable<Id>, reified K : Comparable<K>, reified V : Identifiable<Id, Q>, reified E : Any> androidx.paging.PagingSource<K, V>.storex(
     pagingConfig: PagingConfig<Id, K>,
     driverFactory: DriverFactory,
     errorFactory: ErrorFactory<E>
-): Pager<Id, K, V, E> {
-    return Pager.Builder<Id, K, V, E>(
+): Pager<Id, Q, K, V, E> {
+    return Pager.Builder<Id, Q, K, V, E>(
         pagingConfig = pagingConfig,
         driverFactory = driverFactory,
         errorFactory = errorFactory
@@ -94,13 +94,13 @@ inline fun <reified Id : Comparable<Id>, reified K: Comparable<K>, reified V : I
 }
 
 
-inline fun <reified Id : Comparable<Id>, reified K: Comparable<K>, reified V : Identifiable<Id>, reified E : Any, reified P : Any> androidx.paging.PagingSource<K, V>.storex(
+inline fun <reified Id : Comparable<Id>, reified Q : Quantifiable<Id>, reified K : Comparable<K>, reified V : Identifiable<Id, Q>, reified E : Any, reified P : Any> androidx.paging.PagingSource<K, V>.storex(
     pagingConfig: PagingConfig<Id, K>,
     driverFactory: DriverFactory,
     errorFactory: ErrorFactory<E>,
-    operations: List<Operation<Id, K, V, P, P>>,
-): Pager<Id, K, V, E> {
-    return Pager.Builder<Id, K, V, E, P>(
+    operations: List<Operation<Id, Q, K, V, P, P>>,
+): Pager<Id, Q, K, V, E> {
+    return Pager.Builder<Id, Q, K, V, E, P>(
         pagingConfig = pagingConfig,
         driverFactory = driverFactory,
         errorFactory = errorFactory,

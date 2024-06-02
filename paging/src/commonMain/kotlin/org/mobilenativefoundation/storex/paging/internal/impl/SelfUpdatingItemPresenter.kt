@@ -17,17 +17,17 @@ import org.mobilenativefoundation.storex.paging.internal.api.FetchingStateHolder
 
 @Suppress("UNCHECKED_CAST")
 @OptIn(InternalSerializationApi::class)
-class SelfUpdatingItemPresenter<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any>(
+class SelfUpdatingItemPresenter<Id : Comparable<Id>, Q: Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any>(
     private val itemFetcher: Fetcher<Id, V>?,
-    private val registry: KClassRegistry<Id, K, V, E>,
+    private val registry: KClassRegistry<Id, Q, K, V, E>,
     private val errorFactory: ErrorFactory<E>,
-    private val itemCache: ItemCache<Id, V>,
+    private val itemCache: ItemCache<Id, Q, V>,
     private val db: PagingDb?,
     private val fetchingStateHolder: FetchingStateHolder<Id, K>
 ) {
 
-    fun present(id: Quantifiable<Id>): SelfUpdatingItem<Id, V, E> {
-        val presenter: @Composable (Flow<SelfUpdatingItem.Event<Id, V, E>>) -> ItemState<Id, V, E> = { events ->
+    fun present(id: Quantifiable<Id>): SelfUpdatingItem<Id,Q, V, E> {
+        val presenter: @Composable (Flow<SelfUpdatingItem.Event<Id, Q, V, E>>) -> ItemState<Id, Q, V, E> = { events ->
             itemState(id, events)
         }
         return SelfUpdatingItem(presenter)
@@ -36,8 +36,8 @@ class SelfUpdatingItemPresenter<Id : Comparable<Id>, K : Any, V : Identifiable<I
     @Composable
     private fun itemState(
         id: Quantifiable<Id>,
-        events: Flow<SelfUpdatingItem.Event<Id, V, E>>
-    ): ItemState<Id, V, E> {
+        events: Flow<SelfUpdatingItem.Event<Id, Q, V, E>>
+    ): ItemState<Id, Q, V, E> {
         val encodedId = remember(id) { Json.encodeToString(registry.id.serializer(), id.value) }
         val item by remember { derivedStateOf { itemCache.getItem(id) } }
 

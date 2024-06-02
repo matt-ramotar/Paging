@@ -1,9 +1,6 @@
 package org.mobilenativefoundation.storex.paging.internal.impl
 
-import org.mobilenativefoundation.storex.paging.Identifiable
-import org.mobilenativefoundation.storex.paging.PagingConfig
-import org.mobilenativefoundation.storex.paging.PagingSource
-import org.mobilenativefoundation.storex.paging.PagingState
+import org.mobilenativefoundation.storex.paging.*
 import org.mobilenativefoundation.storex.paging.custom.FetchingStrategy
 import org.mobilenativefoundation.storex.paging.internal.api.FetchingState
 
@@ -11,15 +8,15 @@ import org.mobilenativefoundation.storex.paging.internal.api.FetchingState
 /**
  * Default implementation of [FetchingStrategy].
  */
-class DefaultFetchingStrategy<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any>(
+class DefaultFetchingStrategy<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any>(
     pagingConfig: PagingConfig<Id, K>
-) : FetchingStrategy<Id, K, E> {
+) : FetchingStrategy<Id,Q, K, E> {
     private val prefetchDistance = pagingConfig.prefetchDistance
 
 
     override fun shouldFetchForward(
         params: PagingSource.LoadParams<K>,
-        pagingState: PagingState<Id, E>,
+        pagingState: PagingState<Id, Q, E>,
         fetchingState: FetchingState<Id, K>
     ): Boolean {
         println("SHOULD FETCH FOWRARD HITTING")
@@ -38,7 +35,7 @@ class DefaultFetchingStrategy<Id : Comparable<Id>, K : Any, V : Identifiable<Id>
 
     override fun shouldFetchBackward(
         params: PagingSource.LoadParams<K>,
-        pagingState: PagingState<Id, E>,
+        pagingState: PagingState<Id, Q, E>,
         fetchingState: FetchingState<Id, K>
     ): Boolean {
         TODO()

@@ -3,8 +3,8 @@ package org.mobilenativefoundation.storex.paging
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 
-fun interface PagingSource<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
-    suspend fun load(params: LoadParams<K>): LoadResult<Id, K, V, E>
+fun interface PagingSource<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any> {
+    suspend fun load(params: LoadParams<K>): LoadResult<Id, Q, K, V, E>
 
     @Serializable
     data class LoadParams<K : Any>(
@@ -14,9 +14,9 @@ fun interface PagingSource<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E
     )
 
     @Serializable
-    sealed interface LoadResult<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
+    sealed interface LoadResult<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any> {
         @Serializable
-        data class Data<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any>(
+        data class Data<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any>(
             val items: List<V>,
             val prevKey: K?,
             val params: LoadParams<K>,
@@ -25,7 +25,7 @@ fun interface PagingSource<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E
             val itemsBefore: Int? = null,
             val itemsAfter: Int? = null,
             val extras: JsonObject? = null
-        ) : LoadResult<Id, K, V, E> {
+        ) : LoadResult<Id, Q, K, V, E> {
             @Serializable
             enum class Origin {
                 Network,
@@ -33,7 +33,7 @@ fun interface PagingSource<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E
                 SourceOfTruth
             }
 
-            val normalized: Normalized<Id, K, V, E>
+            val normalized: Normalized<Id, Q, K, V, E>
                 get() = Normalized(
                     items = items.map { it.id },
                     prevKey = prevKey,
@@ -45,13 +45,13 @@ fun interface PagingSource<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E
         }
 
         @Serializable
-        data class Error<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any>(
+        data class Error<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any>(
             val error: E,
             val extras: JsonObject? = null
-        ) : LoadResult<Id, K, V, E>
+        ) : LoadResult<Id, Q, K, V, E>
 
-        data class Normalized<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any>(
-            val items: List<Quantifiable<Id>>,
+        data class Normalized<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any>(
+            val items: List<Q>,
             val prevKey: K?,
             val params: LoadParams<K>,
             val nextKey: K?,

@@ -74,15 +74,15 @@ fun RecompositionMode.toCashRecompositionMode() = when (this) {
 //    }
 //
 //
-fun <Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> Pager<Id, K, V, E>.launchPagingFlow(
+fun <Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any> Pager<Id, Q, K, V, E>.launchPagingFlow(
     requests: Flow<PagingRequest<K>> = emptyFlow(),
-): Flow<PagingState<Id, E>> = this.pagingFlow(requests, RecompositionMode.Immediate)
+): Flow<PagingState<Id, Q, E>> = this.pagingFlow(requests, RecompositionMode.Immediate)
 
 
 @OptIn(ExperimentalTypeInference::class)
-fun <Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> Pager<Id, K, V, E>.launchPagingFlow(
+fun <Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any> Pager<Id, Q, K, V, E>.launchPagingFlow(
     @BuilderInference block: suspend FlowCollector<PagingRequest<K>>.() -> Unit
-): Flow<PagingState<Id, E>> = this.pagingFlow(flow(block), RecompositionMode.Immediate)
+): Flow<PagingState<Id, Q, E>> = this.pagingFlow(flow(block), RecompositionMode.Immediate)
 
 
 

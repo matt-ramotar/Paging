@@ -1,14 +1,17 @@
-package org.mobilenativefoundation.storex.paging.test.utils
+package app.feed.storex
 
+
+import app.feed.common.api.TimelineApi
+import app.feed.common.models.GetFeedRequest
+import app.feed.common.models.Post
+import app.feed.common.models.PostId
+import app.feed.common.server.Server
 import kotlinx.coroutines.CoroutineDispatcher
 import org.mobilenativefoundation.storex.paging.Pager
 import org.mobilenativefoundation.storex.paging.PagingConfig
 import org.mobilenativefoundation.storex.paging.PagingSource
-import org.mobilenativefoundation.storex.paging.test.utils.api.TimelineApi
-import org.mobilenativefoundation.storex.paging.test.utils.models.GetFeedRequest
-import org.mobilenativefoundation.storex.paging.test.utils.models.Post
-import org.mobilenativefoundation.storex.paging.test.utils.models.PostId
-import org.mobilenativefoundation.storex.paging.utils.timeline.server.Server
+import org.mobilenativefoundation.storex.paging.internal.api.DispatcherProvider
+
 
 class TimelinePagerFactory(
     private val pageSize: Int = 20,
@@ -19,12 +22,12 @@ class TimelinePagerFactory(
     private val api = TimelineApi(server)
 
     fun create(
-        coroutineDispatcher: CoroutineDispatcher,
-        storexPagingSourceFactory: ((api: TimelineApi) -> PagingSource<String, PostId, GetFeedRequest, Post, Throwable>)? = null,
+        coroutineDispatcher: CoroutineDispatcher = DispatcherProvider.io,
+        storexPagingSourceFactory: ((api: TimelineApi) -> org.mobilenativefoundation.storex.paging.PagingSource<String, GetFeedRequest, Post, Throwable>)? = null,
         androidxPagingSourceFactory: ((api: TimelineApi) -> androidx.paging.PagingSource<GetFeedRequest, Post>)? = null,
-    ): Pager<String, PostId, GetFeedRequest, Post, Throwable> {
+    ): Pager<String, GetFeedRequest, Post, Throwable> {
 
-        val builder = Pager.Builder<String, PostId, GetFeedRequest, Post>(
+        val builder = Pager.Builder<String, GetFeedRequest, Post>(
             pagingConfig = PagingConfig(
                 placeholderId = PostId.Placeholder,
                 initialKey = GetFeedRequest(PostId("1"), pageSize),
@@ -45,12 +48,12 @@ class TimelinePagerFactory(
 
 
     private fun storexPagingSource() =
-        PagingSource<String, PostId, GetFeedRequest, Post, Throwable> { params ->
+        PagingSource<String, GetFeedRequest, Post, Throwable> { params ->
             val response = api.getFeed(params.key)
 
-            val nextKey = response.nextCursor?.let {
+            val nextKey = response.nextCursor?.let { nextCursor ->
                 params.key.copy(
-                    cursor = response.nextCursor,
+                    cursor = nextCursor,
                     size = pageSize
                 )
             }

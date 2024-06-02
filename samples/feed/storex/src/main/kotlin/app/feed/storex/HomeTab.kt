@@ -13,6 +13,7 @@ data object HomeTab : Screen, Parcelable {
     data class State(
         val userId: String,
         val postIds: List<PostId>,
+        val eventSink: (event: Event) -> Unit
     ) : CircuitUiState
 
     sealed interface Event : CircuitUiEvent {

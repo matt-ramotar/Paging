@@ -14,17 +14,17 @@ import org.mobilenativefoundation.storex.paging.custom.SideEffect
 
 @Suppress("UNCHECKED_CAST")
 @OptIn(InternalSerializationApi::class)
-class PageLoadStatusProvider<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any>(
-    private val pageFetcher: Fetcher<PagingSource.LoadParams<K>, PagingSource.LoadResult.Data<Id, K, V, E>>,
-    private val registry: KClassRegistry<Id, K, V, E>,
+class PageLoadStatusProvider<Id : Comparable<Id>, Q: Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any>(
+    private val pageFetcher: Fetcher<PagingSource.LoadParams<K>, PagingSource.LoadResult.Data<Id, Q, K, V, E>>,
+    private val registry: KClassRegistry<Id, Q, K, V, E>,
     private val errorFactory: ErrorFactory<E>,
-    private val pageCache: PageCache<Id, K, V>,
-    private val itemCache: ItemCache<Id, V>,
+    private val pageCache: PageCache<Id, Q, K, V>,
+    private val itemCache: ItemCache<Id, Q, V>,
     private val db: PagingDb?,
     private val pagingConfig: PagingConfig<Id, K>,
-    private val sideEffects: List<SideEffect<Id, V>>,
+    private val sideEffects: List<SideEffect<Id, Q, V>>,
 ) {
-    fun loadPage(params: PagingSource.LoadParams<K>): Flow<PageLoadStatus<Id, K, V, E>> = flow {
+    fun loadPage(params: PagingSource.LoadParams<K>): Flow<PageLoadStatus<Id, Q, K, V, E>> = flow {
         emit(PageLoadStatus.Processing())
 
         when (params.strategy) {
@@ -63,7 +63,7 @@ class PageLoadStatusProvider<Id : Comparable<Id>, K : Any, V : Identifiable<Id>,
         }
     }
 
-    private suspend fun fetchFromNetwork(params: PagingSource.LoadParams<K>): PageLoadStatus<Id, K, V, E> {
+    private suspend fun fetchFromNetwork(params: PagingSource.LoadParams<K>): PageLoadStatus<Id,Q, K, V, E> {
         return when (val fetcherResult = pageFetcher.invoke(params).first()) {
             is FetcherResult.Data -> {
                 val items = fetcherResult.value.items
@@ -108,7 +108,7 @@ class PageLoadStatusProvider<Id : Comparable<Id>, K : Any, V : Identifiable<Id>,
         }
     }
 
-    private fun successStatus(key: K): PageLoadStatus.Success<Id, K, V, E> {
+    private fun successStatus(key: K): PageLoadStatus.Success<Id, Q, K, V, E> {
         return PageLoadStatus.Success(
             snapshot = snapshot(),
             isTerminal = true,
@@ -126,13 +126,13 @@ class PageLoadStatusProvider<Id : Comparable<Id>, K : Any, V : Identifiable<Id>,
         return db?.pageQueries?.getPage(localParams)?.executeAsOneOrNull() != null
     }
 
-    private fun snapshot(): ItemSnapshotList<Id, V> {
+    private fun snapshot(): ItemSnapshotList<Id,Q, V> {
         return ItemSnapshotList(
             items = pageCache.getItemsInOrder()
         ).also { onSnapshot(it) }
     }
 
-    private fun onSnapshot(snapshot: ItemSnapshotList<Id, V>) {
+    private fun onSnapshot(snapshot: ItemSnapshotList<Id,Q, V>) {
         sideEffects.forEach { it.invoke(snapshot) }
     }
 }
