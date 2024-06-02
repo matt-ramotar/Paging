@@ -1,14 +1,19 @@
 package app.feed.storex
 
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
 import app.feed.common.models.Post
 import app.feed.common.models.PostId
 import com.slack.circuit.runtime.CircuitContext
@@ -34,7 +39,10 @@ data object HomeTabUi : Ui<HomeTab.State> {
     override fun Content(state: HomeTab.State, modifier: Modifier) {
 
         Column {
-            Text("StoreX - Home")
+
+            Row(modifier = Modifier.fillMaxWidth().padding(top = 24.dp), horizontalArrangement = Arrangement.Center) {
+                Icon(painterResource(app.feed.common.R.drawable.storex), "storex", modifier = Modifier.size(50.dp), tint = Color(0xff212121))
+            }
 
             LazySelfUpdatingItems<String, PostId, Post, Throwable>(state.postIds) { itemState ->
                 when (itemState.loadState) {
@@ -43,11 +51,20 @@ data object HomeTabUi : Ui<HomeTab.State> {
                     is SingleLoadState.Error.Refreshing -> Text("is SingleLoadState.Error.Refreshing")
                     SingleLoadState.Initial -> Text("SingleLoadState.Initial")
                     SingleLoadState.Loaded -> {
-                        val item = itemState.item
-                        if (item != null) {
-                            app.feed.common.ui.PostUi(item)
-                        } else {
-                            Text("LOADED BUT NO ITEM!")
+
+                        Column {
+                            val item = itemState.item
+                            if (item != null) {
+                                app.feed.common.ui.PostListUi(item)
+                            } else {
+                                Text("LOADED BUT NO ITEM!")
+                            }
+
+                            HorizontalDivider(
+                                thickness = 1.dp,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth(),
+                                color = Color(0xfff3f3f3)
+                            )
                         }
                     }
 

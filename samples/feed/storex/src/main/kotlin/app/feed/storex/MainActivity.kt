@@ -5,17 +5,16 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Person
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
 import app.feed.common.AppTheme
 import app.feed.common.TimelineAndroidxPagingSource
 import com.slack.circuit.backstack.rememberSaveableBackStack
@@ -57,8 +56,13 @@ class MainActivity : ComponentActivity() {
                 CircuitCompositionLocals(circuit) {
                     AppTheme {
                         Scaffold(
+                            containerColor = Color.White,
                             bottomBar = {
-                                BottomAppBar {
+                                BottomAppBar(
+                                    containerColor = Color(0xfff3f3f3),
+
+                                    ) {
+
                                     IconButton(onClick = {
                                         activeTab = HomeTab
                                         navigator.goTo(HomeTab)
@@ -66,23 +70,64 @@ class MainActivity : ComponentActivity() {
 
                                         if (activeTab == HomeTab) {
 
-                                            Icon(Icons.Filled.Home, "Home")
+                                            Icon(
+                                                painterResource(app.feed.common.R.drawable.home),
+                                                "Home",
+                                                modifier = Modifier.size(24.dp)
+                                            )
                                         } else {
-                                            Icon(Icons.Outlined.Home, "Home")
+                                            Icon(
+                                                painterResource(app.feed.common.R.drawable.home),
+                                                "Home",
+                                                modifier = Modifier.size(24.dp)
+                                            )
                                         }
 
                                     }
+
+                                    IconButton(onClick = {
+                                        activeTab = AccountTab
+                                        navigator.goTo(AccountTab)
+                                    }) {
+                                        Icon(
+                                            painterResource(app.feed.common.R.drawable.discover),
+                                            "Person",
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+
+                                    IconButton(onClick = {
+                                        activeTab = AccountTab
+                                        navigator.goTo(AccountTab)
+                                    }) {
+                                        Icon(
+                                            painterResource(app.feed.common.R.drawable.notifications),
+                                            "Person",
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+
                                     IconButton(onClick = {
                                         activeTab = AccountTab
                                         navigator.goTo(AccountTab)
                                     }) {
                                         if (activeTab == AccountTab) {
 
-                                            Icon(Icons.Filled.Person, "Person")
+                                            Icon(
+                                                painterResource(app.feed.common.R.drawable.user),
+                                                "Person",
+                                                modifier = Modifier.size(24.dp)
+                                            )
                                         } else {
-                                            Icon(Icons.Outlined.Person, "Person")
+                                            Icon(
+                                                painterResource(app.feed.common.R.drawable.user),
+                                                "Person",
+                                                modifier = Modifier.size(24.dp)
+                                            )
                                         }
                                     }
+
+
                                 }
                             }
                         ) { innerPadding ->

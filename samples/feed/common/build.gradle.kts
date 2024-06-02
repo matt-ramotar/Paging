@@ -1,3 +1,5 @@
+import org.mobilenativefoundation.storex.paging.tooling.plugins.configureAndroid
+
 plugins {
     id("storex.android.library")
     kotlin("android")
@@ -8,8 +10,9 @@ plugins {
 
 android {
     namespace = "app.feed.common"
-    compileSdk = libs.versions.android.compileSdk.get().toInt()
 }
+
+configureAndroid()
 
 dependencies {
     api(compose.runtime)
