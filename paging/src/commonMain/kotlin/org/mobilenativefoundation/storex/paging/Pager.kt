@@ -48,7 +48,7 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
         private val valueKClass: KClass<V>,
         private val errorKClass: KClass<E>,
         private val qKClass: KClass<Q>,
-        private val pagingConfig: PagingConfig<Id, K>,
+        private val pagingConfig: PagingConfig<Id, Q, K>,
         private val driverFactory: DriverFactory?,
         private val errorFactory: ErrorFactory<E>,
         private val operations: List<Operation<Id, Q, K, V, P, P>>
@@ -224,7 +224,7 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
 
         companion object {
             inline operator fun <reified Id : Comparable<Id>, reified Q : Quantifiable<Id>, reified K : Comparable<K>, reified V : Identifiable<Id, Q>, reified E : Any, P : Any> invoke(
-                pagingConfig: PagingConfig<Id, K>,
+                pagingConfig: PagingConfig<Id, Q, K>,
                 driverFactory: DriverFactory,
                 errorFactory: ErrorFactory<E>,
                 operations: List<Operation<Id, Q, K, V, P, P>>,
@@ -243,7 +243,7 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
             }
 
             inline operator fun <reified Id : Comparable<Id>, reified Q : Quantifiable<Id>, reified K : Comparable<K>, reified V : Identifiable<Id, Q>, reified E : Any> invoke(
-                pagingConfig: PagingConfig<Id, K>,
+                pagingConfig: PagingConfig<Id, Q, K>,
                 driverFactory: DriverFactory,
                 errorFactory: ErrorFactory<E>,
             ): Builder<Id, Q, K, V, E, Any> {
@@ -261,7 +261,7 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
             }
 
             inline operator fun <reified Id : Comparable<Id>, reified Q : Quantifiable<Id>, reified K : Comparable<K>, reified V : Identifiable<Id, Q>> invoke(
-                pagingConfig: PagingConfig<Id, K>,
+                pagingConfig: PagingConfig<Id, Q, K>,
                 driverFactory: DriverFactory,
             ): Builder<Id, Q, K, V, Throwable, Any> {
                 return Builder(
@@ -278,7 +278,7 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
             }
 
             inline operator fun <reified Id : Comparable<Id>, reified Q : Quantifiable<Id>, reified K : Comparable<K>, reified V : Identifiable<Id, Q>> invoke(
-                pagingConfig: PagingConfig<Id, K>,
+                pagingConfig: PagingConfig<Id, Q, K>,
             ): Builder<Id, Q, K, V, Throwable, Any> {
                 return Builder(
                     idKClass = Id::class,

@@ -21,7 +21,7 @@ class PageLoadStatusProvider<Id : Comparable<Id>, Q: Quantifiable<Id>, K : Any, 
     private val pageCache: PageCache<Id, Q, K, V>,
     private val itemCache: ItemCache<Id, Q, V>,
     private val db: PagingDb?,
-    private val pagingConfig: PagingConfig<Id, K>,
+    private val pagingConfig: PagingConfig<Id, Q, K>,
     private val sideEffects: List<SideEffect<Id, Q, V>>,
 ) {
     fun loadPage(params: PagingSource.LoadParams<K>): Flow<PageLoadStatus<Id, Q, K, V, E>> = flow {

@@ -19,7 +19,7 @@ class ConcurrentNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : A
     private val maxSize: Int = 500,
     private val fetchingStateHolder: FetchingStateHolder<Id, K>,
     private val sideEffects: List<SideEffect<Id, Q, V>>,
-    private val pagingConfig: PagingConfig<Id, K>
+    private val pagingConfig: PagingConfig<Id, Q, K>
 ) : NormalizedStore<Id, Q, K, V, E> {
 
     private val db = driverFactory?.let { PagingDb(driverFactory.createDriver()) }

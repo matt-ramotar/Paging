@@ -9,7 +9,7 @@ import org.mobilenativefoundation.storex.paging.internal.api.FetchingState
  * Default implementation of [FetchingStrategy].
  */
 class DefaultFetchingStrategy<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any>(
-    pagingConfig: PagingConfig<Id, K>
+    pagingConfig: PagingConfig<Id, Q, K>
 ) : FetchingStrategy<Id,Q, K, E> {
     private val prefetchDistance = pagingConfig.prefetchDistance
 

@@ -62,7 +62,7 @@ fun <Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V : Identifia
 
 
 inline fun <reified Id : Comparable<Id>, reified Q : Quantifiable<Id>, reified K : Comparable<K>, reified V : Identifiable<Id, Q>> androidx.paging.PagingSource<K, V>.storex(
-    pagingConfig: PagingConfig<Id, K>,
+    pagingConfig: PagingConfig<Id, Q, K>,
 ): Pager<Id, Q, K, V, Throwable> {
     return Pager.Builder<Id, Q, K, V>(
         pagingConfig = pagingConfig,
@@ -71,7 +71,7 @@ inline fun <reified Id : Comparable<Id>, reified Q : Quantifiable<Id>, reified K
 
 
 inline fun <reified Id : Comparable<Id>, reified Q : Quantifiable<Id>, reified K : Comparable<K>, reified V : Identifiable<Id, Q>> androidx.paging.PagingSource<K, V>.storex(
-    pagingConfig: PagingConfig<Id, K>,
+    pagingConfig: PagingConfig<Id, Q, K>,
     driverFactory: DriverFactory
 ): Pager<Id, Q, K, V, Throwable> {
     return Pager.Builder<Id, Q, K, V>(
@@ -82,7 +82,7 @@ inline fun <reified Id : Comparable<Id>, reified Q : Quantifiable<Id>, reified K
 
 
 inline fun <reified Id : Comparable<Id>, reified Q : Quantifiable<Id>, reified K : Comparable<K>, reified V : Identifiable<Id, Q>, reified E : Any> androidx.paging.PagingSource<K, V>.storex(
-    pagingConfig: PagingConfig<Id, K>,
+    pagingConfig: PagingConfig<Id, Q, K>,
     driverFactory: DriverFactory,
     errorFactory: ErrorFactory<E>
 ): Pager<Id, Q, K, V, E> {
@@ -95,7 +95,7 @@ inline fun <reified Id : Comparable<Id>, reified Q : Quantifiable<Id>, reified K
 
 
 inline fun <reified Id : Comparable<Id>, reified Q : Quantifiable<Id>, reified K : Comparable<K>, reified V : Identifiable<Id, Q>, reified E : Any, reified P : Any> androidx.paging.PagingSource<K, V>.storex(
-    pagingConfig: PagingConfig<Id, K>,
+    pagingConfig: PagingConfig<Id, Q, K>,
     driverFactory: DriverFactory,
     errorFactory: ErrorFactory<E>,
     operations: List<Operation<Id, Q, K, V, P, P>>,

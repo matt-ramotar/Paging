@@ -36,7 +36,7 @@ class RealNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
     private val maxSize: Int = 500,
     private val fetchingStateHolder: FetchingStateHolder<Id, K>,
     private val sideEffects: List<SideEffect<Id, Q, V>>,
-    private val pagingConfig: PagingConfig<Id, K>
+    private val pagingConfig: PagingConfig<Id, Q, K>
 ) : NormalizedStore<Id, Q, K, V, E> {
 
     private val db = driverFactory?.let { PagingDb(driverFactory.createDriver()) }
@@ -48,7 +48,7 @@ class RealNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
         var next: PageNode<K>? = null
     )
 
-    private val idToKeyMap = mutableMapOf<Quantifiable<Id>, K>()
+    private val idToKeyMap = mutableMapOf<Q, K>()
     private val keyToParamsMap = mutableMapOf<K, PagingSource.LoadParams<K>>()
 
     private var headPage: PageNode<K>? = null
@@ -56,8 +56,8 @@ class RealNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
 
     private val pageNodeMap = mutableMapOf<K, PageNode<K>>()
 
-    private var pageMemoryCache = mutableMapOf<K, List<Quantifiable<Id>>>()
-    private var itemMemoryCache = mutableMapOf<Quantifiable<Id>, V>()
+    private var pageMemoryCache = mutableMapOf<K, List<Q>>()
+    private var itemMemoryCache = mutableMapOf<Q, V>()
 
     private var sizeItems = 0
     private var sizePages = 0
@@ -74,7 +74,7 @@ class RealNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
 
     }
 
-    private fun removeItem(id: Quantifiable<Id>) {
+    private fun removeItem(id: Q) {
         val key = idToKeyMap[id]
 
         if (key != null) {
@@ -93,7 +93,7 @@ class RealNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
         }
 
         // TODO(): Only encode/decode if db != null
-        val encodedItemId = Json.encodeToString(registry.id.serializer(), id.value)
+        val encodedItemId = Json.encodeToString(registry.q.serializer(), id)
 
         db?.itemQueries?.removeItem(encodedItemId)
 
@@ -264,7 +264,7 @@ class RealNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
 
 
     private fun saveItemToDb(item: V, localParams: String) {
-        val id = Json.encodeToString(registry.id.serializer(), item.id.value)
+        val id = Json.encodeToString(registry.q.serializer(), item.id)
 
 
         val localItem = Item(
@@ -552,7 +552,7 @@ class RealNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
         id: Q,
         events: Flow<SelfUpdatingItem.Event<Id, Q, V, E>>
     ): ItemState<Id, Q, V, E> {
-        val encodedId = remember(id) { Json.encodeToString(registry.id.serializer(), id.value) }
+        val encodedId = remember(id) { Json.encodeToString(registry.q.serializer(), id) }
 
         val v by remember {
             derivedStateOf { itemMemoryCache[id] }
@@ -620,7 +620,7 @@ class RealNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
 
                                 // Update database
                                 val itemId =
-                                    Json.encodeToString(registry.id.serializer(), item.id.value)
+                                    Json.encodeToString(registry.q.serializer(), item.id)
                                 val updatedData =
                                     Json.encodeToString(registry.value.serializer(), item)
                                 db?.itemQueries?.updateItem(updatedData, itemId)
@@ -682,7 +682,7 @@ class RealNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
 
                         // Save to database
                         val itemId =
-                            Json.encodeToString(registry.id.serializer(), event.value.id.value)
+                            Json.encodeToString(registry.q.serializer(), event.value.id)
                         val updatedData =
                             Json.encodeToString(registry.value.serializer(), event.value)
                         db?.itemQueries?.updateItem(updatedData, itemId)
