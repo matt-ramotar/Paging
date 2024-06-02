@@ -42,7 +42,15 @@ data object HomeTabUi : Ui<HomeTab.State> {
                     is SingleLoadState.Error.InitialLoad -> Text("is SingleLoadState.Error.InitialLoad")
                     is SingleLoadState.Error.Refreshing -> Text("is SingleLoadState.Error.Refreshing")
                     SingleLoadState.Initial -> Text("SingleLoadState.Initial")
-                    SingleLoadState.Loaded -> Text("${itemState.item?.title} - SingleLoadState.Loaded")
+                    SingleLoadState.Loaded -> {
+                        val item = itemState.item
+                        if (item != null) {
+                            app.feed.common.ui.PostUi(item)
+                        } else {
+                            Text("LOADED BUT NO ITEM!")
+                        }
+                    }
+
                     SingleLoadState.Loading -> Text("SingleLoadState.Loading")
                     SingleLoadState.Refreshing -> Text("SingleLoadState.Refreshing")
                 }
@@ -105,10 +113,10 @@ fun <Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any
     }
 }
 
-sealed class Nullable<T: Any> {
+sealed class Nullable<T : Any> {
     abstract val data: T?
 
-    data class NonNull<T: Any>(
+    data class NonNull<T : Any>(
         override val data: T
     ) : Nullable<T>()
 

@@ -6,5 +6,20 @@ import org.mobilenativefoundation.storex.paging.Identifiable
 @Serializable
 data class Post(
     override val id: PostId,
-    val title: String,
+    val userId: String,
+    val text: String,
+    val createdAt: Long,
+    val retweetCount: Int,
+    val favoriteCount: Int,
+    val isRetweetedByViewer: Boolean,
+    val isLikedByViewer: Boolean,
+    val parentPostId: String? = null
 ) : Identifiable<String, PostId>
+
+
+@Serializable
+data class User(
+    val id: String,
+    val name: String,
+    val profileImageUrl: String
+)

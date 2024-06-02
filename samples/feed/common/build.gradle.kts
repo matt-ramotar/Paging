@@ -27,6 +27,7 @@ dependencies {
     api(libs.ktor.serialization.json)
     api(libs.ktor.negotiation)
     api(libs.androidx.paging)
+    api(libs.kotlinx.datetime)
 
     implementation(projects.paging)
 
@@ -34,4 +35,6 @@ dependencies {
 
     // ViewModel utilities for Compose
     api("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.1")
+
+    api(libs.swipe)
 }
