@@ -75,7 +75,7 @@ class PostCollection {
             byId[postId] = Post(
                 id = postId,
                 userId = userId.toString(),
-                text = "Woofsum woofor sit amet, consectetur woofipiscing elit. Woofellus woofrerit sed woofus commodo wooferdum.",
+                text = "Woofsem woofor sit amet, consectetur woofipiscing elit. Woofellus woofrerit sed woofus commodo wooferdum.",
                 createdAt = idToDateMap[index]!!,
                 retweetCount = 0,
                 favoriteCount = 0,
