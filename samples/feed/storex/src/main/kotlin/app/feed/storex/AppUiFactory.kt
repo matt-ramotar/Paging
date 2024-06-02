@@ -86,7 +86,7 @@ fun <Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any
         }
     }
 
-    LazyColumn {
+    LazyColumn(modifier) {
         items(items, key = {
             when (it) {
                 is NullableQ.NonNull -> it.data.value
