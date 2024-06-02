@@ -6,6 +6,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import app.feed.common.models.GetFeedRequest
 import app.feed.common.models.Post
 import app.feed.common.models.PostId
+import app.feed.common.ui.PostDetailScreen
+import app.feed.common.ui.PostDetailScreenPresenter
 import com.slack.circuit.runtime.CircuitContext
 import com.slack.circuit.runtime.Navigator
 import com.slack.circuit.runtime.presenter.Presenter
@@ -13,15 +15,19 @@ import com.slack.circuit.runtime.screen.Screen
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
-import org.mobilenativefoundation.storex.paging.*
+import org.mobilenativefoundation.storex.paging.LoadDirection
+import org.mobilenativefoundation.storex.paging.LoadStrategy
+import org.mobilenativefoundation.storex.paging.Pager
+import org.mobilenativefoundation.storex.paging.PagingRequest
 
 data class AppPresenterFactory(
     private val pager: Pager<String, PostId, GetFeedRequest, Post, Throwable>
 ) : Presenter.Factory {
     override fun create(screen: Screen, navigator: Navigator, context: CircuitContext): Presenter<*>? {
         return when (screen) {
-            is HomeTab -> HomeTabPresenter(pager)
+            is HomeTab -> HomeTabPresenter(navigator, pager)
             is AccountTab -> AccountTabPresenter()
+            is PostDetailScreen -> PostDetailScreenPresenter(screen.postId)
             else -> null
         }
     }
@@ -29,7 +35,10 @@ data class AppPresenterFactory(
 }
 
 
-class HomeTabPresenter(private val pager: Pager<String, PostId, GetFeedRequest, Post, Throwable>) :
+class HomeTabPresenter(
+    private val navigator: Navigator,
+    private val pager: Pager<String, PostId, GetFeedRequest, Post, Throwable>
+) :
     Presenter<HomeTab.State> {
 
     private val requests = MutableSharedFlow<PagingRequest<GetFeedRequest>>(replay = 1)
@@ -55,6 +64,10 @@ class HomeTabPresenter(private val pager: Pager<String, PostId, GetFeedRequest, 
                         )
                     }
                 }
+
+                is HomeTab.Event.GoToDetailScreen -> navigator.goTo(
+                    PostDetailScreen(event.postId)
+                )
             }
         }
     }

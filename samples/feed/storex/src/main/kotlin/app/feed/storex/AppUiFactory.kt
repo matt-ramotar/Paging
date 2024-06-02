@@ -16,6 +16,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import app.feed.common.models.Post
 import app.feed.common.models.PostId
+import app.feed.common.ui.PostDetailScreen
 import com.slack.circuit.runtime.CircuitContext
 import com.slack.circuit.runtime.screen.Screen
 import com.slack.circuit.runtime.ui.Ui
@@ -28,6 +29,7 @@ data object AppUiFactory : Ui.Factory {
         return when (screen) {
             is HomeTab -> HomeTabUi
             is AccountTab -> AccountTabUi
+            is PostDetailScreen -> PostDetailScreenUi
             else -> null
         }
     }
@@ -41,7 +43,12 @@ data object HomeTabUi : Ui<HomeTab.State> {
         Column {
 
             Row(modifier = Modifier.fillMaxWidth().padding(top = 24.dp), horizontalArrangement = Arrangement.Center) {
-                Icon(painterResource(app.feed.common.R.drawable.storex), "storex", modifier = Modifier.size(50.dp), tint = Color(0xff212121))
+                Icon(
+                    painterResource(app.feed.common.R.drawable.storex),
+                    "storex",
+                    modifier = Modifier.size(50.dp),
+                    tint = Color(0xff212121)
+                )
             }
 
             LazySelfUpdatingItems<String, PostId, Post, Throwable>(state.postIds) { itemState ->
@@ -55,7 +62,9 @@ data object HomeTabUi : Ui<HomeTab.State> {
                         Column {
                             val item = itemState.item
                             if (item != null) {
-                                app.feed.common.ui.PostListUi(item)
+                                app.feed.common.ui.PostListUi(item) {
+                                    state.eventSink(HomeTab.Event.GoToDetailScreen(item.id))
+                                }
                             } else {
                                 Text("LOADED BUT NO ITEM!")
                             }

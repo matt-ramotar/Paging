@@ -1,12 +1,14 @@
 package app.feed.common.ui
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,7 +21,6 @@ import androidx.compose.ui.unit.dp
 import app.feed.common.R
 import app.feed.common.models.Post
 import kotlinx.datetime.*
-import kotlin.math.absoluteValue
 
 
 fun timeAgo(dateTime: LocalDateTime): String {
@@ -39,9 +40,15 @@ fun timeAgo(dateTime: LocalDateTime): String {
 }
 
 @Composable
-fun PostListUi(post: Post) {
+fun PostListUi(post: Post, onSelect: () -> Unit) {
 
-    Row(modifier = Modifier.padding(16.dp)) {
+    val createdAt by remember {
+        derivedStateOf {
+            Instant.fromEpochMilliseconds(post.createdAt).toLocalDateTime(TimeZone.currentSystemDefault())
+        }
+    }
+
+    Row(modifier = Modifier.clickable{onSelect()}.padding(16.dp)) {
 
         Image(
             painterResource(R.drawable.tag), "Tag", modifier = Modifier.size(60.dp).clip(
@@ -63,7 +70,7 @@ fun PostListUi(post: Post) {
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                Text("${post.createdAt.monthNumber}/${post.createdAt.dayOfMonth}", color = Color(0xff424242))
+                Text("${createdAt.month.number}/${createdAt.dayOfMonth}/${createdAt.year.mod(2000)}", color = Color(0xff424242))
             }
 
             Spacer(modifier = Modifier.width(16.dp))

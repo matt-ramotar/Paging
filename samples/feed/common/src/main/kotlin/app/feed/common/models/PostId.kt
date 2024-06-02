@@ -1,10 +1,13 @@
 package app.feed.common.models
 
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
 import kotlinx.serialization.Serializable
 import org.mobilenativefoundation.storex.paging.Quantifiable
 
 @Serializable
-data class PostId(override val value: String) : Quantifiable<String> {
+@Parcelize
+data class PostId(override val value: String) : Quantifiable<String>, Parcelable {
     override fun minus(other: Quantifiable<String>): Int {
 
         return if (value == PLACEHOLDER && other.value == PLACEHOLDER) {

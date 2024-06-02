@@ -1,6 +1,8 @@
 package app.feed.common.models
 
+import android.os.Parcelable
 import kotlinx.datetime.LocalDateTime
+import kotlinx.parcelize.Parcelize
 import kotlinx.serialization.Serializable
 import org.mobilenativefoundation.storex.paging.Identifiable
 
@@ -9,7 +11,7 @@ data class Post(
     override val id: PostId,
     val userId: String,
     val text: String,
-    val createdAt: LocalDateTime,
+    val createdAt: Long,
     val retweetCount: Int,
     val favoriteCount: Int,
     val commentCount: Int,

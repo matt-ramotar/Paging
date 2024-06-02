@@ -4,6 +4,8 @@ import app.feed.common.models.Post
 import app.feed.common.models.PostId
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.Month
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toInstant
 
 
 fun createdAt(month: Month, day: Int): LocalDateTime {
@@ -55,15 +57,14 @@ class PostCollection {
     val groupedIds = distributeIdsToDates(ids, createdAtDates)
 
 
-    val idToDateMap = mutableMapOf<Int, LocalDateTime>()
-
+    val idToDateMap = mutableMapOf<Int, Long>()
 
 
     init {
 
         for ((date, idList) in groupedIds) {
             for (id in idList) {
-                idToDateMap[id] = date
+                idToDateMap[id] = date.toInstant(TimeZone.currentSystemDefault()).toEpochMilliseconds()
             }
         }
 
