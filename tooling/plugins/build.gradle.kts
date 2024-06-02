@@ -31,5 +31,11 @@ gradlePlugin {
             implementationClass =
                 "org.mobilenativefoundation.storex.paging.tooling.plugins.KotlinAndroidLibraryConventionPlugin"
         }
+
+        register("androidApplicationConventionPlugin") {
+            id = "storex.android.application"
+            implementationClass =
+                "org.mobilenativefoundation.storex.paging.tooling.plugins.AndroidApplicationConventionPlugin"
+        }
     }
 }

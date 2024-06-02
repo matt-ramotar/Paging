@@ -16,3 +16,6 @@ rootProject.name = "storex-paging"
 include(":paging")
 include(":paging-benchmarks")
 include(":paging-test")
+include(":samples:feed:androidx")
+include(":samples:feed:common")
+include(":samples:feed:storex")
