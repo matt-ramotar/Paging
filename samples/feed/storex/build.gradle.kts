@@ -1,10 +1,13 @@
 plugins {
     id("storex.android.application")
     alias(libs.plugins.compose)
+    alias(libs.plugins.kotlin.plugin.parcelize)
+    alias(libs.plugins.ksp)
+
 }
 
 android {
-    namespace = "storex.feed"
+    namespace = "app.feed.storex"
 
     defaultConfig {
         applicationId = "storex.feed"
@@ -23,4 +26,9 @@ android {
 dependencies {
     implementation(projects.paging)
     implementation(projects.samples.feed.common)
+    implementation(libs.kotlinInject.runtime)
+    ksp(libs.kotlinInject.compiler)
+}
+ksp {
+    arg("me.tatarka.inject.generateCompanionExtensions", "true")
 }

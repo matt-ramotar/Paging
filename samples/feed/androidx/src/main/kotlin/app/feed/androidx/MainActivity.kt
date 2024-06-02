@@ -1,4 +1,4 @@
-package androidx.feed
+package app.feed.androidx
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity

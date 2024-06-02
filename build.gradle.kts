@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.ktlint)
     alias(libs.plugins.kotlinx.benchmark) apply false
     alias(libs.plugins.allopen) apply false
+    alias(libs.plugins.kotlin.plugin.parcelize) apply false
 }
 
 buildscript {

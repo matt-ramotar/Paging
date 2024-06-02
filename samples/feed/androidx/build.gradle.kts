@@ -1,13 +1,14 @@
 plugins {
     id("storex.android.application")
     alias(libs.plugins.compose)
+    alias(libs.plugins.kotlin.plugin.parcelize)
 }
 
 android {
-    namespace = "androidx.feed"
+    namespace = "app.feed.androidx"
 
     defaultConfig {
-        applicationId = "androidx.feed"
+        applicationId = "app.feed.androidx"
         versionCode = 1
         versionName = "1.0"
     }

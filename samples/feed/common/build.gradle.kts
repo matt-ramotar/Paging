@@ -2,10 +2,12 @@ plugins {
     id("storex.android.library")
     kotlin("android")
     alias(libs.plugins.compose)
+    alias(libs.plugins.kotlin.plugin.parcelize)
+    alias(libs.plugins.serialization)
 }
 
 android {
-    namespace = "common.feed"
+    namespace = "app.feed.common"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 }
 
@@ -24,4 +26,11 @@ dependencies {
     api(libs.ktor.client.android)
     api(libs.ktor.serialization.json)
     api(libs.ktor.negotiation)
+
+    implementation(projects.paging)
+
+    api("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.1")
+
+    // ViewModel utilities for Compose
+    api("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.1")
 }

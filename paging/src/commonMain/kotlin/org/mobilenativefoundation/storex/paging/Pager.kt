@@ -17,8 +17,12 @@ import org.mobilenativefoundation.storex.paging.internal.impl.*
 import org.mobilenativefoundation.storex.paging.internal.impl.DefaultErrorFactory
 import kotlin.reflect.KClass
 
+interface SelfUpdatingItemFactory<Id : Comparable<Id>, V : Identifiable<Id>, E : Any> {
+    fun createSelfUpdatingItem(id: Quantifiable<Id>): SelfUpdatingItem<Id, V, E>
+}
 
-interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
+
+interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> : SelfUpdatingItemFactory<Id, V, E> {
 
     // TODO(): Design decision to support incremental/decremental loading as well as manually force fetching by explicitly providing params
 
@@ -29,9 +33,6 @@ interface Pager<Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> {
         requests: Flow<PagingRequest<K>>,
         recompositionMode: RecompositionMode = RecompositionMode.ContextClock
     ): Flow<PagingState<Id, E>>
-
-    fun selfUpdatingItem(id: Quantifiable<Id>): SelfUpdatingItem<Id, V, E>
-
 
     @OptIn(InternalSerializationApi::class)
     class Builder<Id : Comparable<Id>, K : Comparable<K>, V : Identifiable<Id>, E : Any, P : Any>(

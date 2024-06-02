@@ -44,6 +44,9 @@ kotlin {
         androidMain {
             dependencies {
                 api(libs.sqldelight.android)
+
+                api("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.1")
+                api("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.1")
             }
         }
 

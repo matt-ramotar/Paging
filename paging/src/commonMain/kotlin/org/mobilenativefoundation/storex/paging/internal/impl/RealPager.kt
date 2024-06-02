@@ -55,7 +55,7 @@ class RealPager<Id : Comparable<Id>, K : Comparable<K>, V : Identifiable<Id>, E 
         handleEagerLoading()
     }
 
-    override fun selfUpdatingItem(id: Quantifiable<Id>): SelfUpdatingItem<Id, V, E> {
+    override fun createSelfUpdatingItem(id: Quantifiable<Id>): SelfUpdatingItem<Id, V, E> {
         println("SELF UPDATING ITEM CALLED")
         return normalizedStore.selfUpdatingItem(id)
     }
