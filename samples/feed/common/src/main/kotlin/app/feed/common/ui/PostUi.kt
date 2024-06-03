@@ -226,6 +226,10 @@ fun PostDetailUi(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            Text("#p${post.id.value} #g${1 + (10 - post.id.value.toInt().mod(10)).mod(10)}", color = Color(0xff229BF0))
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
