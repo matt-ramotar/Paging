@@ -1,14 +1,20 @@
 package org.mobilenativefoundation.storex.paging
 
-class PagingState<Id : Comparable<Id>, Q: Quantifiable<Id>, E : Any>(
+class PagingState<Id : Comparable<Id>, Q : Quantifiable<Id>, E : Any>(
     val ids: List<Q?>,
-    val loadStates: CombinedPagingLoadStates<E>
+    val loadStates: CombinedPagingLoadStates<E>,
 ) {
     companion object {
-        fun <Id : Comparable<Id>, Q: Quantifiable<Id>, E : Any> initial() = PagingState<Id, Q, E>(
+        fun <Id : Comparable<Id>, Q : Quantifiable<Id>, E : Any> initial() = PagingState<Id, Q, E>(
             emptyList(),
             CombinedPagingLoadStates.initial()
         )
     }
 }
 
+
+class PagingStateWithEventSink<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, E : Any>(
+    val ids: List<Q?>,
+    val loadStates: CombinedPagingLoadStates<E>,
+    val eventSink: (PagingRequest<K>) -> Unit
+)

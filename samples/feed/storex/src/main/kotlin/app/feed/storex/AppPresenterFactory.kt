@@ -1,6 +1,8 @@
 package app.feed.storex
 
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import app.feed.common.models.GetFeedRequest
 import app.feed.common.models.Post
 import app.feed.common.models.PostId
@@ -13,10 +15,7 @@ import com.slack.circuit.runtime.screen.Screen
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
-import org.mobilenativefoundation.storex.paging.LoadDirection
-import org.mobilenativefoundation.storex.paging.LoadStrategy
-import org.mobilenativefoundation.storex.paging.Pager
-import org.mobilenativefoundation.storex.paging.PagingRequest
+import org.mobilenativefoundation.storex.paging.*
 
 data class AppPresenterFactory(
     private val pager: Pager<String, PostId, GetFeedRequest, Post, Throwable>
@@ -44,33 +43,25 @@ class HomeTabPresenter(
     @Composable
     override fun present(): HomeTab.State {
 
-        val scope = rememberCoroutineScope()
+        val pagingState by pager.collectAsState()
 
-        val pagingStateFlow = remember(Unit) {
-            println("*** DERIVING STATE 1")
-            pager.pagingStateFlow(scope, requests)
-        }
-
-        val pagingState = pagingStateFlow.collectAsState()
-
-        return HomeTab.State("", pagingState.value.ids.toImmutableList()) { event ->
+        return HomeTab.State("", pagingState.ids.toImmutableList()) { event ->
 
             when (event) {
                 HomeTab.Event.Refresh -> {
                     println("*() Received event $event")
-                    scope.launch {
-                        requests.emit(
-                            PagingRequest.skipQueue(
-                                key = GetFeedRequest(
-                                    cursor = null,
-                                    size = 20,
-                                    headers = mutableMapOf("type" to "refresh")
-                                ),
-                                direction = LoadDirection.Prepend,
-                                strategy = LoadStrategy.SkipCache,
-                            )
+
+                    pagingState.eventSink(
+                        PagingRequest.skipQueue(
+                            key = GetFeedRequest(
+                                cursor = null,
+                                size = 20,
+                                headers = mutableMapOf("type" to "refresh")
+                            ),
+                            direction = LoadDirection.Prepend,
+                            strategy = LoadStrategy.SkipCache,
                         )
-                    }
+                    )
                 }
 
                 is HomeTab.Event.GoToDetailScreen -> navigator.goTo(
