@@ -21,6 +21,7 @@ kotlin {
                 implementation(libs.kotlin.stdlib)
                 implementation(libs.touchlab.kermit)
                 implementation(libs.kotlinx.coroutines.core)
+                api(compose.material)
                 api(libs.store)
                 api(libs.store.cache)
                 // implementation(libs.kotlinx.datetime)

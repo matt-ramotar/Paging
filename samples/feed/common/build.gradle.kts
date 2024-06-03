@@ -17,6 +17,7 @@ configureAndroid()
 dependencies {
     api(compose.runtime)
     api(compose.material3)
+    api(compose.material)
     api(libs.androidx.appCompat)
     api(libs.androidx.compose.activity)
     api(libs.androidx.core)

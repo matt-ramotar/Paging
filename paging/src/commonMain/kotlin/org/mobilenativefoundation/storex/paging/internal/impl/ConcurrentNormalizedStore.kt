@@ -54,6 +54,10 @@ class ConcurrentNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : A
         TODO()
     }
 
+    override fun getItem(id: Q): V? {
+        TODO("Not yet implemented")
+    }
+
     override fun invalidate() {
         pageCache.clear()
         itemCache.clear()

@@ -397,6 +397,15 @@ class RealNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
         }
     }
 
+    override fun getItem(id: Q): V? {
+        return itemMemoryCache[id] ?: db?.itemQueries?.getItem(Json.encodeToString(registry.q.serializer(), id))
+            ?.let { json ->
+                json.executeAsOneOrNull()?.let {
+                    Json.decodeFromString(registry.value.serializer(), it.data_)
+                }
+            }
+    }
+
     override fun loadPage(params: PagingSource.LoadParams<K>): Flow<PageLoadStatus<Id, Q, K, V, E>> =
         flow {
             println("PARAMS = $params")

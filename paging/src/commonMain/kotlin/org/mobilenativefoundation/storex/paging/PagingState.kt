@@ -11,3 +11,4 @@ class PagingState<Id : Comparable<Id>, Q: Quantifiable<Id>, E : Any>(
         )
     }
 }
+

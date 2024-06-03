@@ -43,6 +43,11 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
         requests: Flow<PagingRequest<K>>
     ): StateFlow<PagingState<Id, Q, E>>
 
+    fun pagingItems(
+        coroutineScope: CoroutineScope,
+        requests: Flow<PagingRequest<K>>,
+    ): StateFlow<List<V>>
+
     @OptIn(InternalSerializationApi::class)
     class Builder<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V : Identifiable<Id, Q>, E : Any, P : Any>(
         private val idKClass: KClass<Id>,

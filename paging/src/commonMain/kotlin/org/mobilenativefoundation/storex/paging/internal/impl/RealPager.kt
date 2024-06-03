@@ -92,6 +92,12 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
             pagingState(requests)
         }
 
+    override fun pagingItems(coroutineScope: CoroutineScope, requests: Flow<PagingRequest<K>>): StateFlow<List<V>> {
+        return coroutineScope.launchMolecule(RecompositionMode.ContextClock.toCashRecompositionMode()) {
+            pagingState(requests).ids.mapNotNull { id -> id?.let { normalizedStore.getItem(it) } }
+        }
+    }
+
 
     @Composable
     private fun pagingState(requests: Flow<PagingRequest<K>>): PagingState<Id, Q, E> {

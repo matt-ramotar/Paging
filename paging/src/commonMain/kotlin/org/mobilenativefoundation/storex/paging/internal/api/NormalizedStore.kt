@@ -8,6 +8,7 @@ interface NormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
     fun selfUpdatingItem(id: Q): SelfUpdatingItem<Id, Q, V, E>
     fun selfUpdatingPage(key: K): SelfUpdatingPage<Id, Q, K, V, E>
     fun loadPage(params: PagingSource.LoadParams<K>): Flow<PageLoadStatus<Id,Q, K, V, E>>
+    fun getItem(id: Q): V?
     fun clear(key: K)
     fun invalidate()
 }
