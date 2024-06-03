@@ -92,6 +92,7 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
             pagingState(requests)
         }
 
+    // TODO(): This is not efficient - we should extract the common logic from [pagingState] - we shouldn't be getting ids and then remapping to values when we have values initially
     override fun pagingItems(coroutineScope: CoroutineScope, requests: Flow<PagingRequest<K>>): StateFlow<List<V>> {
         return coroutineScope.launchMolecule(RecompositionMode.ContextClock.toCashRecompositionMode()) {
             pagingState(requests).ids.mapNotNull { id -> id?.let { normalizedStore.getItem(it) } }
