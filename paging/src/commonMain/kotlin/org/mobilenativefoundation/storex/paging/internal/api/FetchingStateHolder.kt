@@ -12,4 +12,6 @@ interface FetchingStateHolder<Id : Comparable<Id>, Q: Quantifiable<Id>, K : Any>
     fun updateMinItemAccessedSoFar(id: Q)
     fun updateMaxRequestSoFar(key: K)
     fun updateMinRequestSoFar(key: K)
+    fun updateMinItemLoadedSoFar(id: Q)
+    fun updateMaxItemLoadedSoFar(id: Q)
 }

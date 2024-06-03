@@ -20,6 +20,7 @@ class TimelinePagerFactory(
 
     private val server = Server()
     private val api = TimelineApi(server)
+    private val cursorHistory = LinkedHashMap<PostId, PostId>()
 
     fun create(
         coroutineDispatcher: CoroutineDispatcher = DispatcherProvider.io,
@@ -64,11 +65,9 @@ class TimelinePagerFactory(
                 prevKey = getPreviousCursor(params.key.cursor)?.let { params.key.copy(cursor = it) },
                 nextKey = nextKey,
                 origin = PagingSource.LoadResult.Data.Origin.Network,
-
-                )
+            )
         }
 
-    private val cursorHistory = LinkedHashMap<PostId, PostId>()
 
     private fun getPreviousCursor(currentCursor: PostId?): PostId? {
         if (currentCursor == null) return null

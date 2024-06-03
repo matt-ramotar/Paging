@@ -47,7 +47,9 @@ data object HomeTabUi : Ui<HomeTab.State> {
                 )
             }
 
-            LazySelfUpdatingPagingItems<String, PostId, Post, Throwable>(state.postIds) { itemState ->
+            LazySelfUpdatingPagingItems<String, PostId, Post, Throwable>(state.postIds, {
+                state.eventSink(HomeTab.Event.Refresh)
+            }) { itemState ->
                 when (itemState.loadState) {
                     SingleLoadState.Cleared -> Text("SingleLoadState.Cleared")
                     is SingleLoadState.Error.InitialLoad -> Text("is SingleLoadState.Error.InitialLoad")

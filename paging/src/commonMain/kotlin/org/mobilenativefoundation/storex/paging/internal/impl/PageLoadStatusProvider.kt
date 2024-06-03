@@ -57,9 +57,9 @@ class PageLoadStatusProvider<Id : Comparable<Id>, Q: Quantifiable<Id>, K : Any, 
                 }
             }
 
-            LoadStrategy.Refresh -> {
-                // TODO: Implement refresh strategy
-            }
+//            LoadStrategy.Refresh -> {
+//                // TODO: Implement refresh strategy
+//            }
         }
     }
 

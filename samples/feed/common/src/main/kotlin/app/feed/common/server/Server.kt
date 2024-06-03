@@ -20,7 +20,21 @@ class Server {
     }
 
     fun getFeed(request: GetFeedRequest): GetFeedResponse {
-        return feedService.getFeed(request)
+
+        println("*** GET FEED - ${request.headers}")
+        if (request.headers.containsKey("type")) {
+            val type = request.headers.getValue("type")
+            when (type) {
+                "refresh" -> {
+                    db.postCollection().addPosts(request.size)
+                    println("*** ***HITTING IN GET FEED")
+                    return feedService.getFeed(request, true)
+                }
+            }
+
+        }
+
+        return feedService.getFeed(request, false)
     }
 
 }

@@ -7,7 +7,7 @@ import app.feed.common.server.db.TimelineDb
 class FeedService(
     private val db: TimelineDb
 ) {
-    fun getFeed(key: GetFeedRequest): GetFeedResponse {
+    fun getFeed(key: GetFeedRequest, isRefresh: Boolean): GetFeedResponse {
 
 
         println("GETTING FEED $key")
@@ -19,12 +19,13 @@ class FeedService(
         val indexOfLast = minOf((indexOfFirst + key.size), posts.lastIndex)
         println("INDEX OF LAST = $indexOfLast")
         println("INDEX OF NEXT CURSOR = $indexOfLast")
-        val nextCursor = if (indexOfLast < posts.size) posts[indexOfLast].id else null
+        val nextCursor = if (isRefresh) null else if (indexOfLast < posts.size) posts[indexOfLast].id else null
         println("NEXT CURSOR = $nextCursor")
 
         return GetFeedResponse(
             posts = posts.subList(indexOfFirst, indexOfLast),
-            nextCursor = nextCursor
+            nextCursor = nextCursor,
+            prevCursor = key.cursor
         )
     }
 }

@@ -87,10 +87,13 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
     override fun pagingStateFlow(
         composableCoroutineScope: CoroutineScope,
         requests: Flow<PagingRequest<K>>
-    ): StateFlow<PagingState<Id, Q, E>> =
-        composableCoroutineScope.launchMolecule(RecompositionMode.ContextClock.toCashRecompositionMode()) {
+    ): StateFlow<PagingState<Id, Q, E>> {
+
+        println("*** BEFORE LAUNCHING MOLECULE")
+        return composableCoroutineScope.launchMolecule(RecompositionMode.ContextClock.toCashRecompositionMode()) {
             pagingState(requests)
         }
+    }
 
     // TODO(): This is not efficient - we should extract the common logic from [pagingState] - we shouldn't be getting ids and then remapping to values when we have values initially
     override fun pagingItems(coroutineScope: CoroutineScope, requests: Flow<PagingRequest<K>>): StateFlow<List<V>> {
@@ -111,12 +114,12 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
 
         val scope = rememberCoroutineScope()
 
-        LaunchedEffect(requests) {
+        LaunchedEffect(Unit) {
 
             println("LAUNCHING 1")
 
-            requests.collect { request ->
-                println("RECEIVED REQUEST $request")
+            requests.distinctUntilChanged().collect { request ->
+                println("*** RECEIVED REQUEST")
                 when (request) {
                     is PagingRequest.ProcessQueue -> {
                         when (request.direction) {
@@ -131,18 +134,27 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
                     }
 
                     is PagingRequest.SkipQueue -> {
-                        println("SKIP QUEUE HITTING HERE")
-
-
-                        addPendingQueueJob(request.key)
+                        println("*** SKIP QUEUE HITTING HERE")
+                        println("*** ${request.key}")
 
                         when (request.direction) {
                             LoadDirection.Prepend -> {
+
+                                if (pendingSkipQueueJobs[request.key]?.inFlight == true) {
+                                    // No op, this is a refresh request already in flight
+                                } else {
+
+                                addPendingQueueJob(request.key)
                                 handlePrependLoading(request.toPagingSourceLoadParams())
+                                }
+
+
                             }
 
                             // We don't add next to queue, because we are only agreeing to skip the queue for this key
                             LoadDirection.Append -> {
+                                addPendingQueueJob(request.key)
+
                                 handleAppendLoading(
                                     request.toPagingSourceLoadParams(),
                                     addNextToQueue = false
@@ -198,11 +210,11 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
 //            handleForwardPrefetching()
 //            handleBackwardPrefetching()
 //        }
-
-        LaunchedEffect(fetchingState.minItemAccessedSoFar?.value) {
-            println("&&&& - FETCHING STATE MIN ITEM ACCESSED CHANGED ${fetchingState.minItemAccessedSoFar?.value}")
-            processPrependQueue()
-        }
+//
+//        LaunchedEffect(fetchingState.minItemAccessedSoFar?.value) {
+//            println("&&&& - FETCHING STATE MIN ITEM ACCESSED CHANGED ${fetchingState.minItemAccessedSoFar?.value}")
+//            processPrependQueue()
+//        }
 
         LaunchedEffect(fetchingState.maxItemAccessedSoFar?.value) {
             println("&&&& - FETCHING STATE MAX ITEM ACCESSED CHANGED ${fetchingState.maxItemAccessedSoFar?.value}")
@@ -318,7 +330,12 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
         updateStateWithPrependLoading()
 
         try {
+
+            println("*** HITTING IN PREPEND LOADING")
             normalizedStore.loadPage(loadParams).first {
+
+                println("*** PREPEND LOADING RESULT = $it")
+
                 when (it) {
                     is PageLoadStatus.Empty -> {
                         // TODO(): Enable debug logging
@@ -332,7 +349,7 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
                     }
 
                     is PageLoadStatus.Loading -> {
-                        updateStateWithAppendLoading() // TODO(): Is this right?
+                        updateStateWithPrependLoading() // TODO(): Is this right?
                         false
                     }
 
@@ -368,6 +385,8 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
                                 )
                             )
                         }
+
+                        updateExistingPendingQueueJob(loadParams.key, inFlight = false, completed = true)
 
                         true
                     }
@@ -449,7 +468,7 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
                     is PageLoadStatus.Empty -> {
                         // TODO(): Enable debug logging
 
-                        updateExistingPendingQueueJob(loadParams.key, inFlight = true, completed = true)
+                        updateExistingPendingQueueJob(loadParams.key, inFlight = false, completed = true)
 
                         true
 
@@ -489,7 +508,7 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
                     }
 
                     is PageLoadStatus.SkippingLoad -> {
-                        updateExistingPendingQueueJob(loadParams.key, inFlight = true, completed = true)
+                        updateExistingPendingQueueJob(loadParams.key, inFlight = false, completed = true)
 
                         true
                     }
@@ -517,7 +536,7 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
 
                         }
 
-                        updateExistingPendingQueueJob(loadParams.key, inFlight = true, completed = true)
+                        updateExistingPendingQueueJob(loadParams.key, inFlight = false, completed = true)
 
 
                         true

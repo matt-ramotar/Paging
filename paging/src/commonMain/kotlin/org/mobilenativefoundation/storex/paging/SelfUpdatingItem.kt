@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 class SelfUpdatingItem<Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any>(
     private val presenter: @Composable (events: Flow<Event<Id, Q, V, E>>) -> ItemState<Id, Q, V, E>
 ) {
-    private val _events = MutableSharedFlow<Event<Id, Q, V, E>>()
+    private val _events = MutableSharedFlow<Event<Id, Q, V, E>>(extraBufferCapacity = 20)
 
     @Composable
     operator fun invoke() = presenter(_events)

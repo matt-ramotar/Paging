@@ -7,12 +7,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
 
 @Composable
-fun <Id : Comparable<Id>, Q: Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any> StoreCompositionLocals(
-    selfUpdatingItemFactory: SelfUpdatingItemFactory<Id, Q, V, E>,
+fun <Id : Comparable<Id>, Q: Quantifiable<Id>, K: Any, V : Identifiable<Id, Q>, E : Any> StoreCompositionLocals(
+    pager: Pager<Id, Q, K, V, E>,
     content: @Composable () -> Unit,
 ) {
     CompositionLocalProvider(
-        LocalSelfUpdatingItemFactory provides selfUpdatingItemFactory,
+        LocalSelfUpdatingItemFactory provides pager,
+        LocalPager provides pager,
     ) {
         content()
     }
@@ -23,6 +24,8 @@ fun <Id : Comparable<Id>, Q: Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any>
 val LocalSelfUpdatingItemFactory: ProvidableCompositionLocal<SelfUpdatingItemFactory<*,*, *, *>> =
     staticCompositionLocalOf { throw IllegalStateException("SelfUpdatingItemFactory not provided") }
 
+val LocalPager: ProvidableCompositionLocal<Pager<*, *, *, *, *>> =
+    staticCompositionLocalOf { throw IllegalStateException("Pager not provided") }
 
 
 

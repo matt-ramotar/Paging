@@ -1,8 +1,6 @@
 package app.feed.storex
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.*
 import app.feed.common.models.GetFeedRequest
 import app.feed.common.models.Post
 import app.feed.common.models.PostId
@@ -41,25 +39,35 @@ class HomeTabPresenter(
 ) :
     Presenter<HomeTab.State> {
 
-    private val requests = MutableSharedFlow<PagingRequest<GetFeedRequest>>(replay = 1)
+    private val requests = MutableSharedFlow<PagingRequest<GetFeedRequest>>(replay = 20)
 
     @Composable
     override fun present(): HomeTab.State {
 
         val scope = rememberCoroutineScope()
 
-        val pagingState = pager.pagingStateFlow(scope, requests).collectAsState()
+        val pagingStateFlow = remember(Unit) {
+            println("*** DERIVING STATE 1")
+            pager.pagingStateFlow(scope, requests)
+        }
+
+        val pagingState = pagingStateFlow.collectAsState()
 
         return HomeTab.State("", pagingState.value.ids.toImmutableList()) { event ->
 
             when (event) {
                 HomeTab.Event.Refresh -> {
+                    println("*() Received event $event")
                     scope.launch {
                         requests.emit(
                             PagingRequest.skipQueue(
-                                key = GetFeedRequest(cursor = null, size = 20),
+                                key = GetFeedRequest(
+                                    cursor = null,
+                                    size = 20,
+                                    headers = mutableMapOf("type" to "refresh")
+                                ),
                                 direction = LoadDirection.Prepend,
-                                strategy = LoadStrategy.SkipCache
+                                strategy = LoadStrategy.SkipCache,
                             )
                         )
                     }

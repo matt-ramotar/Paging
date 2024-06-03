@@ -2,10 +2,7 @@ package app.feed.common.server.db
 
 import app.feed.common.models.Post
 import app.feed.common.models.PostId
-import kotlinx.datetime.LocalDateTime
-import kotlinx.datetime.Month
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toInstant
+import kotlinx.datetime.*
 
 
 fun createdAt(month: Month, day: Int): LocalDateTime {
@@ -52,21 +49,17 @@ class PostCollection {
         createdAt(Month.JUNE, 7),
     )
 
-    val ids = (0..499).toList()
-
-    val groupedIds = distributeIdsToDates(ids, createdAtDates)
-
+    var maxIdSoFar = 0
 
     val idToDateMap = mutableMapOf<Int, Long>()
 
+    val defaultCreatedAt = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+        .toInstant(TimeZone.currentSystemDefault()).toEpochMilliseconds()
 
-    init {
+    fun addPosts(startId: Int, endId: Int, createdAt: (index: Int) -> Long = { _ -> defaultCreatedAt }) {
+        val ids = (startId..endId).toList()
 
-        for ((date, idList) in groupedIds) {
-            for (id in idList) {
-                idToDateMap[id] = date.toInstant(TimeZone.currentSystemDefault()).toEpochMilliseconds()
-            }
-        }
+        println("*** ADDING POSTS $ids")
 
         ids.map { index ->
             val id = (index + 1).toString()
@@ -77,7 +70,7 @@ class PostCollection {
                 id = postId,
                 userId = userId.toString(),
                 text = "Woofsem woofor sit amet, consectetur woofipiscing elit. Woofellus woofrerit sed woofus commodo wooferdum.",
-                createdAt = idToDateMap[index]!!,
+                createdAt = createdAt(index),
                 retweetCount = 0,
                 favoriteCount = 0,
                 commentCount = 0,
@@ -85,6 +78,30 @@ class PostCollection {
                 isLikedByViewer = false,
                 parentPostId = null
             )
+        }
+
+        maxIdSoFar = maxOf(maxIdSoFar, endId)
+    }
+
+    fun addPosts(count: Int) {
+        addPosts(startId = maxIdSoFar + 1, endId = maxIdSoFar + count)
+    }
+
+
+    init {
+
+
+        val groupedIds = distributeIdsToDates((0..499).toList(), createdAtDates)
+
+
+        for ((date, idList) in groupedIds) {
+            for (id in idList) {
+                idToDateMap[id] = date.toInstant(TimeZone.currentSystemDefault()).toEpochMilliseconds()
+            }
+        }
+
+        addPosts(0, 499) {
+            idToDateMap[it]!!
         }
     }
 

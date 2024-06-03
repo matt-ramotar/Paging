@@ -44,6 +44,7 @@ class RealNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
     private data class PageNode<K : Any>(
         val key: K,
         val placeholder: Boolean = false,
+        var inFlight: Boolean = false,
         var prev: PageNode<K>? = null,
         var next: PageNode<K>? = null
     )
@@ -184,7 +185,7 @@ class RealNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
     private fun appendPlaceholders(
         params: PagingSource.LoadParams<K>
     ) {
-        val pageNode = PageNode(key = params.key)
+        val pageNode = PageNode(key = params.key, placeholder = true)
 
         if (tailPage == null) {
             headPage = pageNode
@@ -305,6 +306,8 @@ class RealNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
     private suspend fun loadFromNetwork(params: PagingSource.LoadParams<K>): PageLoadStatus<Id, Q, K, V, E> {
         println("HITTING IN LOAD FROM NETWORK")
 
+        pageNodeMap[params.key]?.inFlight = true
+
         return when (val fetcherResult = pageFetcher.invoke(params).first()) {
             is FetcherResult.Data -> {
                 println("HITTING IN LOAD FROM NETWORK DATA")
@@ -325,11 +328,22 @@ class RealNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
                 }
                 println("LOCAL PARAMS = $localParams")
 
+                var maxItemLoaded = items[0].id
+                var minItemLoaded = items[0].id
+
 
                 when (params.direction) {
                     LoadDirection.Prepend -> {
                         items.asReversed().forEach { item ->
                             prependItem(item, localParams)
+
+                            if (item.id.value < minItemLoaded.value) {
+                                minItemLoaded = item.id
+                            }
+
+                            if (item.id.value > maxItemLoaded.value) {
+                                maxItemLoaded = item.id
+                            }
                         }
 
                         // save normalized page to memory cache
@@ -340,12 +354,23 @@ class RealNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
                         println("HITTING IN APPEND")
                         items.forEach { item ->
                             appendItem(item, localParams)
+
+                            if (item.id.value < minItemLoaded.value) {
+                                minItemLoaded = item.id
+                            }
+
+                            if (item.id.value > maxItemLoaded.value) {
+                                maxItemLoaded = item.id
+                            }
                         }
 
                         // save normalized page to memory cache
                         appendPage(params, localParams, fetcherResult)
                     }
                 }
+
+                fetchingStateHolder.updateMaxItemLoadedSoFar(maxItemLoaded)
+                fetchingStateHolder.updateMinItemLoadedSoFar(minItemLoaded)
 
                 trimToMaxSize()
 
@@ -408,7 +433,7 @@ class RealNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
 
     override fun loadPage(params: PagingSource.LoadParams<K>): Flow<PageLoadStatus<Id, Q, K, V, E>> =
         flow {
-            println("PARAMS = $params")
+            println("*** PARAMS = $params")
             keyToParamsMap[params.key] = params
 
             if (pagingConfig.placeholderId != null && params.strategy != LoadStrategy.LocalOnly) {
@@ -425,7 +450,7 @@ class RealNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
             }
 
             fun inFlight(key: K): Boolean {
-                return pageNodeMap[key]?.placeholder == true
+                return pageNodeMap[key]?.inFlight == true
             }
 
             fun isCached(key: K): Boolean {
@@ -491,6 +516,9 @@ class RealNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
                     println("HITTING")
 
                     if (inFlight(params.key)) {
+                        println("*** IN FLIGHT ${params.key}")
+
+                        println("*** ${pageNodeMap[params.key]?.key}")
                         emit(PageLoadStatus.SkippingLoad.inFlight())
                     } else {
                         emit(PageLoadStatus.Loading.remote())
@@ -539,11 +567,11 @@ class RealNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
                         }
                     }
                 }
-
-                LoadStrategy.Refresh -> {
-                    // TODO(): Update - do we need this? can just configure with others (e.g., invalidate or skip queue with prepend)
-                    // TODO(): Support refresh
-                }
+//
+//                LoadStrategy.Refresh -> {
+//                    // TODO(): Update - do we need this? can just configure with others (e.g., invalidate or skip queue with prepend)
+//                    // TODO(): Support refresh
+//                }
             }
 
         }

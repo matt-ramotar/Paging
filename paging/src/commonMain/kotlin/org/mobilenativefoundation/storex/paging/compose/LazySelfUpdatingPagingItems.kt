@@ -1,17 +1,19 @@
 package org.mobilenativefoundation.storex.paging.compose
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.mobilenativefoundation.storex.paging.*
 
 
@@ -19,6 +21,7 @@ import org.mobilenativefoundation.storex.paging.*
 @Composable
 fun <Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any> LazySelfUpdatingPagingItems(
     ids: List<Q?>,
+    onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable (itemState: ItemState<Id, Q, V, E>) -> Unit
 ) {
@@ -29,23 +32,25 @@ fun <Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any
         }
     }
 
+    val refreshScope = rememberCoroutineScope()
+    var refreshing by remember { mutableStateOf(false) }
+
+
+    fun refresh() = refreshScope.launch {
+        refreshing = true
+        println("*** ABOUT TO INVOKE ON REFRESH")
+        delay(1000)
+        onRefresh()
+        refreshing = false
+    }
+
+    val state = rememberPullRefreshState(refreshing, ::refresh)
+
     Box(
-        modifier = Modifier.pullRefresh(
-            state = rememberPullRefreshState(
-                onRefresh = {},
-                refreshing = false
-            )
-        )
+        modifier = Modifier.fillMaxSize().pullRefresh(state)
     ) {
-
-
         LazyColumn(modifier) {
-            items(items, key = {
-                when (it) {
-                    is Nullable.NonNull -> it.data.value
-                    Nullable.Null -> Unit
-                }
-            }) {
+            items(items) {
                 val id = when (it) {
                     is Nullable.NonNull -> it.data
                     Nullable.Null -> null
@@ -56,6 +61,8 @@ fun <Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any
                 }
             }
         }
+
+        PullRefreshIndicator(refreshing, state, Modifier.align(Alignment.TopCenter))
     }
 }
 

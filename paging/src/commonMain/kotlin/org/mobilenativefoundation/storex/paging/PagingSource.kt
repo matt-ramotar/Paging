@@ -69,14 +69,11 @@ enum class LoadDirection {
 @Serializable
 sealed interface LoadStrategy {
     @Serializable
-    data class CacheFirst(val refresh: Boolean) : LoadStrategy
+    data class CacheFirst(val alsoLoadFromNetwork: Boolean) : LoadStrategy
 
     @Serializable
     data object SkipCache : LoadStrategy
 
     @Serializable
     data object LocalOnly : LoadStrategy
-
-    @Serializable
-    data object Refresh : LoadStrategy
 }

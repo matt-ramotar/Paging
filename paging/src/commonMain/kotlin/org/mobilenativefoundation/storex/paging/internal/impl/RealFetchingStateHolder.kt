@@ -15,6 +15,22 @@ class RealFetchingStateHolder<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Com
 ) : FetchingStateHolder<Id, Q, K> {
     private val _state = MutableStateFlow(initialFetchingState)
     override val state: StateFlow<FetchingState<Id, Q, K>> = _state.asStateFlow()
+    override fun updateMaxItemLoadedSoFar(id: Q) {
+        val maxSoFar = _state.value.maxItemLoadedSoFar?.let {
+            if (it.value > id.value) it else id
+        } ?: id
+
+        _state.value = _state.value.copy(maxItemLoadedSoFar = maxSoFar)
+    }
+
+    override fun updateMinItemLoadedSoFar(id: Q) {
+        val minSoFar = _state.value.minItemLoadedSoFar?.let {
+            if (it.value < id.value) it else id
+        } ?: id
+
+        _state.value = _state.value.copy(minItemLoadedSoFar = minSoFar)
+    }
+
     override fun updateMinRequestSoFar(key: K) {
         val minRequestSoFar = _state.value.minRequestSoFar?.let {
             minOf(it, key)
