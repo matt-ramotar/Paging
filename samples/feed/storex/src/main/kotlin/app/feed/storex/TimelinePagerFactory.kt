@@ -14,8 +14,8 @@ import org.mobilenativefoundation.storex.paging.internal.api.DispatcherProvider
 
 
 class TimelinePagerFactory(
-    private val pageSize: Int = 20,
-    private val prefetchDistance: Int = 100,
+    private val pageSize: Int = 5,
+    private val prefetchDistance: Int = pageSize * 10,
 ) {
 
     private val server = Server()

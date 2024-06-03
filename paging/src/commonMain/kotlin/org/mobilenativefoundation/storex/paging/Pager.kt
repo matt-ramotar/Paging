@@ -2,7 +2,6 @@
 
 package org.mobilenativefoundation.storex.paging
 
-import androidx.compose.runtime.Composable
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -65,7 +64,7 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
         private var errorHandlingStrategy: ErrorHandlingStrategy = ErrorHandlingStrategy.RetryLast()
         private var middleware: List<Middleware<K>> = emptyList()
         private var initialState: PagingState<Id, Q, E> = PagingState.initial()
-        private var initialFetchingState: FetchingState<Id, K> = FetchingState()
+        private var initialFetchingState: FetchingState<Id, Q, K> = FetchingState()
         private var itemFetcher: Fetcher<Id, V>? = null
         private var fetchingStrategy: FetchingStrategy<Id, Q, K, E> =
             DefaultFetchingStrategy(pagingConfig)
@@ -98,7 +97,7 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
             this.initialState = initialState
         }
 
-        fun initialFetchingState(initialFetchingState: FetchingState<Id, K>) = apply {
+        fun initialFetchingState(initialFetchingState: FetchingState<Id, Q, K>) = apply {
             this.initialFetchingState = initialFetchingState
         }
 

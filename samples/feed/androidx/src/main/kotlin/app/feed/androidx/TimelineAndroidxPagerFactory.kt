@@ -9,8 +9,8 @@ import app.feed.common.models.Post
 import app.feed.common.server.Server
 
 class TimelineAndroidxPagerFactory(
-    private val pageSize: Int = 20,
-    private val prefetchDistance: Int = 100,
+    private val pageSize: Int = 5,
+    private val prefetchDistance: Int = 5,
 ) {
     private val api = TimelineApi(Server())
 

@@ -34,7 +34,7 @@ class RealNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
     private val itemFetcher: Fetcher<Id, V>?,
     driverFactory: DriverFactory?,
     private val maxSize: Int = 500,
-    private val fetchingStateHolder: FetchingStateHolder<Id, K>,
+    private val fetchingStateHolder: FetchingStateHolder<Id, Q, K>,
     private val sideEffects: List<SideEffect<Id, Q, V>>,
     private val pagingConfig: PagingConfig<Id, Q, K>
 ) : NormalizedStore<Id, Q, K, V, E> {
@@ -587,6 +587,7 @@ class RealNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
 
         LaunchedEffect(id) {
             fetchingStateHolder.updateMaxItemAccessedSoFar(id)
+            fetchingStateHolder.updateMinItemAccessedSoFar(id)
         }
 
         LaunchedEffect(id, events) {

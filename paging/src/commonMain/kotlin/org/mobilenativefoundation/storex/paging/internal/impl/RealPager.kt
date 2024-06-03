@@ -21,7 +21,7 @@ import org.mobilenativefoundation.storex.paging.internal.api.NormalizedStore
 @OptIn(InternalSerializationApi::class)
 class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V : Identifiable<Id, Q>, E : Any, P : Any>(
     coroutineDispatcher: CoroutineDispatcher,
-    private val fetchingStateHolder: FetchingStateHolder<Id, K>,
+    private val fetchingStateHolder: FetchingStateHolder<Id, Q, K>,
     private val launchEffects: List<LaunchEffect>,
     private val errorHandlingStrategy: ErrorHandlingStrategy,
     private val middleware: List<Middleware<K>>,
@@ -84,7 +84,10 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
             pagingState(requests)
         }
 
-    override fun pagingStateFlow(composableCoroutineScope: CoroutineScope, requests: Flow<PagingRequest<K>>): StateFlow<PagingState<Id, Q, E>> =
+    override fun pagingStateFlow(
+        composableCoroutineScope: CoroutineScope,
+        requests: Flow<PagingRequest<K>>
+    ): StateFlow<PagingState<Id, Q, E>> =
         composableCoroutineScope.launchMolecule(RecompositionMode.ContextClock.toCashRecompositionMode()) {
             pagingState(requests)
         }
@@ -189,10 +192,21 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
 //            handleBackwardPrefetching()
 //        }
 
+        LaunchedEffect(fetchingState.minItemAccessedSoFar?.value) {
+            println("&&&& - FETCHING STATE MIN ITEM ACCESSED CHANGED ${fetchingState.minItemAccessedSoFar?.value}")
+            processPrependQueue()
+        }
+
+        LaunchedEffect(fetchingState.maxItemAccessedSoFar?.value) {
+            println("&&&& - FETCHING STATE MAX ITEM ACCESSED CHANGED ${fetchingState.maxItemAccessedSoFar?.value}")
+            processAppendQueue()
+        }
+
 
         println("RETURNING PAGING STATE ${pagingState.ids.size}")
         return pagingState
     }
+
 
     // TODO(): Design decision to get the most recent prepend load params
     private fun processPrependQueue() {

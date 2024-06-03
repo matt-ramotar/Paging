@@ -2,10 +2,12 @@ package app.feed.common.ui
 
 import androidx.compose.runtime.Composable
 import app.feed.common.models.PostId
+import com.slack.circuit.runtime.Navigator
 import com.slack.circuit.runtime.presenter.Presenter
 
 class PostDetailScreenPresenter(
-    private val postId: PostId
+    private val postId: PostId,
+    private val navigator: Navigator
 ) : Presenter<PostDetailScreen.State> {
 
     @Composable
@@ -14,16 +16,10 @@ class PostDetailScreenPresenter(
             postId
         ) { event ->
             when (event) {
-                PostDetailScreen.Event.Like -> {
-                    // No op for testing
-                }
 
-                PostDetailScreen.Event.Refresh -> {
-                    // No op for testing
-                }
 
-                PostDetailScreen.Event.Unlike -> {
-                    // No op for testing
+                PostDetailScreen.Event.GoBack -> {
+                    navigator.pop()
                 }
             }
 

@@ -27,7 +27,7 @@ data class AppPresenterFactory(
         return when (screen) {
             is HomeTab -> HomeTabPresenter(navigator, pager)
             is AccountTab -> AccountTabPresenter()
-            is PostDetailScreen -> PostDetailScreenPresenter(screen.postId)
+            is PostDetailScreen -> PostDetailScreenPresenter(screen.postId, navigator)
             else -> null
         }
     }

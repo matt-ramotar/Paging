@@ -27,7 +27,7 @@ class MainActivity : ComponentActivity() {
 
     private val pager = TimelinePagerFactory().create(
         androidxPagingSourceFactory = { api ->
-            TimelineAndroidxPagingSource(api, 20)
+            TimelineAndroidxPagingSource(api, 5)
         }
     )
 

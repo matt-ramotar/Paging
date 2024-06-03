@@ -10,11 +10,11 @@ import org.mobilenativefoundation.storex.paging.internal.api.FetchingStateHolder
 /**
  * TODO(): Make this thread safe!
  */
-class RealFetchingStateHolder<Id : Comparable<Id>, K : Comparable<K>>(
-    initialFetchingState: FetchingState<Id, K> = FetchingState()
-) : FetchingStateHolder<Id, K> {
+class RealFetchingStateHolder<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>>(
+    initialFetchingState: FetchingState<Id, Q, K> = FetchingState()
+) : FetchingStateHolder<Id, Q, K> {
     private val _state = MutableStateFlow(initialFetchingState)
-    override val state: StateFlow<FetchingState<Id, K>> = _state.asStateFlow()
+    override val state: StateFlow<FetchingState<Id, Q, K>> = _state.asStateFlow()
     override fun updateMinRequestSoFar(key: K) {
         val minRequestSoFar = _state.value.minRequestSoFar?.let {
             minOf(it, key)
@@ -31,11 +31,15 @@ class RealFetchingStateHolder<Id : Comparable<Id>, K : Comparable<K>>(
         _state.value = _state.value.copy(maxRequestSoFar = maxRequestSoFar)
     }
 
-    override fun updateMinItemAccessedSoFar(id: Quantifiable<Id>) {
-        TODO("Not yet implemented")
+    override fun updateMinItemAccessedSoFar(id: Q) {
+        val minItemAccessedSoFar = _state.value.minItemAccessedSoFar?.let {
+            if (it.value < id.value) it else id
+        } ?: id
+
+        _state.value = _state.value.copy(minItemAccessedSoFar = minItemAccessedSoFar)
     }
 
-    override fun updateMaxItemAccessedSoFar(id: Quantifiable<Id>) {
+    override fun updateMaxItemAccessedSoFar(id: Q) {
         val maxItemAccessedSoFar = _state.value.maxItemAccessedSoFar?.let {
             if (it.value > id.value) it else id
         } ?: id
@@ -43,11 +47,11 @@ class RealFetchingStateHolder<Id : Comparable<Id>, K : Comparable<K>>(
         _state.value = _state.value.copy(maxItemAccessedSoFar = maxItemAccessedSoFar)
     }
 
-    override fun update(nextState: FetchingState<Id, K>) {
+    override fun update(nextState: FetchingState<Id, Q, K>) {
         _state.value = nextState
     }
 
-    override fun update(reducer: (prevState: FetchingState<Id, K>) -> FetchingState<Id, K>) {
+    override fun update(reducer: (prevState: FetchingState<Id, Q, K>) -> FetchingState<Id, Q, K>) {
         _state.value = reducer(_state.value)
     }
 

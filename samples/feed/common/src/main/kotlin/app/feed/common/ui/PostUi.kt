@@ -21,7 +21,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.feed.common.R
 import app.feed.common.models.Post
+import app.feed.common.models.PostId
 import kotlinx.datetime.*
+import org.mobilenativefoundation.storex.paging.SelfUpdatingItem
 
 
 fun timeAgo(dateTime: LocalDateTime): String {
@@ -111,7 +113,10 @@ fun PostListUi(post: Post, onSelect: () -> Unit) {
                         if (post.isLikedByViewer) LikedPostColor else UnlikedPostColor
                     ) {}
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(post.favoriteCount.toString(), color = if (post.isLikedByViewer) LikedPostColor else UnlikedPostColor)
+                    Text(
+                        post.favoriteCount.toString(),
+                        color = if (post.isLikedByViewer) LikedPostColor else UnlikedPostColor
+                    )
                 }
             }
 
@@ -169,6 +174,7 @@ fun BookmarkIcon(onClick: () -> Unit) {
 fun PostDetailUi(
     post: Post,
     modifier: Modifier = Modifier,
+    selfUpdatingItemEventSink: (event: SelfUpdatingItem.Event<String, PostId, Post, Throwable>) -> Unit,
     eventSink: (event: PostDetailScreen.Event) -> Unit
 ) {
 
@@ -187,11 +193,15 @@ fun PostDetailUi(
                     Text("Post")
                 },
                 navigationIcon = {
-                    Icon(
-                        painterResource(app.feed.common.R.drawable.arrow_left),
-                        "arrow left",
-                        modifier = Modifier.size(24.dp)
-                    )
+                    IconButton({
+                        eventSink(PostDetailScreen.Event.GoBack)
+                    }){
+                        Icon(
+                            painterResource(app.feed.common.R.drawable.arrow_left),
+                            "arrow left",
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
                 }
             )
 
@@ -276,11 +286,12 @@ fun PostDetailUi(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     HeartIcon(tint = if (post.isLikedByViewer) LikedPostColor else UnlikedPostColor) {
-                        if (post.isLikedByViewer) {
-                            eventSink(PostDetailScreen.Event.Unlike)
+                        val updatedPost = if (post.isLikedByViewer) {
+                            post.copy(isLikedByViewer = false, favoriteCount = post.favoriteCount - 1)
                         } else {
-                            eventSink(PostDetailScreen.Event.Like)
+                            post.copy(isLikedByViewer = true, favoriteCount = post.favoriteCount + 1)
                         }
+                        selfUpdatingItemEventSink(SelfUpdatingItem.Event.Update(updatedPost))
                     }
                 }
 

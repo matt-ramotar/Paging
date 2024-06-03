@@ -18,9 +18,9 @@ data class PostDetailScreen(
         val eventSink: (event: Event) -> Unit
     ) : CircuitUiState
 
+
+    // TODO: Note that SelfUpdatingItem events don't belong here!
     sealed interface Event : CircuitUiEvent {
-        data object Refresh : Event
-        data object Like: Event
-        data object Unlike: Event
+        data object GoBack: Event
     }
 }

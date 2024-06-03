@@ -23,10 +23,10 @@ class SelfUpdatingItemPresenter<Id : Comparable<Id>, Q: Quantifiable<Id>, K : An
     private val errorFactory: ErrorFactory<E>,
     private val itemCache: ItemCache<Id, Q, V>,
     private val db: PagingDb?,
-    private val fetchingStateHolder: FetchingStateHolder<Id, K>
+    private val fetchingStateHolder: FetchingStateHolder<Id, Q, K>
 ) {
 
-    fun present(id: Quantifiable<Id>): SelfUpdatingItem<Id,Q, V, E> {
+    fun present(id: Q): SelfUpdatingItem<Id,Q, V, E> {
         val presenter: @Composable (Flow<SelfUpdatingItem.Event<Id, Q, V, E>>) -> ItemState<Id, Q, V, E> = { events ->
             itemState(id, events)
         }
@@ -35,7 +35,7 @@ class SelfUpdatingItemPresenter<Id : Comparable<Id>, Q: Quantifiable<Id>, K : An
 
     @Composable
     private fun itemState(
-        id: Quantifiable<Id>,
+        id: Q,
         events: Flow<SelfUpdatingItem.Event<Id, Q, V, E>>
     ): ItemState<Id, Q, V, E> {
         val encodedId = remember(id) { Json.encodeToString(registry.id.serializer(), id.value) }
