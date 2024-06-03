@@ -1,8 +1,8 @@
 package app.feed.storex
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
 import app.feed.common.models.GetFeedRequest
 import app.feed.common.models.Post
 import app.feed.common.models.PostId
@@ -14,7 +14,7 @@ import com.slack.circuit.runtime.presenter.Presenter
 import com.slack.circuit.runtime.screen.Screen
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.mobilenativefoundation.storex.paging.*
 
 data class AppPresenterFactory(
@@ -40,12 +40,15 @@ class HomeTabPresenter(
 
     private val requests = MutableSharedFlow<PagingRequest<GetFeedRequest>>(replay = 20)
 
+    private var sort = MutableStateFlow<HomeFeedSort>(HomeFeedSort.New)
+
     @Composable
     override fun present(): HomeTab.State {
 
         val pagingState by pager.collectAsState()
+        val sortState by sort.collectAsState()
 
-        return HomeTab.State("", pagingState.ids.toImmutableList()) { event ->
+        return HomeTab.State("", pagingState.ids.toImmutableList(), sort = sortState) { event ->
 
             when (event) {
                 HomeTab.Event.Refresh -> {
@@ -67,6 +70,10 @@ class HomeTabPresenter(
                 is HomeTab.Event.GoToDetailScreen -> navigator.goTo(
                     PostDetailScreen(event.postId)
                 )
+
+                is HomeTab.Event.UpdateSort -> {
+                    sort.value = event.sort
+                }
             }
         }
     }

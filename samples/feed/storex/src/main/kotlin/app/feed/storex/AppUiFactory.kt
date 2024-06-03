@@ -1,11 +1,9 @@
 package app.feed.storex
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
@@ -31,6 +29,135 @@ data object AppUiFactory : Ui.Factory {
 }
 
 
+sealed interface HomeFeedSort {
+    val id: String
+
+    data object Best : HomeFeedSort {
+        override val id: String = "best"
+    }
+
+    data object Hot : HomeFeedSort {
+        override val id: String = "hot"
+    }
+
+    data class Top(
+        val timespan: Timespan
+    ) : HomeFeedSort {
+        override val id: String = "top"
+    }
+
+    data object New : HomeFeedSort {
+        override val id: String = "new"
+    }
+}
+
+enum class Timespan {
+    Hour,
+    Day,
+    Week,
+    Month,
+    Year,
+    AllTime
+}
+
+@Composable
+private fun HomeFeedSortDropdownMenu(
+    sort: HomeFeedSort,
+    onClick: (HomeFeedSort) -> Unit
+) {
+
+    var isExpanded by remember { mutableStateOf(false) }
+
+    val iconResId = remember(sort) {
+        when (sort) {
+            HomeFeedSort.Best -> app.feed.common.R.drawable.trophy
+            HomeFeedSort.Hot -> app.feed.common.R.drawable.hot
+            HomeFeedSort.New -> app.feed.common.R.drawable.clock
+            is HomeFeedSort.Top -> app.feed.common.R.drawable.top
+        }
+    }
+
+    fun menuItemColors(sortId: String) = MenuItemColors(
+        textColor = if (sortId == sort.id) Color(0xff229BF0) else Color.Black,
+        leadingIconColor = if (sortId == sort.id) Color(0xff229BF0) else Color.Black,
+        trailingIconColor = Color.Black,
+        disabledTextColor = Color.Black,
+        disabledLeadingIconColor = Color.Black,
+        disabledTrailingIconColor = Color.Black
+    )
+
+    IconButton({
+        isExpanded = !isExpanded
+    }) {
+        Icon(
+            painterResource(iconResId),
+            "sort icon",
+            modifier = Modifier.size(32.dp),
+            tint = Color(0xff229BF0)
+        )
+
+
+        DropdownMenu(expanded = isExpanded, onDismissRequest = {
+            isExpanded = false
+        }, modifier = Modifier.background(Color.White)) {
+            DropdownMenuItem(text = {
+                Text("Best")
+            }, onClick = {
+                onClick(HomeFeedSort.Best)
+                isExpanded = false
+            }, leadingIcon = {
+                Icon(
+                    painterResource(app.feed.common.R.drawable.trophy),
+                    "trophy",
+                    modifier = Modifier.size(24.dp)
+                )
+            }, colors = menuItemColors(HomeFeedSort.Best.id))
+
+            DropdownMenuItem(text = {
+                Text("Hot")
+            }, onClick = {
+                onClick(HomeFeedSort.Hot)
+                isExpanded = false
+            }, leadingIcon = {
+                Icon(
+                    painterResource(app.feed.common.R.drawable.hot),
+                    "trophy",
+                    modifier = Modifier.size(24.dp)
+                )
+            }, colors = menuItemColors(HomeFeedSort.Hot.id))
+            DropdownMenuItem(text = {
+                Text("Top")
+            }, onClick = {
+                onClick(HomeFeedSort.Top(Timespan.Day))
+                isExpanded = false
+            }, leadingIcon = {
+                Icon(
+                    painterResource(app.feed.common.R.drawable.top),
+                    "trophy",
+                    modifier = Modifier.size(24.dp)
+                )
+            }, colors = menuItemColors(HomeFeedSort.Top(Timespan.Day).id))
+
+            DropdownMenuItem(text = {
+                Text("New")
+            }, onClick = {
+                onClick(HomeFeedSort.New)
+                isExpanded = false
+            }, leadingIcon = {
+                Icon(
+                    painterResource(app.feed.common.R.drawable.clock),
+                    "trophy",
+                    modifier = Modifier.size(24.dp)
+                )
+            }, colors = menuItemColors(HomeFeedSort.New.id))
+
+
+        }
+    }
+
+}
+
+
 data object HomeTabUi : Ui<HomeTab.State> {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
@@ -38,13 +165,24 @@ data object HomeTabUi : Ui<HomeTab.State> {
 
         Column(modifier = Modifier.fillMaxSize()) {
 
-            Row(modifier = Modifier.fillMaxWidth().padding(top = 24.dp), horizontalArrangement = Arrangement.Center) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 24.dp, start = 16.dp, end = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+
+                Spacer(modifier = Modifier.width(32.dp))
+
                 Icon(
                     painterResource(app.feed.common.R.drawable.storex),
                     "storex",
-                    modifier = Modifier.size(50.dp),
+                    modifier = Modifier.size(40.dp),
                     tint = Color(0xff212121)
                 )
+
+                HomeFeedSortDropdownMenu(state.sort) {
+                    state.eventSink(HomeTab.Event.UpdateSort(it))
+                }
+
             }
 
             LazySelfUpdatingPagingItems<String, PostId, Post, Throwable>(state.postIds, {

@@ -15,11 +15,13 @@ data object HomeTab : Screen, Parcelable {
     data class State(
         val userId: String,
         val postIds: ImmutableList<PostId?>,
+        val sort: HomeFeedSort,
         val eventSink: (event: Event) -> Unit
     ) : CircuitUiState
 
     sealed interface Event : CircuitUiEvent {
         data object Refresh : Event
         data class GoToDetailScreen(val postId: PostId): Event
+        data class UpdateSort(val sort: HomeFeedSort): Event
     }
 }
