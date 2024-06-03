@@ -101,15 +101,17 @@ fun PostListUi(post: Post, onSelect: () -> Unit) {
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    RetweetIcon {}
+                    RepostIcon {}
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(post.retweetCount.toString(), color = Color(0xff424242))
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    HeartIcon {}
+                    HeartIcon(
+                        if (post.isLikedByViewer) LikedPostColor else UnlikedPostColor
+                    ) {}
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(post.favoriteCount.toString(), color = Color(0xff424242))
+                    Text(post.favoriteCount.toString(), color = if (post.isLikedByViewer) LikedPostColor else UnlikedPostColor)
                 }
             }
 
@@ -126,16 +128,19 @@ fun CommentIcon(onClick: () -> Unit) {
 }
 
 @Composable
-fun HeartIcon(onClick: () -> Unit) {
+fun HeartIcon(tint: Color = UnlikedPostColor, onClick: () -> Unit) {
     val icon = painterResource(R.drawable.heart)
 
     IconButton(onClick = onClick) {
-        Icon(icon, "heart", modifier = Modifier.size(24.dp), tint = Color(0xff424242))
+        Icon(icon, "heart", modifier = Modifier.size(24.dp), tint = tint)
     }
 }
 
+val LikedPostColor = Color(0xffE61776)
+val UnlikedPostColor = Color(0xff424242)
+
 @Composable
-fun RetweetIcon(onClick: () -> Unit) {
+fun RepostIcon(onClick: () -> Unit) {
     val icon = painterResource(R.drawable.repost)
     IconButton(onClick = onClick) {
         Icon(icon, "retweet", modifier = Modifier.size(24.dp), tint = Color(0xff424242))
@@ -260,13 +265,13 @@ fun PostDetailUi(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    RetweetIcon {
+                    RepostIcon {
                         // TODO
                     }
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    HeartIcon {
+                    HeartIcon(tint = if (post.isLikedByViewer) LikedPostColor else UnlikedPostColor) {
                         if (post.isLikedByViewer) {
                             eventSink(PostDetailScreen.Event.Unlike)
                         } else {
@@ -312,3 +317,4 @@ fun PostDetailUi(
 
     }
 }
+
