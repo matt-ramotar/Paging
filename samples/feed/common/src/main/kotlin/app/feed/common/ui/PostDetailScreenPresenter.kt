@@ -1,7 +1,6 @@
 package app.feed.common.ui
 
 import androidx.compose.runtime.Composable
-import app.feed.common.models.Post
 import app.feed.common.models.PostId
 import com.slack.circuit.runtime.presenter.Presenter
 
@@ -13,6 +12,21 @@ class PostDetailScreenPresenter(
     override fun present(): PostDetailScreen.State {
         return PostDetailScreen.State(
             postId
-        )
+        ) { event ->
+            when (event) {
+                PostDetailScreen.Event.Like -> {
+                    // No op for testing
+                }
+
+                PostDetailScreen.Event.Refresh -> {
+                    // No op for testing
+                }
+
+                PostDetailScreen.Event.Unlike -> {
+                    // No op for testing
+                }
+            }
+
+        }
     }
 }

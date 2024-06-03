@@ -59,7 +59,7 @@ class MainActivity : ComponentActivity() {
                             containerColor = Color.White,
                             bottomBar = {
                                 BottomAppBar(
-                                    containerColor = Color(0xfff3f3f3),
+                                    containerColor = Color.White,
 
                                     ) {
 

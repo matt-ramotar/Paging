@@ -3,9 +3,7 @@ package app.feed.storex
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
@@ -37,10 +35,11 @@ data object AppUiFactory : Ui.Factory {
 
 
 data object HomeTabUi : Ui<HomeTab.State> {
+    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content(state: HomeTab.State, modifier: Modifier) {
 
-        Column {
+        Column(modifier = Modifier.fillMaxSize()) {
 
             Row(modifier = Modifier.fillMaxWidth().padding(top = 24.dp), horizontalArrangement = Arrangement.Center) {
                 Icon(

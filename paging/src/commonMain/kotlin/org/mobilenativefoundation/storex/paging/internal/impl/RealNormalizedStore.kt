@@ -554,8 +554,8 @@ class RealNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
     ): ItemState<Id, Q, V, E> {
         val encodedId = remember(id) { Json.encodeToString(registry.q.serializer(), id) }
 
-        val v by remember {
-            derivedStateOf { itemMemoryCache[id] }
+        var v by remember {
+            mutableStateOf(itemMemoryCache[id])
         }
 
         var itemVersion by remember(id) {
@@ -677,8 +677,12 @@ class RealNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
                     }
 
                     is SelfUpdatingItem.Event.Update -> {
+                        println("^^^^HITTING IN UPDATE SUI")
+                        println("^^^^${event.value}")
+
                         // Save to memory cache
                         itemMemoryCache[id] = event.value
+                        v = event.value
 
                         // Save to database
                         val itemId =

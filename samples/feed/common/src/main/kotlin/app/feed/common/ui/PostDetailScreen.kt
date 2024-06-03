@@ -14,10 +14,13 @@ data class PostDetailScreen(
     val postId: PostId
 ) : Screen, Parcelable {
     data class State(
-        val postId: PostId
+        val postId: PostId,
+        val eventSink: (event: Event) -> Unit
     ) : CircuitUiState
 
     sealed interface Event : CircuitUiEvent {
         data object Refresh : Event
+        data object Like: Event
+        data object Unlike: Event
     }
 }

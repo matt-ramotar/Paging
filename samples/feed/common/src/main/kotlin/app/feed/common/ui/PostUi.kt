@@ -1,11 +1,12 @@
 package app.feed.common.ui
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -48,7 +49,7 @@ fun PostListUi(post: Post, onSelect: () -> Unit) {
         }
     }
 
-    Row(modifier = Modifier.clickable{onSelect()}.padding(16.dp)) {
+    Row(modifier = Modifier.clickable { onSelect() }.padding(16.dp)) {
 
         Image(
             painterResource(R.drawable.tag), "Tag", modifier = Modifier.size(60.dp).clip(
@@ -70,19 +71,22 @@ fun PostListUi(post: Post, onSelect: () -> Unit) {
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                Text("${createdAt.month.number}/${createdAt.dayOfMonth}/${createdAt.year.mod(2000)}", color = Color(0xff424242))
+                Text(
+                    "${createdAt.month.number}/${createdAt.dayOfMonth}/${createdAt.year.mod(2000)}",
+                    color = Color(0xff424242)
+                )
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
 
             Text(post.text, color = Color.Black)
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Text("#p${post.id.value} #g${1 + (10 - post.id.value.toInt().mod(10)).mod(10)}", color = Color(0xff229BF0))
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -91,20 +95,20 @@ fun PostListUi(post: Post, onSelect: () -> Unit) {
             ) {
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    CommentIcon()
-                    Spacer(modifier = Modifier.width(8.dp))
+                    CommentIcon {}
+                    Spacer(modifier = Modifier.height(8.dp))
                     Text(post.commentCount.toString(), color = Color(0xff424242))
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    RetweetIcon()
-                    Spacer(modifier = Modifier.width(8.dp))
+                    RetweetIcon {}
+                    Spacer(modifier = Modifier.height(8.dp))
                     Text(post.retweetCount.toString(), color = Color(0xff424242))
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    HeartIcon()
-                    Spacer(modifier = Modifier.width(8.dp))
+                    HeartIcon {}
+                    Spacer(modifier = Modifier.height(8.dp))
                     Text(post.favoriteCount.toString(), color = Color(0xff424242))
                 }
             }
@@ -114,79 +118,197 @@ fun PostListUi(post: Post, onSelect: () -> Unit) {
 }
 
 @Composable
-fun CommentIcon() {
+fun CommentIcon(onClick: () -> Unit) {
     val icon = painterResource(R.drawable.comment)
-    Icon(icon, "comment", modifier = Modifier.size(24.dp), tint = Color(0xff424242))
+    IconButton(onClick = onClick) {
+        Icon(icon, "comment", modifier = Modifier.size(24.dp), tint = Color(0xff424242))
+    }
 }
 
 @Composable
-fun HeartIcon() {
+fun HeartIcon(onClick: () -> Unit) {
     val icon = painterResource(R.drawable.heart)
-    Icon(icon, "heart", modifier = Modifier.size(24.dp), tint = Color(0xff424242))
+
+    IconButton(onClick = onClick) {
+        Icon(icon, "heart", modifier = Modifier.size(24.dp), tint = Color(0xff424242))
+    }
 }
 
 @Composable
-fun RetweetIcon() {
+fun RetweetIcon(onClick: () -> Unit) {
     val icon = painterResource(R.drawable.repost)
-    Icon(icon, "retweet", modifier = Modifier.size(24.dp), tint = Color(0xff424242))
+    IconButton(onClick = onClick) {
+        Icon(icon, "retweet", modifier = Modifier.size(24.dp), tint = Color(0xff424242))
+    }
 }
 
 @Composable
-fun PostDetailUi(post: Post) {
-    Column {
-        Text("Tag Ramotar")
-        Text("@tag")
+fun ShareIcon(onClick: () -> Unit) {
+    val icon = painterResource(R.drawable.share)
+    IconButton(onClick = onClick) {
+        Icon(icon, "share", modifier = Modifier.size(24.dp), tint = Color(0xff424242))
+    }
+}
 
-        Text(post.text)
+
+@Composable
+fun BookmarkIcon(onClick: () -> Unit) {
+    val icon = painterResource(R.drawable.bookmark)
+    IconButton(onClick = onClick) {
+        Icon(icon, "share", modifier = Modifier.size(24.dp), tint = Color(0xff424242))
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PostDetailUi(
+    post: Post,
+    modifier: Modifier = Modifier,
+    eventSink: (event: PostDetailScreen.Event) -> Unit
+) {
+
+    println("^^^^${post}")
+
+    val favoriteCount = post.favoriteCount
+
+    println("^^^^FAVORITE COUNT = $favoriteCount")
+
+    Column(modifier = modifier, verticalArrangement = Arrangement.SpaceBetween) {
+
+        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+
+            TopAppBar(
+                title = {
+                    Text("Post")
+                },
+                navigationIcon = {
+                    Icon(
+                        painterResource(app.feed.common.R.drawable.arrow_left),
+                        "arrow left",
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
 
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+            Row {
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(post.commentCount.toString(), fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Comments")
+                Image(
+                    painterResource(R.drawable.tag), "Tag", modifier = Modifier.size(60.dp).clip(
+                        CircleShape
+                    ),
+                    contentScale = ContentScale.Crop
+                )
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                Column {
+                    Text("Tag Ramotar", fontWeight = FontWeight.Bold)
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text("@tag", color = Color(0xff424242))
+                }
+
+
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Spacer(modifier = Modifier.height(16.dp))
 
-                Text(post.retweetCount.toString(), fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Reposts")
+            Text(post.text, color = Color.Black)
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(post.commentCount.toString(), fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Comments")
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+
+                    Text(post.retweetCount.toString(), fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Reposts")
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(favoriteCount.toString(), fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Likes")
+                }
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(post.favoriteCount.toString(), fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Likes")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CommentIcon {
+                        // TODO
+                    }
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RetweetIcon {
+                        // TODO
+                    }
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    HeartIcon {
+                        if (post.isLikedByViewer) {
+                            eventSink(PostDetailScreen.Event.Unlike)
+                        } else {
+                            eventSink(PostDetailScreen.Event.Like)
+                        }
+                    }
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BookmarkIcon {
+                        // TODO
+                    }
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ShareIcon {
+                        // TODO
+                    }
+                }
             }
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                CommentIcon()
-            }
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                RetweetIcon()
-            }
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                HeartIcon()
-            }
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                HeartIcon()
-            }
+        Row(modifier = Modifier.fillMaxWidth().background(Color.White).padding(8.dp)) {
+            TextField(
+                value = "",
+                placeholder = {
+                    Text("Post your reply")
+                },
+                onValueChange = {},
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color(0xfff3f3f3),
+                    unfocusedContainerColor = Color(0xfff3f3f3),
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent
+                ),
+                textStyle = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.fillMaxWidth().padding(2.dp),
+                singleLine = true,
+                shape = RoundedCornerShape(24.dp)
+            )
         }
+
+
     }
 }
