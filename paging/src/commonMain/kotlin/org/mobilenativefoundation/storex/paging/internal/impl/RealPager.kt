@@ -739,6 +739,9 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
         }
     }
 
+    private val operationCache =
+        mutableMapOf<Pair<Operation<Id, Q, K, V>, ItemSnapshotList<Id, Q, V>>, ItemSnapshotList<Id, Q, V>>()
+
     private fun applyOperations(snapshot: ItemSnapshotList<Id, Q, V>, key: K?): ItemSnapshotList<Id, Q, V> {
         if (operations.isEmpty()) {
             return snapshot
@@ -749,7 +752,11 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
 
         return operations.fold(snapshot) { acc, operation ->
             if (operation.shouldApply(key, pagingState, fetchingState)) {
-                operation(acc)
+                if ((operation to acc) in operationCache) {
+                    operationCache[(operation to acc)]!!
+                } else {
+                    operation(acc)
+                }
             } else {
                 acc
             }
