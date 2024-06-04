@@ -15,8 +15,12 @@ class DefaultFetchingStrategy<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any
 
 
     private fun minItemLoadedIsUnderPrefetchLimit(pagingState: PagingState<Id, Q, E>, minLoaded: Q): Boolean {
+        println("HITTING IN MIN ITEM LOADED ${minLoaded.value}")
         val indexOfMinLoaded = pagingState.ids.indexOfFirst { it?.value == minLoaded.value }
-        return indexOfMinLoaded < pagingConfig.prefetchDistance
+        println("INDEX = $indexOfMinLoaded")
+        println("PREFETCH = $prefetchDistance")
+        val minLoadedPosition = indexOfMinLoaded + 1
+        return minLoadedPosition + 1 < pagingConfig.prefetchDistance
     }
 
     override fun shouldFetchForward(

@@ -23,7 +23,7 @@ class TimelineAndroidxPagingSource(
 
     override suspend fun load(params: LoadParams<GetFeedRequest>): LoadResult<GetFeedRequest, Post> {
         return try {
-            val key = params.key ?: GetFeedRequest(PostId("1"), pageSize)
+            val key = params.key ?: GetFeedRequest(null, pageSize)
             val response = api.getFeed(key)
 
             val nextKey = response.nextCursor?.let {
@@ -40,7 +40,12 @@ class TimelineAndroidxPagingSource(
         }
     }
 
-    private fun getPreviousCursor(currentCursor: PostId): PostId? {
+
+    private fun getPreviousCursor(currentCursor: PostId?): PostId? {
+        if (currentCursor == null) {
+            return null
+        }
+
         val prevCursor = cursorHistory[currentCursor]
         if (prevCursor != null) {
             cursorHistory.remove(currentCursor)

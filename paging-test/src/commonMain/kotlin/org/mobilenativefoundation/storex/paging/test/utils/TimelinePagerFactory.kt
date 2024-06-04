@@ -27,7 +27,7 @@ class TimelinePagerFactory(
         val builder = Pager.Builder<String, PostId, GetFeedRequest, Post>(
             pagingConfig = PagingConfig(
                 placeholderId = PostId.Placeholder,
-                initialKey = GetFeedRequest(PostId("1"), pageSize),
+                initialKey = GetFeedRequest(null, pageSize),
                 prefetchDistance = prefetchDistance
             )
         ).coroutineDispatcher(coroutineDispatcher)
@@ -48,9 +48,9 @@ class TimelinePagerFactory(
         PagingSource<String, PostId, GetFeedRequest, Post, Throwable> { params ->
             val response = api.getFeed(params.key)
 
-            val nextKey = response.nextCursor?.let {
+            val nextKey = response.nextCursor?.let { nextCursor ->
                 params.key.copy(
-                    cursor = response.nextCursor,
+                    cursor = nextCursor,
                     size = pageSize
                 )
             }
@@ -67,7 +67,11 @@ class TimelinePagerFactory(
 
     private val cursorHistory = LinkedHashMap<PostId, PostId>()
 
-    private fun getPreviousCursor(currentCursor: PostId): PostId? {
+    private fun getPreviousCursor(currentCursor: PostId?): PostId? {
+        if (currentCursor == null) {
+            return null
+        }
+
         val prevCursor = cursorHistory[currentCursor]
         if (prevCursor != null) {
             cursorHistory.remove(currentCursor)

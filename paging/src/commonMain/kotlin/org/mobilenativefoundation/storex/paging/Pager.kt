@@ -15,6 +15,7 @@ import org.mobilenativefoundation.storex.paging.custom.*
 import org.mobilenativefoundation.storex.paging.db.DriverFactory
 import org.mobilenativefoundation.storex.paging.internal.api.DispatcherProvider
 import org.mobilenativefoundation.storex.paging.internal.api.FetchingState
+import org.mobilenativefoundation.storex.paging.internal.api.OperationManager
 import org.mobilenativefoundation.storex.paging.internal.impl.*
 import org.mobilenativefoundation.storex.paging.internal.impl.DefaultErrorFactory
 import kotlin.reflect.KClass
@@ -25,7 +26,8 @@ interface SelfUpdatingItemFactory<Id : Comparable<Id>, Q : Quantifiable<Id>, V :
 
 
 interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any> :
-    SelfUpdatingItemFactory<Id, Q, V, E> {
+    SelfUpdatingItemFactory<Id, Q, V, E>,
+    OperationManager<Id, Q, K, V> {
 
     // TODO(): Design decision to support incremental/decremental loading as well as manually force fetching by explicitly providing params
 
@@ -49,7 +51,7 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
     ): StateFlow<List<V>>
 
     @OptIn(InternalSerializationApi::class)
-    class Builder<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V : Identifiable<Id, Q>, E : Any, P : Any>(
+    class Builder<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V : Identifiable<Id, Q>, E : Any>(
         private val idKClass: KClass<Id>,
         private val keyKClass: KClass<K>,
         private val valueKClass: KClass<V>,
@@ -58,7 +60,7 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
         private val pagingConfig: PagingConfig<Id, Q, K>,
         private val driverFactory: DriverFactory?,
         private val errorFactory: ErrorFactory<E>,
-        private val operations: List<Operation<Id, Q, K, V, P, P>>
+        private val operations: List<Operation<Id, Q, K, V>>
     ) {
         private var storexPagingSource: PagingSource<Id, Q, K, V, E>? = null
         private var androidxPagingSource: androidx.paging.PagingSource<K, V>? = null
@@ -224,7 +226,6 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
                 ),
                 registry = registry,
                 normalizedStore = normalizedStore,
-                operations = operations,
                 initialState = initialState,
             )
         }
@@ -234,8 +235,8 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
                 pagingConfig: PagingConfig<Id, Q, K>,
                 driverFactory: DriverFactory,
                 errorFactory: ErrorFactory<E>,
-                operations: List<Operation<Id, Q, K, V, P, P>>,
-            ): Builder<Id, Q, K, V, E, P> {
+                operations: List<Operation<Id, Q, K, V>>,
+            ): Builder<Id, Q, K, V, E> {
                 return Builder(
                     idKClass = Id::class,
                     keyKClass = K::class,
@@ -253,7 +254,7 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
                 pagingConfig: PagingConfig<Id, Q, K>,
                 driverFactory: DriverFactory,
                 errorFactory: ErrorFactory<E>,
-            ): Builder<Id, Q, K, V, E, Any> {
+            ): Builder<Id, Q, K, V, E> {
                 return Builder(
                     idKClass = Id::class,
                     keyKClass = K::class,
@@ -270,7 +271,7 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
             inline operator fun <reified Id : Comparable<Id>, reified Q : Quantifiable<Id>, reified K : Comparable<K>, reified V : Identifiable<Id, Q>> invoke(
                 pagingConfig: PagingConfig<Id, Q, K>,
                 driverFactory: DriverFactory,
-            ): Builder<Id, Q, K, V, Throwable, Any> {
+            ): Builder<Id, Q, K, V, Throwable> {
                 return Builder(
                     idKClass = Id::class,
                     keyKClass = K::class,
@@ -286,7 +287,7 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
 
             inline operator fun <reified Id : Comparable<Id>, reified Q : Quantifiable<Id>, reified K : Comparable<K>, reified V : Identifiable<Id, Q>> invoke(
                 pagingConfig: PagingConfig<Id, Q, K>,
-            ): Builder<Id, Q, K, V, Throwable, Any> {
+            ): Builder<Id, Q, K, V, Throwable> {
                 return Builder(
                     idKClass = Id::class,
                     keyKClass = K::class,

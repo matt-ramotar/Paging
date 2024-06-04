@@ -7,10 +7,9 @@ import org.mobilenativefoundation.storex.paging.Quantifiable
 /**
  * A strategy for validating the paged data against specific rules or constraints.
  */
-fun interface ValidationStrategy<Id : Comparable<Id>, Q: Quantifiable<Id>, V : Identifiable<Id, Q>, P : Any, T : P> :
-    TransformationStrategy<Id, Q, V, T> {
+fun interface ValidationStrategy<Id : Comparable<Id>, Q: Quantifiable<Id>, V : Identifiable<Id, Q>> :
+    TransformationStrategy<Id, Q, V> {
     override operator fun invoke(
         snapshot: ItemSnapshotList<Id, Q, V>,
-        params: T
     ): ItemSnapshotList<Id, Q, V>
 }

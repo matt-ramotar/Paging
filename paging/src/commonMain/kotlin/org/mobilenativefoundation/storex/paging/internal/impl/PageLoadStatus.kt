@@ -84,7 +84,8 @@ sealed interface PageLoadStatus<Id : Comparable<Id>, Q : Quantifiable<Id>, out K
         val reason: Reason
     ) : PageLoadStatus<Id, Q, K, V, E> {
         enum class Reason {
-            LocalOnlyRequest
+            LocalOnlyRequest,
+            NetworkResponse
         }
     }
 

@@ -8,10 +8,9 @@ import org.mobilenativefoundation.storex.paging.Quantifiable
  * Represents a strategy for aggregating loaded pages of data.
  */
 
-fun interface AggregatingStrategy<Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, P : Any, T : P> :
-    TransformationStrategy<Id, Q, V, T> {
+fun interface AggregatingStrategy<Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>> :
+    TransformationStrategy<Id, Q, V> {
     override operator fun invoke(
         snapshot: ItemSnapshotList<Id, Q, V>,
-        params: T
     ): ItemSnapshotList<Id, Q, V>
 }

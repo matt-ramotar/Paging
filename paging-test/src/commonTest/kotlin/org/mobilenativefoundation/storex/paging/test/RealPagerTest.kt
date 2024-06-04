@@ -9,6 +9,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.mobilenativefoundation.storex.paging.*
 import org.mobilenativefoundation.storex.paging.test.utils.TimelineAndroidxPagingSource
+import org.mobilenativefoundation.storex.paging.test.utils.TimelinePagerFactory
 import org.mobilenativefoundation.storex.paging.test.utils.models.GetFeedRequest
 import org.mobilenativefoundation.storex.paging.test.utils.models.PostId
 import kotlin.test.Test
@@ -35,7 +36,7 @@ class RealPagerTest {
     fun pagingState_givenEmptyFlow_shouldEagerLoad() = testScope.runTest {
 
         val pager =
-            org.mobilenativefoundation.storex.paging.test.utils.TimelinePagerFactory().create(coroutineDispatcher)
+            TimelinePagerFactory().create(coroutineDispatcher)
 
         advanceUntilIdle()
 
@@ -121,7 +122,7 @@ class RealPagerTest {
             val prefetchDistance = 100
 
             fun nextCursor(prefetchDistance: Int, request: Int) =
-                (prefetchDistance + 1 + (pageSize * (request - 1))).toString()
+                (500 - (prefetchDistance + (pageSize * (request - 1)))).toString()
 
             fun nextKey(prefetchDistance: Int, request: Int) =
                 GetFeedRequest(PostId(nextCursor(prefetchDistance, request)), pageSize)
@@ -162,13 +163,13 @@ class RealPagerTest {
                 println("loading1 = $loading1")
                 assertIs<PagingLoadState.Loading>(loading1.loadStates.append)
                 assertEquals(100, loading1.ids.size)
-                assertEquals(List(100) { PostId((it + 1).toString()) }, loading1.ids)
+                assertEquals((500 downTo 401).toList().map { PostId(it.toString()) }, loading1.ids)
 
 
                 val success1 = awaitItem()
                 assertIs<PagingLoadState.NotLoading>(success1.loadStates.append)
                 assertEquals(120, success1.ids.size)
-                assertEquals(List(120) { PostId((it + 1).toString()) }, success1.ids)
+                assertEquals((500 downTo 381).toList().map { PostId(it.toString()) }, success1.ids)
                 println("success1 = $success1")
 
 

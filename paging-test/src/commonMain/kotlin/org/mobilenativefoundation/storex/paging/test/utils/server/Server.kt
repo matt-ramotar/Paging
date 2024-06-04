@@ -20,7 +20,6 @@ class Server {
     }
 
     fun getFeed(request: GetFeedRequest): GetFeedResponse {
-        return feedService.getFeed(request)
+        return feedService.getFeed(request, false)
     }
-
 }

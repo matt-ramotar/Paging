@@ -98,7 +98,7 @@ inline fun <reified Id : Comparable<Id>, reified Q : Quantifiable<Id>, reified K
     pagingConfig: PagingConfig<Id, Q, K>,
     driverFactory: DriverFactory,
     errorFactory: ErrorFactory<E>,
-    operations: List<Operation<Id, Q, K, V, P, P>>,
+    operations: List<Operation<Id, Q, K, V>>,
 ): Pager<Id, Q, K, V, E> {
     return Pager.Builder<Id, Q, K, V, E, P>(
         pagingConfig = pagingConfig,

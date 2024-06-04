@@ -314,6 +314,10 @@ class RealNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
 
                 val items = fetcherResult.value.items
 
+                if (items.isEmpty()) {
+                    return PageLoadStatus.Empty(isTerminal = true, PageLoadStatus.Empty.Reason.NetworkResponse)
+                }
+
                 println("ITEMS = $items")
 
 
@@ -369,9 +373,12 @@ class RealNormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
                     }
                 }
 
+                println("UPDATING MAX ITEM LOADED SO FAR")
+                println("UPDATING MIN ITEM LOADED SO FAR")
                 fetchingStateHolder.updateMaxItemLoadedSoFar(maxItemLoaded)
                 fetchingStateHolder.updateMinItemLoadedSoFar(minItemLoaded)
-
+                println("UPDATED MAX ITEM LOADED SO FAR")
+                println("UPDATED MIN ITEM LOADED SO FAR")
                 trimToMaxSize()
 
                 PageLoadStatus.Success(

@@ -12,14 +12,19 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.serializer
 import org.mobilenativefoundation.storex.paging.*
-import org.mobilenativefoundation.storex.paging.custom.*
+import org.mobilenativefoundation.storex.paging.custom.ErrorHandlingStrategy
+import org.mobilenativefoundation.storex.paging.custom.FetchingStrategy
+import org.mobilenativefoundation.storex.paging.custom.LaunchEffect
+import org.mobilenativefoundation.storex.paging.custom.Middleware
 import org.mobilenativefoundation.storex.paging.internal.api.FetchingStateHolder
 import org.mobilenativefoundation.storex.paging.internal.api.NormalizedStore
+import org.mobilenativefoundation.storex.paging.internal.api.OperationManager
+import org.mobilenativefoundation.storex.paging.internal.api.RealOperationManager
 
 // TODO(): Design decision to support initial state (e.g., hardcoded)
 
 @OptIn(InternalSerializationApi::class)
-class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V : Identifiable<Id, Q>, E : Any, P : Any>(
+class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V : Identifiable<Id, Q>, E : Any>(
     coroutineDispatcher: CoroutineDispatcher,
     private val fetchingStateHolder: FetchingStateHolder<Id, Q, K>,
     private val launchEffects: List<LaunchEffect>,
@@ -29,15 +34,17 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
     private val initialLoadParams: PagingSource.LoadParams<K>,
     private val registry: KClassRegistry<Id, Q, K, V, E>,
     private val normalizedStore: NormalizedStore<Id, Q, K, V, E>,
-    private val operations: List<Operation<Id, Q, K, V, P, P>>,
-    private val initialState: PagingState<Id, Q, E> = PagingState.initial()
-) : Pager<Id, Q, K, V, E> {
+    private val initialState: PagingState<Id, Q, E> = PagingState.initial(),
+    operationManager: OperationManager<Id, Q, K, V> = RealOperationManager()
+) : Pager<Id, Q, K, V, E>, OperationManager<Id, Q, K, V> by operationManager {
 
     private val coroutineScope = CoroutineScope(coroutineDispatcher)
 
     // TODO(): This is not thread safe!
     private val _mutablePagingState = MutableStateFlow(initialState)
     private val _processingAppendQueue = MutableStateFlow(false)
+
+    private val operationManager = RealOperationManager<Id, Q, K, V>()
 
     private val pendingSkipQueueJobs = mutableMapOf<K, PendingSkipQueueJob<K>>()
 
@@ -144,8 +151,8 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
                                     // No op, this is a refresh request already in flight
                                 } else {
 
-                                addPendingQueueJob(request.key)
-                                handlePrependLoading(request.toPagingSourceLoadParams())
+                                    addPendingQueueJob(request.key)
+                                    handlePrependLoading(request.toPagingSourceLoadParams())
                                 }
 
 
@@ -245,24 +252,24 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
     }
 
 
-    private fun transformSnapshot(
-        snapshot: ItemSnapshotList<Id, Q, V>,
-        key: K?,
-    ): ItemSnapshotList<Id, Q, V> {
-
-        if (operations.isEmpty()) {
-            return snapshot
-        }
-
-        val pagingState = _mutablePagingState.value
-        val fetchingState = fetchingStateHolder.state.value
-
-        return operations.fold(snapshot) { acc, operation ->
-            operation.shouldApply(key, pagingState, fetchingState)?.let { params ->
-                operation.strategy.invoke(acc, params)
-            } ?: acc
-        }
-    }
+//    private fun applyOperations(
+//        snapshot: ItemSnapshotList<Id, Q, V>,
+//        key: K?,
+//    ): ItemSnapshotList<Id, Q, V> {
+//
+//        if (operations.isEmpty()) {
+//            return snapshot
+//        }
+//
+//        val pagingState = _mutablePagingState.value
+//        val fetchingState = fetchingStateHolder.state.value
+//
+//        return operations.fold(snapshot) { acc, operation ->
+//            operation.shouldApply(key, pagingState, fetchingState)?.let { params ->
+//                operation.strategy.invoke(acc, params)
+//            } ?: acc
+//        }
+//    }
 
     private suspend fun processAppendQueue() {
 
@@ -625,7 +632,7 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
 
     private fun updateStateWithAppendData(data: PageLoadStatus.Success<Id, Q, K, V, E>, key: K?) {
 
-        val transformedSnapshot = transformSnapshot(data.snapshot, key)
+        val transformedSnapshot = applyOperations(data.snapshot, key)
 
         _mutablePagingState.value = PagingState<Id, Q, E>(
             ids = transformedSnapshot.getAllIds(),
@@ -642,7 +649,7 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
         val prevState = _mutablePagingState.value
 
         println("PREV STATE = $prevState")
-        val transformedSnapshot = transformSnapshot(data.snapshot, key)
+        val transformedSnapshot = applyOperations(data.snapshot, key)
         println("TRANSFORMED SNAPSHOT = $transformedSnapshot")
 
         _mutablePagingState.value = PagingState(
@@ -709,6 +716,24 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
             }
         } else {
             this
+        }
+    }
+
+    private fun applyOperations(snapshot: ItemSnapshotList<Id, Q, V>, key: K?): ItemSnapshotList<Id, Q, V> {
+        val operations = operationManager.getOperations()
+        if (operations.isEmpty()) {
+            return snapshot
+        }
+
+        val pagingState = _mutablePagingState.value
+        val fetchingState = fetchingStateHolder.state.value
+
+        return operations.fold(snapshot) { acc, operation ->
+            if (operation.shouldApply(key, pagingState, fetchingState)) {
+                operation.strategy(acc)
+            } else {
+                acc
+            }
         }
     }
 
