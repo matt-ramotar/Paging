@@ -12,14 +12,9 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.serializer
 import org.mobilenativefoundation.storex.paging.*
-import org.mobilenativefoundation.storex.paging.custom.ErrorHandlingStrategy
-import org.mobilenativefoundation.storex.paging.custom.FetchingStrategy
-import org.mobilenativefoundation.storex.paging.custom.LaunchEffect
-import org.mobilenativefoundation.storex.paging.custom.Middleware
+import org.mobilenativefoundation.storex.paging.custom.*
 import org.mobilenativefoundation.storex.paging.internal.api.FetchingStateHolder
 import org.mobilenativefoundation.storex.paging.internal.api.NormalizedStore
-import org.mobilenativefoundation.storex.paging.internal.api.OperationManager
-import org.mobilenativefoundation.storex.paging.internal.api.RealOperationManager
 
 // TODO(): Design decision to support initial state (e.g., hardcoded)
 
@@ -34,17 +29,14 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
     private val initialLoadParams: PagingSource.LoadParams<K>,
     private val registry: KClassRegistry<Id, Q, K, V, E>,
     private val normalizedStore: NormalizedStore<Id, Q, K, V, E>,
-    private val initialState: PagingState<Id, Q, E> = PagingState.initial(),
-    operationManager: OperationManager<Id, Q, K, V> = RealOperationManager()
-) : Pager<Id, Q, K, V, E>, OperationManager<Id, Q, K, V> by operationManager {
+    private val initialState: PagingState<Id, Q, E> = PagingState.initial()
+) : Pager<Id, Q, K, V, E> {
 
     private val coroutineScope = CoroutineScope(coroutineDispatcher)
 
     // TODO(): This is not thread safe!
     private val _mutablePagingState = MutableStateFlow(initialState)
     private val _processingAppendQueue = MutableStateFlow(false)
-
-    private val operationManager = RealOperationManager<Id, Q, K, V>()
 
     private val pendingSkipQueueJobs = mutableMapOf<K, PendingSkipQueueJob<K>>()
 
@@ -60,6 +52,19 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
     init {
         handleLaunchEffects()
         handleEagerLoading()
+    }
+
+    private val operations = mutableListOf<Operation<Id, Q, K, V>>()
+    private var lastUntransformedSnapshot: ItemSnapshotList<Id, Q, V>? = null
+
+    override fun addOperation(operation: Operation<Id, Q, K, V>) {
+        operations.add(operation)
+        applyOperationsAndUpdateState()
+    }
+
+    override fun removeOperation(operation: Operation<Id, Q, K, V>) {
+        operations.remove(operation)
+        applyOperationsAndUpdateState()
     }
 
     override fun createSelfUpdatingItem(id: Q): SelfUpdatingItem<Id, Q, V, E> {
@@ -629,8 +634,21 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
         }
     }
 
+    private fun applyOperationsAndUpdateState() {
+        lastUntransformedSnapshot?.let {
+            val transformedSnapshot = applyOperations(it, null)
+            _mutablePagingState.value = PagingState<Id, Q, E>(
+                ids = transformedSnapshot.getAllIds(),
+                loadStates = _mutablePagingState.value.loadStates
+            )
+        }
+
+    }
+
 
     private fun updateStateWithAppendData(data: PageLoadStatus.Success<Id, Q, K, V, E>, key: K?) {
+
+        lastUntransformedSnapshot = data.snapshot
 
         val transformedSnapshot = applyOperations(data.snapshot, key)
 
@@ -646,6 +664,8 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
     }
 
     private fun updateStateWithPrependData(data: PageLoadStatus.Success<Id, Q, K, V, E>, key: K?) {
+        lastUntransformedSnapshot = data.snapshot
+
         val prevState = _mutablePagingState.value
 
         println("PREV STATE = $prevState")
@@ -720,7 +740,6 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
     }
 
     private fun applyOperations(snapshot: ItemSnapshotList<Id, Q, V>, key: K?): ItemSnapshotList<Id, Q, V> {
-        val operations = operationManager.getOperations()
         if (operations.isEmpty()) {
             return snapshot
         }
@@ -735,6 +754,15 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
                 acc
             }
         }
+    }
+
+    override fun removeAll(predicate: (Operation<Id, Q, K, V>) -> Boolean) {
+        operations.removeAll { predicate(it) }
+    }
+
+
+    override fun clearOperations() {
+        operations.clear()
     }
 
 

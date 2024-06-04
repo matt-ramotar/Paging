@@ -95,14 +95,14 @@ class HomeTabPresenter(
 
 
         LaunchedEffect(sort) {
-            when (sort) {
-                HomeFeedSort.Best -> pager.addOperation(SortedByRelevanceScore)
-                HomeFeedSort.Hot -> pager.addOperation(SortedByTrendingScore)
-                HomeFeedSort.New -> pager.addOperation(SortedByDateTimeCreated)
+            val sortingOperation = when (sort) {
+                HomeFeedSort.Best -> SortedByRelevanceScore
+                HomeFeedSort.Hot -> SortedByTrendingScore
+                HomeFeedSort.New -> SortedByDateTimeCreated
                 is HomeFeedSort.Top -> {
                     val s = sort as HomeFeedSort.Top
                     val timespan = s.timespan
-                    val operation = when (timespan) {
+                    when (timespan) {
                         Timespan.Hour -> TopPosts(TimeRange.HOUR)
                         Timespan.Day -> TopPosts(TimeRange.DAY)
                         Timespan.Week -> TopPosts(TimeRange.WEEK)
@@ -110,9 +110,11 @@ class HomeTabPresenter(
                         Timespan.Year -> TopPosts(TimeRange.YEAR)
                         Timespan.AllTime -> TopPosts(TimeRange.INF)
                     }
-                    pager.addOperation(operation)
                 }
             }
+
+            pager.clearOperations()
+            pager.addOperation(sortingOperation)
         }
 
         return HomeTab.State("", pagingState.ids.toImmutableList(), sort = sort) { event ->
