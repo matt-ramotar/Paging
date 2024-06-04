@@ -4,7 +4,7 @@ import org.mobilenativefoundation.storex.paging.Identifiable
 import org.mobilenativefoundation.storex.paging.ItemSnapshotList
 import org.mobilenativefoundation.storex.paging.Quantifiable
 
-interface TransformationStrategy<Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>> {
+fun interface TransformationStrategy<Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>> {
 
     operator fun invoke(
         snapshot: ItemSnapshotList<Id, Q, V>,

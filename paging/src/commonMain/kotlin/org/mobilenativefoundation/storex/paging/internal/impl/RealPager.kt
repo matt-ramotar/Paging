@@ -730,7 +730,7 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
 
         return operations.fold(snapshot) { acc, operation ->
             if (operation.shouldApply(key, pagingState, fetchingState)) {
-                operation.strategy(acc)
+                operation(acc)
             } else {
                 acc
             }

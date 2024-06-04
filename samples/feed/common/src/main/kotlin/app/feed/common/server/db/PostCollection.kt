@@ -3,6 +3,7 @@ package app.feed.common.server.db
 import app.feed.common.models.Post
 import app.feed.common.models.PostId
 import kotlinx.datetime.*
+import kotlin.random.Random
 
 
 fun createdAt(month: Month, day: Int): LocalDateTime {
@@ -76,7 +77,9 @@ class PostCollection {
                 commentCount = 0,
                 isRetweetedByViewer = false,
                 isLikedByViewer = false,
-                parentPostId = null
+                parentPostId = null,
+                relevanceScore = Random.nextFloat(),
+                trendingScore = Random.nextFloat()
             )
         }
 

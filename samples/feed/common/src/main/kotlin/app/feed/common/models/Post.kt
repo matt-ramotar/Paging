@@ -1,8 +1,5 @@
 package app.feed.common.models
 
-import android.os.Parcelable
-import kotlinx.datetime.LocalDateTime
-import kotlinx.parcelize.Parcelize
 import kotlinx.serialization.Serializable
 import org.mobilenativefoundation.storex.paging.Identifiable
 
@@ -17,7 +14,9 @@ data class Post(
     val commentCount: Int,
     val isRetweetedByViewer: Boolean,
     val isLikedByViewer: Boolean,
-    val parentPostId: String? = null
+    val relevanceScore: Float,
+    val trendingScore: Float,
+    val parentPostId: String? = null,
 ) : Identifiable<String, PostId>
 
 

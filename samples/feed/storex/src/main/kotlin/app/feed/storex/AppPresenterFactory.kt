@@ -1,8 +1,6 @@
 package app.feed.storex
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import app.feed.common.models.GetFeedRequest
 import app.feed.common.models.Post
 import app.feed.common.models.PostId
@@ -14,8 +12,12 @@ import com.slack.circuit.runtime.presenter.Presenter
 import com.slack.circuit.runtime.screen.Screen
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
 import org.mobilenativefoundation.storex.paging.*
+import org.mobilenativefoundation.storex.paging.custom.Operation
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.INFINITE
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
 
 data class AppPresenterFactory(
     private val pager: Pager<String, PostId, GetFeedRequest, Post, Throwable>
@@ -31,6 +33,51 @@ data class AppPresenterFactory(
 
 }
 
+data object SortedByRelevanceScore : Operation<String, PostId, GetFeedRequest, Post>() {
+    override operator fun invoke(snapshot: ItemSnapshotList<String, PostId, Post>): ItemSnapshotList<String, PostId, Post> {
+        return ItemSnapshotList(snapshot.sortedBy { it?.relevanceScore })
+    }
+}
+
+data object SortedByTrendingScore : Operation<String, PostId, GetFeedRequest, Post>() {
+    override operator fun invoke(snapshot: ItemSnapshotList<String, PostId, Post>): ItemSnapshotList<String, PostId, Post> {
+        return ItemSnapshotList(snapshot.sortedBy { it?.trendingScore })
+    }
+}
+
+data object SortedByDateTimeCreated : Operation<String, PostId, GetFeedRequest, Post>() {
+    override operator fun invoke(snapshot: ItemSnapshotList<String, PostId, Post>): ItemSnapshotList<String, PostId, Post> {
+        return ItemSnapshotList(snapshot.sortedBy { it?.createdAt })
+    }
+}
+
+enum class TimeRange(val duration: Duration) {
+    HOUR(1.hours),
+    DAY(1.days),
+    WEEK(7.days),
+    MONTH(31.days),
+    YEAR(365.days),
+    INF(INFINITE)
+}
+
+
+class TopPosts(private val timeRange: TimeRange) : Operation<String, PostId, GetFeedRequest, Post>() {
+
+    private fun isWithinRange(timestamp: Long?, range: TimeRange): Boolean {
+        if (timestamp == null) return false
+
+        val now = System.currentTimeMillis()
+        val durationMillis = range.duration.inWholeMilliseconds
+        return now - timestamp <= durationMillis
+    }
+
+    override operator fun invoke(snapshot: ItemSnapshotList<String, PostId, Post>): ItemSnapshotList<String, PostId, Post> {
+        val filteredAndSorted = snapshot.filter { isWithinRange(it?.createdAt, timeRange) }
+            .sortedByDescending { it?.favoriteCount }
+        return ItemSnapshotList(filteredAndSorted)
+    }
+}
+
 
 class HomeTabPresenter(
     private val navigator: Navigator,
@@ -40,15 +87,35 @@ class HomeTabPresenter(
 
     private val requests = MutableSharedFlow<PagingRequest<GetFeedRequest>>(replay = 20)
 
-    private var sort = MutableStateFlow<HomeFeedSort>(HomeFeedSort.New)
-
     @Composable
     override fun present(): HomeTab.State {
 
         val pagingState by pager.collectAsState()
-        val sortState by sort.collectAsState()
+        var sort by remember { mutableStateOf<HomeFeedSort>(HomeFeedSort.New) }
 
-        return HomeTab.State("", pagingState.ids.toImmutableList(), sort = sortState) { event ->
+
+        LaunchedEffect(sort) {
+            when (sort) {
+                HomeFeedSort.Best -> pager.addOperation(SortedByRelevanceScore)
+                HomeFeedSort.Hot -> pager.addOperation(SortedByTrendingScore)
+                HomeFeedSort.New -> pager.addOperation(SortedByDateTimeCreated)
+                is HomeFeedSort.Top -> {
+                    val s = sort as HomeFeedSort.Top
+                    val timespan = s.timespan
+                    val operation = when (timespan) {
+                        Timespan.Hour -> TopPosts(TimeRange.HOUR)
+                        Timespan.Day -> TopPosts(TimeRange.DAY)
+                        Timespan.Week -> TopPosts(TimeRange.WEEK)
+                        Timespan.Month -> TopPosts(TimeRange.MONTH)
+                        Timespan.Year -> TopPosts(TimeRange.YEAR)
+                        Timespan.AllTime -> TopPosts(TimeRange.INF)
+                    }
+                    pager.addOperation(operation)
+                }
+            }
+        }
+
+        return HomeTab.State("", pagingState.ids.toImmutableList(), sort = sort) { event ->
 
             when (event) {
                 HomeTab.Event.Refresh -> {
@@ -72,7 +139,7 @@ class HomeTabPresenter(
                 )
 
                 is HomeTab.Event.UpdateSort -> {
-                    sort.value = event.sort
+                    sort = event.sort
                 }
             }
         }
