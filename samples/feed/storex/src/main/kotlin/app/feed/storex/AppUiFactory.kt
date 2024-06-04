@@ -2,6 +2,7 @@ package app.feed.storex
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -183,6 +184,35 @@ data object HomeTabUi : Ui<HomeTab.State> {
                     state.eventSink(HomeTab.Event.UpdateSort(it))
                 }
 
+            }
+
+
+            Row(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+                TextField(
+                    value = "",
+                    placeholder = {
+                        Text("Search")
+                    },
+                    leadingIcon = {
+
+                        Icon(
+                            painterResource(app.feed.common.R.drawable.search),
+                            "search",
+                            modifier = Modifier.size(24.dp),
+                        )
+                    },
+                    onValueChange = {},
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color(0xfff3f3f3),
+                        unfocusedContainerColor = Color(0xfff3f3f3),
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent
+                    ),
+                    textStyle = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.fillMaxWidth().padding(2.dp),
+                    singleLine = true,
+                    shape = RoundedCornerShape(8.dp)
+                )
             }
 
             LazySelfUpdatingPagingItems<String, PostId, Post, Throwable>(state.postIds, {
