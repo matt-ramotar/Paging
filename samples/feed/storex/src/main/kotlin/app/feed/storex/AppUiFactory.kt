@@ -1,14 +1,17 @@
 package app.feed.storex
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text2.input.rememberTextFieldState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import app.feed.common.R
 import app.feed.common.models.Post
 import app.feed.common.models.PostId
 import app.feed.common.ui.PostDetailScreen
@@ -50,6 +53,10 @@ sealed interface HomeFeedSort {
     data object New : HomeFeedSort {
         override val id: String = "new"
     }
+
+    data object Default: HomeFeedSort {
+        override val id: String = "default"
+    }
 }
 
 enum class Timespan {
@@ -71,10 +78,11 @@ private fun HomeFeedSortDropdownMenu(
 
     val iconResId = remember(sort) {
         when (sort) {
-            HomeFeedSort.Best -> app.feed.common.R.drawable.trophy
-            HomeFeedSort.Hot -> app.feed.common.R.drawable.hot
-            HomeFeedSort.New -> app.feed.common.R.drawable.clock
-            is HomeFeedSort.Top -> app.feed.common.R.drawable.top
+            HomeFeedSort.Best -> R.drawable.trophy
+            HomeFeedSort.Hot -> R.drawable.hot
+            HomeFeedSort.New -> R.drawable.one_day
+            is HomeFeedSort.Top -> R.drawable.top
+            HomeFeedSort.Default -> R.drawable.clock
         }
     }
 
@@ -160,7 +168,7 @@ private fun HomeFeedSortDropdownMenu(
 
 
 data object HomeTabUi : Ui<HomeTab.State> {
-    @OptIn(ExperimentalMaterial3Api::class)
+    @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
     @Composable
     override fun Content(state: HomeTab.State, modifier: Modifier) {
 
@@ -188,8 +196,10 @@ data object HomeTabUi : Ui<HomeTab.State> {
 
 
             Row(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+                var value by remember {  mutableStateOf("")}
+
                 TextField(
-                    value = "",
+                    value = value,
                     placeholder = {
                         Text("Search")
                     },
@@ -201,7 +211,10 @@ data object HomeTabUi : Ui<HomeTab.State> {
                             modifier = Modifier.size(24.dp),
                         )
                     },
-                    onValueChange = {},
+                    onValueChange = {
+                        value = it
+                        state.eventSink(HomeTab.Event.UpdateSearchQuery(it.ifEmpty { null }))
+                    },
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color(0xfff3f3f3),
                         unfocusedContainerColor = Color(0xfff3f3f3),

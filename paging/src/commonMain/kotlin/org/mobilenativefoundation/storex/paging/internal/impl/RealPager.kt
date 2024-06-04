@@ -634,7 +634,7 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
         }
     }
 
-    private fun applyOperationsAndUpdateState() {
+    override fun applyOperationsAndUpdateState() {
         lastUntransformedSnapshot?.let {
             val transformedSnapshot = applyOperations(it, null)
             _mutablePagingState.value = PagingState<Id, Q, E>(

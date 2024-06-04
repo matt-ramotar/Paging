@@ -14,6 +14,7 @@ import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.MutableSharedFlow
 import org.mobilenativefoundation.storex.paging.*
 import org.mobilenativefoundation.storex.paging.custom.Operation
+import org.mobilenativefoundation.storex.paging.internal.api.FetchingState
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.INFINITE
 import kotlin.time.Duration.Companion.days
@@ -35,19 +36,25 @@ data class AppPresenterFactory(
 
 data object SortedByRelevanceScore : Operation<String, PostId, GetFeedRequest, Post>() {
     override operator fun invoke(snapshot: ItemSnapshotList<String, PostId, Post>): ItemSnapshotList<String, PostId, Post> {
-        return ItemSnapshotList(snapshot.sortedBy { it?.relevanceScore })
+        return ItemSnapshotList(snapshot.sortedByDescending { it?.relevanceScore })
     }
 }
 
 data object SortedByTrendingScore : Operation<String, PostId, GetFeedRequest, Post>() {
     override operator fun invoke(snapshot: ItemSnapshotList<String, PostId, Post>): ItemSnapshotList<String, PostId, Post> {
-        return ItemSnapshotList(snapshot.sortedBy { it?.trendingScore })
+        return ItemSnapshotList(snapshot.sortedByDescending { it?.trendingScore })
     }
 }
 
 data object SortedByDateTimeCreated : Operation<String, PostId, GetFeedRequest, Post>() {
     override operator fun invoke(snapshot: ItemSnapshotList<String, PostId, Post>): ItemSnapshotList<String, PostId, Post> {
-        return ItemSnapshotList(snapshot.sortedBy { it?.createdAt })
+        return ItemSnapshotList(snapshot.sortedByDescending { it?.createdAt })
+    }
+}
+
+data object SortedById : Operation<String, PostId, GetFeedRequest, Post>() {
+    override operator fun invoke(snapshot: ItemSnapshotList<String, PostId, Post>): ItemSnapshotList<String, PostId, Post> {
+        return ItemSnapshotList(snapshot.sortedBy { it?.id?.value })
     }
 }
 
@@ -79,6 +86,43 @@ class TopPosts(private val timeRange: TimeRange) : Operation<String, PostId, Get
 }
 
 
+class Search(
+    private val searchFields: List<(Post) -> String>,
+) : Operation<String, PostId, GetFeedRequest, Post>() {
+
+    private var searchQuery: String = ""
+
+    fun setSearchQuery(query: String) {
+        searchQuery = query
+    }
+
+    fun clearSearchQuery() {
+        searchQuery = ""
+    }
+
+    override fun invoke(snapshot: ItemSnapshotList<String, PostId, Post>): ItemSnapshotList<String, PostId, Post> {
+        val nextItems = snapshot.filter { post ->
+            if (post == null) {
+                false
+            } else {
+                searchFields.any { field -> field(post).lowercase().contains(searchQuery) }
+            }
+        }
+
+        return ItemSnapshotList(nextItems)
+    }
+
+    override fun shouldApply(
+        key: GetFeedRequest?,
+        pagingState: PagingState<String, PostId, *>,
+        fetchingState: FetchingState<String, PostId, GetFeedRequest>
+    ): Boolean {
+        return searchQuery.isNotEmpty()
+    }
+
+}
+
+
 class HomeTabPresenter(
     private val navigator: Navigator,
     private val pager: Pager<String, PostId, GetFeedRequest, Post, Throwable>
@@ -87,12 +131,18 @@ class HomeTabPresenter(
 
     private val requests = MutableSharedFlow<PagingRequest<GetFeedRequest>>(replay = 20)
 
+    private val searchOperation = Search(
+        listOf(
+            { post: Post -> post.text },
+            { post: Post -> post.id.value }
+        )
+    )
+
     @Composable
     override fun present(): HomeTab.State {
 
         val pagingState by pager.collectAsState()
         var sort by remember { mutableStateOf<HomeFeedSort>(HomeFeedSort.New) }
-
 
         LaunchedEffect(sort) {
             val sortingOperation = when (sort) {
@@ -111,10 +161,13 @@ class HomeTabPresenter(
                         Timespan.AllTime -> TopPosts(TimeRange.INF)
                     }
                 }
+
+                HomeFeedSort.Default -> SortedById
             }
 
             pager.clearOperations()
             pager.addOperation(sortingOperation)
+            pager.addOperation(searchOperation)
         }
 
         return HomeTab.State("", pagingState.ids.toImmutableList(), sort = sort) { event ->
@@ -142,6 +195,15 @@ class HomeTabPresenter(
 
                 is HomeTab.Event.UpdateSort -> {
                     sort = event.sort
+                }
+
+                is HomeTab.Event.UpdateSearchQuery -> {
+                    if (event.searchQuery != null) {
+                        searchOperation.setSearchQuery(event.searchQuery)
+                    } else {
+                        searchOperation.clearSearchQuery()
+                    }
+                    pager.applyOperationsAndUpdateState()
                 }
             }
         }

@@ -10,5 +10,7 @@ interface OperationManager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V
     fun removeOperation(operation: Operation<Id, Q, K, V>)
     fun removeAll(predicate: (Operation<Id, Q, K, V>) -> Boolean)
     fun clearOperations()
+    fun applyOperationsAndUpdateState()
+
 }
 
