@@ -23,5 +23,6 @@ android {
 
 dependencies {
     implementation(libs.androidx.paging)
+    implementation(libs.androidx.paging.compose)
     implementation(projects.samples.feed.common)
 }

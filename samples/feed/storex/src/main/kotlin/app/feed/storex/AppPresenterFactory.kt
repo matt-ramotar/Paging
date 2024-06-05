@@ -1,6 +1,15 @@
 package app.feed.storex
 
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import app.feed.common.AccountTab
+import app.feed.common.HomeFeedSort
+import app.feed.common.HomeTab
+import app.feed.common.Timespan
 import app.feed.common.models.GetFeedRequest
 import app.feed.common.models.Post
 import app.feed.common.models.PostId
@@ -12,7 +21,13 @@ import com.slack.circuit.runtime.presenter.Presenter
 import com.slack.circuit.runtime.screen.Screen
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.MutableSharedFlow
-import org.mobilenativefoundation.storex.paging.*
+import org.mobilenativefoundation.storex.paging.ItemSnapshotList
+import org.mobilenativefoundation.storex.paging.LoadDirection
+import org.mobilenativefoundation.storex.paging.LoadStrategy
+import org.mobilenativefoundation.storex.paging.Pager
+import org.mobilenativefoundation.storex.paging.PagingRequest
+import org.mobilenativefoundation.storex.paging.PagingState
+import org.mobilenativefoundation.storex.paging.collectAsState
 import org.mobilenativefoundation.storex.paging.custom.Operation
 import org.mobilenativefoundation.storex.paging.internal.api.FetchingState
 import kotlin.time.Duration
@@ -23,7 +38,11 @@ import kotlin.time.Duration.Companion.hours
 data class AppPresenterFactory(
     private val pager: Pager<String, PostId, GetFeedRequest, Post, Throwable>
 ) : Presenter.Factory {
-    override fun create(screen: Screen, navigator: Navigator, context: CircuitContext): Presenter<*>? {
+    override fun create(
+        screen: Screen,
+        navigator: Navigator,
+        context: CircuitContext
+    ): Presenter<*>? {
         return when (screen) {
             is HomeTab -> HomeTabPresenter(navigator, pager)
             is AccountTab -> AccountTabPresenter()
@@ -68,7 +87,8 @@ enum class TimeRange(val duration: Duration) {
 }
 
 
-class TopPosts(private val timeRange: TimeRange) : Operation<String, PostId, GetFeedRequest, Post>() {
+class TopPosts(private val timeRange: TimeRange) :
+    Operation<String, PostId, GetFeedRequest, Post>() {
 
     private fun isWithinRange(timestamp: Long?, range: TimeRange): Boolean {
         if (timestamp == null) return false
@@ -126,8 +146,7 @@ class Search(
 class HomeTabPresenter(
     private val navigator: Navigator,
     private val pager: Pager<String, PostId, GetFeedRequest, Post, Throwable>
-) :
-    Presenter<HomeTab.State> {
+) : Presenter<StoreXHomeTabState> {
 
     private val requests = MutableSharedFlow<PagingRequest<GetFeedRequest>>(replay = 20)
 
@@ -139,7 +158,7 @@ class HomeTabPresenter(
     )
 
     @Composable
-    override fun present(): HomeTab.State {
+    override fun present(): StoreXHomeTabState {
 
         val pagingState by pager.collectAsState()
         var sort by remember { mutableStateOf<HomeFeedSort>(HomeFeedSort.New) }
@@ -170,7 +189,7 @@ class HomeTabPresenter(
             pager.addOperation(searchOperation)
         }
 
-        return HomeTab.State("", pagingState.ids.toImmutableList(), sort = sort) { event ->
+        return StoreXHomeTabState("", pagingState.ids.toImmutableList(), sort = sort) { event ->
 
             when (event) {
                 HomeTab.Event.Refresh -> {
@@ -198,8 +217,9 @@ class HomeTabPresenter(
                 }
 
                 is HomeTab.Event.UpdateSearchQuery -> {
-                    if (event.searchQuery != null) {
-                        searchOperation.setSearchQuery(event.searchQuery)
+                    val searchQuery = event.searchQuery
+                    if (searchQuery != null) {
+                        searchOperation.setSearchQuery(searchQuery)
                     } else {
                         searchOperation.clearSearchQuery()
                     }

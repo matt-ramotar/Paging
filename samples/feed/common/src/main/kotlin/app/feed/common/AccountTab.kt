@@ -1,7 +1,6 @@
-package app.feed.storex
+package app.feed.common
 
 import android.os.Parcelable
-import app.feed.common.models.PostId
 import com.slack.circuit.runtime.CircuitUiEvent
 import com.slack.circuit.runtime.CircuitUiState
 import com.slack.circuit.runtime.screen.Screen

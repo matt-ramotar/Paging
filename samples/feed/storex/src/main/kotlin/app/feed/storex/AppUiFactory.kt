@@ -1,17 +1,20 @@
 package app.feed.storex
 
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text2.input.rememberTextFieldState
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import app.feed.common.R
+import app.feed.common.AccountTab
+import app.feed.common.CommonHomeTab
+import app.feed.common.HomeTab
 import app.feed.common.models.Post
 import app.feed.common.models.PostId
 import app.feed.common.ui.PostDetailScreen
@@ -33,202 +36,21 @@ data object AppUiFactory : Ui.Factory {
 }
 
 
-sealed interface HomeFeedSort {
-    val id: String
-
-    data object Best : HomeFeedSort {
-        override val id: String = "best"
-    }
-
-    data object Hot : HomeFeedSort {
-        override val id: String = "hot"
-    }
-
-    data class Top(
-        val timespan: Timespan
-    ) : HomeFeedSort {
-        override val id: String = "top"
-    }
-
-    data object New : HomeFeedSort {
-        override val id: String = "new"
-    }
-
-    data object Default: HomeFeedSort {
-        override val id: String = "default"
-    }
-}
-
-enum class Timespan {
-    Hour,
-    Day,
-    Week,
-    Month,
-    Year,
-    AllTime
-}
-
-@Composable
-private fun HomeFeedSortDropdownMenu(
-    sort: HomeFeedSort,
-    onClick: (HomeFeedSort) -> Unit
-) {
-
-    var isExpanded by remember { mutableStateOf(false) }
-
-    val iconResId = remember(sort) {
-        when (sort) {
-            HomeFeedSort.Best -> R.drawable.trophy
-            HomeFeedSort.Hot -> R.drawable.hot
-            HomeFeedSort.New -> R.drawable.one_day
-            is HomeFeedSort.Top -> R.drawable.top
-            HomeFeedSort.Default -> R.drawable.clock
-        }
-    }
-
-    fun menuItemColors(sortId: String) = MenuItemColors(
-        textColor = if (sortId == sort.id) Color(0xff229BF0) else Color.Black,
-        leadingIconColor = if (sortId == sort.id) Color(0xff229BF0) else Color.Black,
-        trailingIconColor = Color.Black,
-        disabledTextColor = Color.Black,
-        disabledLeadingIconColor = Color.Black,
-        disabledTrailingIconColor = Color.Black
-    )
-
-    IconButton({
-        isExpanded = !isExpanded
-    }) {
-        Icon(
-            painterResource(iconResId),
-            "sort icon",
-            modifier = Modifier.size(32.dp),
-            tint = Color(0xff229BF0)
-        )
-
-
-        DropdownMenu(expanded = isExpanded, onDismissRequest = {
-            isExpanded = false
-        }, modifier = Modifier.background(Color.White)) {
-            DropdownMenuItem(text = {
-                Text("Best")
-            }, onClick = {
-                onClick(HomeFeedSort.Best)
-                isExpanded = false
-            }, leadingIcon = {
-                Icon(
-                    painterResource(app.feed.common.R.drawable.trophy),
-                    "trophy",
-                    modifier = Modifier.size(24.dp)
-                )
-            }, colors = menuItemColors(HomeFeedSort.Best.id))
-
-            DropdownMenuItem(text = {
-                Text("Hot")
-            }, onClick = {
-                onClick(HomeFeedSort.Hot)
-                isExpanded = false
-            }, leadingIcon = {
-                Icon(
-                    painterResource(app.feed.common.R.drawable.hot),
-                    "trophy",
-                    modifier = Modifier.size(24.dp)
-                )
-            }, colors = menuItemColors(HomeFeedSort.Hot.id))
-            DropdownMenuItem(text = {
-                Text("Top")
-            }, onClick = {
-                onClick(HomeFeedSort.Top(Timespan.Day))
-                isExpanded = false
-            }, leadingIcon = {
-                Icon(
-                    painterResource(app.feed.common.R.drawable.top),
-                    "trophy",
-                    modifier = Modifier.size(24.dp)
-                )
-            }, colors = menuItemColors(HomeFeedSort.Top(Timespan.Day).id))
-
-            DropdownMenuItem(text = {
-                Text("New")
-            }, onClick = {
-                onClick(HomeFeedSort.New)
-                isExpanded = false
-            }, leadingIcon = {
-                Icon(
-                    painterResource(app.feed.common.R.drawable.clock),
-                    "trophy",
-                    modifier = Modifier.size(24.dp)
-                )
-            }, colors = menuItemColors(HomeFeedSort.New.id))
-
-
-        }
-    }
-
-}
-
-
-data object HomeTabUi : Ui<HomeTab.State> {
-    @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+data object HomeTabUi : Ui<StoreXHomeTabState> {
     @Composable
-    override fun Content(state: HomeTab.State, modifier: Modifier) {
+    override fun Content(state: StoreXHomeTabState, modifier: Modifier) {
 
-        Column(modifier = Modifier.fillMaxSize()) {
-
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 24.dp, start = 16.dp, end = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-
-                Spacer(modifier = Modifier.width(32.dp))
-
-                Icon(
-                    painterResource(app.feed.common.R.drawable.storex),
-                    "storex",
-                    modifier = Modifier.size(40.dp),
-                    tint = Color(0xff212121)
-                )
-
-                HomeFeedSortDropdownMenu(state.sort) {
-                    state.eventSink(HomeTab.Event.UpdateSort(it))
-                }
-
-            }
-
-
-            Row(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
-                var value by remember {  mutableStateOf("")}
-
-                TextField(
-                    value = value,
-                    placeholder = {
-                        Text("Search")
-                    },
-                    leadingIcon = {
-
-                        Icon(
-                            painterResource(app.feed.common.R.drawable.search),
-                            "search",
-                            modifier = Modifier.size(24.dp),
-                        )
-                    },
-                    onValueChange = {
-                        value = it
-                        state.eventSink(HomeTab.Event.UpdateSearchQuery(it.ifEmpty { null }))
-                    },
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color(0xfff3f3f3),
-                        unfocusedContainerColor = Color(0xfff3f3f3),
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent
-                    ),
-                    textStyle = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.fillMaxWidth().padding(2.dp),
-                    singleLine = true,
-                    shape = RoundedCornerShape(8.dp)
-                )
-            }
-
-            LazySelfUpdatingPagingItems<String, PostId, Post, Throwable>(state.postIds, {
+        CommonHomeTab(state = state,
+        appIcon = {
+            Icon(
+                painterResource(app.feed.common.R.drawable.storex),
+                "storex",
+                modifier = Modifier.size(40.dp),
+                tint = Color(0xff212121)
+            )
+        },
+            modifier = modifier) {
+            LazySelfUpdatingPagingItems<String, PostId, Post, Throwable>(state.pagingData, {
                 state.eventSink(HomeTab.Event.Refresh)
             }) { itemState ->
                 when (itemState.loadState) {
@@ -250,7 +72,9 @@ data object HomeTabUi : Ui<HomeTab.State> {
 
                             HorizontalDivider(
                                 thickness = 1.dp,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth(),
+                                modifier = Modifier
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                                    .fillMaxWidth(),
                                 color = Color(0xfff3f3f3)
                             )
                         }

@@ -33,7 +33,7 @@ dependencies {
     api(libs.androidx.paging)
     api(libs.kotlinx.datetime)
 
-    implementation(projects.paging)
+    api(projects.paging)
 
     api("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.1")
 
