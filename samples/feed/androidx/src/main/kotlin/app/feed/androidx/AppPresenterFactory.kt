@@ -2,7 +2,10 @@ package app.feed.androidx
 
 import androidx.compose.runtime.Composable
 import androidx.paging.Pager
+import androidx.paging.PagingData
+import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.filter
 import app.feed.common.HomeFeedSort
 import app.feed.common.HomeTab
 import app.feed.common.models.GetFeedRequest
@@ -12,6 +15,10 @@ import com.slack.circuit.runtime.CircuitContext
 import com.slack.circuit.runtime.Navigator
 import com.slack.circuit.runtime.presenter.Presenter
 import com.slack.circuit.runtime.screen.Screen
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
 
 data class AppPresenterFactory(
     private val pager: Pager<GetFeedRequest, Post>
@@ -30,6 +37,22 @@ data class AppPresenterFactory(
 
 }
 
+private fun isWithinRange(timestamp: Long?, range: Duration): Boolean {
+    if (timestamp == null) return false
+
+    val now = System.currentTimeMillis()
+    val durationMillis = range.inWholeMilliseconds
+    return now - timestamp <= durationMillis
+}
+
+// TODO(): Is it possible to sort?
+@Composable
+fun getBest(pagingDataFlow: Flow<PagingData<Post>>): LazyPagingItems<Post> {
+    return pagingDataFlow.map { pagingData ->
+        pagingData.filter { isWithinRange(it.createdAt, 1.hours) }
+    }.collectAsLazyPagingItems()
+}
+
 
 class HomeTabPresenter(
     private val navigator: Navigator,
@@ -39,7 +62,7 @@ class HomeTabPresenter(
     @Composable
     override fun present(): AndroidXHomeTabState {
 
-        val pagingData = pager.flow.collectAsLazyPagingItems()
+        val pagingData = getBest(pagingDataFlow = pager.flow)
 
         return HomeTab.State(
             "",
