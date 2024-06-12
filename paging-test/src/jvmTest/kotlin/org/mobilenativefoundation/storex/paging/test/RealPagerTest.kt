@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -153,7 +154,83 @@ class RealPagerTest {
 
 
     @Test
-    fun pagingFlow_givenCompletedEagerLoad_whenUpdateFetchingState_shouldFetch() = testScope.runTest {
+    fun pagingFlow_givenCompletedEagerLoad_whenUpdateFetchingState2XPageSize_shouldFetch2X() = testScope.runTest {
+        val pageSize = 20
+        val prefetchDistance = 100
+
+        fun nextCursor(prefetchDistance: Int, request: Int) =
+            (500 - (prefetchDistance + (pageSize * (request - 1)))).toString()
+
+        fun nextKey(prefetchDistance: Int, request: Int) =
+            GetFeedRequest(PostId(nextCursor(prefetchDistance, request)), pageSize)
+
+        val requests = MutableSharedFlow<PagingRequest<GetFeedRequest>>(replay = 5)
+
+        val fetchingStateHolder = RealFetchingStateHolder<String, PostId, GetFeedRequest>()
+
+        val pager = mockPager(coroutineDispatcher, fetchingStateHolder)
+
+        val state = pager.pagingFlow(
+            flowOf(PagingRequest.processQueue(LoadDirection.Append)),
+            recompositionMode = RecompositionMode.Immediate
+        )
+
+        advanceUntilIdle()
+
+//        fetchingStateHolder.updateMinItemAccessedSoFar(PostId("480"))
+
+        state.test {
+
+            val eagerLoading = awaitItem()
+            assertIs<PagingLoadState.NotLoading>(eagerLoading.loadStates.append)
+            assertEquals(100, eagerLoading.ids.size)
+            assertEquals((499 downTo 400).map { PostId(it.toString()) }, eagerLoading.ids)
+
+            // Doesn't fetch further because of prefetchDistance
+            expectNoEvents()
+
+            advanceUntilIdle()
+
+            launch {
+                println("LAUNCHING!!LILY")
+                fetchingStateHolder.updateMinItemAccessedSoFar(PostId("480"))
+            }
+
+            val loadingPrefetch1 = awaitItem()
+            assertIs<PagingLoadState.Loading>(loadingPrefetch1.loadStates.append)
+            assertEquals((499 downTo 400).map { PostId(it.toString()) }, loadingPrefetch1.ids)
+
+            val loadedPrefetch1 = awaitItem()
+            assertIs<PagingLoadState.NotLoading>(loadedPrefetch1.loadStates.append)
+            assertEquals((499 downTo 380).map { PostId(it.toString()) }, loadedPrefetch1.ids)
+
+            advanceUntilIdle()
+
+
+            launch {
+                println("LAUNCHING!!LILY")
+                fetchingStateHolder.updateMinItemAccessedSoFar(PostId("460"))
+
+            }
+            println("LOADING PREFETCH 1 = ${loadedPrefetch1.ids}")
+
+            val loadingPrefetch2 = awaitItem()
+            assertIs<PagingLoadState.Loading>(loadingPrefetch2.loadStates.append)
+            assertEquals((499 downTo 380).map { PostId(it.toString()) }, loadingPrefetch2.ids)
+
+
+            val loadedPrefetch2 = awaitItem()
+            assertIs<PagingLoadState.NotLoading>(loadedPrefetch2.loadStates.append)
+            assertEquals((499 downTo 360).map { PostId(it.toString()) }, loadedPrefetch2.ids)
+
+            advanceUntilIdle()
+
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun pagingFlow_givenCompletedEagerLoad_whenUpdateFetchingState1XPageSize_shouldFetch1X() = testScope.runTest {
         val pageSize = 20
         val prefetchDistance = 100
 
@@ -181,7 +258,6 @@ class RealPagerTest {
 
         state.test {
 
-
             val eagerLoading = awaitItem()
             assertIs<PagingLoadState.NotLoading>(eagerLoading.loadStates.append)
             assertEquals(100, eagerLoading.ids.size)
@@ -203,6 +279,7 @@ class RealPagerTest {
             expectNoEvents()
         }
     }
+
 
     @Test
     fun pagingState_givenCompletedEagerLoad_whenSkipQueueRequest_shouldBypassFetchingStrategy() =
