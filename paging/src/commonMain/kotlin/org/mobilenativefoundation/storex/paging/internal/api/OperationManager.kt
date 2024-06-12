@@ -14,3 +14,26 @@ interface OperationManager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V
 
 }
 
+
+class RealOperationManager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>>: OperationManager<Id, Q, K, V> {
+    override fun addOperation(operation: Operation<Id, Q, K, V>) {
+        TODO("Not yet implemented")
+    }
+
+    override fun removeOperation(operation: Operation<Id, Q, K, V>) {
+        TODO("Not yet implemented")
+    }
+
+    override fun removeAll(predicate: (Operation<Id, Q, K, V>) -> Boolean) {
+        TODO("Not yet implemented")
+    }
+
+    override fun clearOperations() {
+        TODO("Not yet implemented")
+    }
+
+    override fun applyOperationsAndUpdateState() {
+        TODO("Not yet implemented")
+    }
+
+}

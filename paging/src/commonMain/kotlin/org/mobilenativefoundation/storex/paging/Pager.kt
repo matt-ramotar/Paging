@@ -2,6 +2,7 @@
 
 package org.mobilenativefoundation.storex.paging
 
+import androidx.annotation.VisibleForTesting
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -13,9 +14,7 @@ import org.mobilenativefoundation.store.store5.Fetcher
 import org.mobilenativefoundation.store.store5.FetcherResult
 import org.mobilenativefoundation.storex.paging.custom.*
 import org.mobilenativefoundation.storex.paging.db.DriverFactory
-import org.mobilenativefoundation.storex.paging.internal.api.DispatcherProvider
-import org.mobilenativefoundation.storex.paging.internal.api.FetchingState
-import org.mobilenativefoundation.storex.paging.internal.api.OperationManager
+import org.mobilenativefoundation.storex.paging.internal.api.*
 import org.mobilenativefoundation.storex.paging.internal.impl.*
 import org.mobilenativefoundation.storex.paging.internal.impl.DefaultErrorFactory
 import kotlin.reflect.KClass
@@ -23,6 +22,9 @@ import kotlin.reflect.KClass
 interface SelfUpdatingItemFactory<Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any> {
     fun createSelfUpdatingItem(id: Q): SelfUpdatingItem<Id, Q, V, E>
 }
+
+
+
 
 
 interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any> :
@@ -75,6 +77,36 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
         private var itemFetcher: Fetcher<Id, V>? = null
         private var fetchingStrategy: FetchingStrategy<Id, Q, K, E> =
             DefaultFetchingStrategy(pagingConfig)
+
+
+        private var registry: KClassRegistry<Id, Q, K, V, E>? = null
+
+        private var fetchingStateHolder: FetchingStateHolder<Id, Q, K>? = null
+
+        private var normalizedStore: NormalizedStore<Id, Q, K, V, E>? = null
+
+        private var operationManager: OperationManager<Id, Q, K, V>? = null
+
+        @VisibleForTesting
+        fun operationManager(operationManager: OperationManager<Id, Q, K, V>) = apply {
+            this.operationManager = operationManager
+        }
+
+        @VisibleForTesting
+        fun registry(registry: KClassRegistry<Id, Q, K, V, E>) = apply {
+            this.registry = registry
+        }
+
+        @VisibleForTesting
+        fun fetchingStateHolder(fetchingStateHolder: FetchingStateHolder<Id, Q, K>) = apply {
+            this.fetchingStateHolder = fetchingStateHolder
+        }
+
+        @VisibleForTesting
+        fun normalizedStore(normalizedStore: NormalizedStore<Id, Q, K, V, E>) = apply {
+            this.normalizedStore = normalizedStore
+        }
+
 
         fun coroutineDispatcher(coroutineDispatcher: CoroutineDispatcher) = apply {
             this.coroutineDispatcher = coroutineDispatcher
@@ -183,7 +215,8 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
 
         fun build(): Pager<Id, Q, K, V, E> {
 
-            val registry = KClassRegistry(
+
+            val registry = this.registry ?: KClassRegistry(
                 id = idKClass,
                 q = qKClass,
                 key = keyKClass,
@@ -195,12 +228,12 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
                 ?: androidxPagingSource?.let { createFetcherFromAndroidxPagingSource(it) }
                 ?: throw IllegalArgumentException("You must provide a paging source, either from storex or androidx!")
 
-            val fetchingStateHolder = RealFetchingStateHolder(
+            val fetchingStateHolder = this.fetchingStateHolder ?: RealFetchingStateHolder(
                 initialFetchingState
             )
 
 
-            val normalizedStore = RealNormalizedStore(
+            val normalizedStore = this.normalizedStore ?: RealNormalizedStore(
                 pageFetcher = pageFetcher,
                 registry = registry,
                 errorFactory = errorFactory,
@@ -211,6 +244,8 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
                 sideEffects = sideEffects,
                 pagingConfig = pagingConfig,
             )
+
+            val operationManager = this.operationManager ?: RealOperationManager<Id, Q, K, V>()
 
             return RealPager(
                 coroutineDispatcher = coroutineDispatcher,
@@ -226,6 +261,7 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
                 ),
                 registry = registry,
                 normalizedStore = normalizedStore,
+                operationManager = operationManager,
                 initialState = initialState,
             )
         }

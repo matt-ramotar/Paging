@@ -1,17 +1,31 @@
 package org.mobilenativefoundation.storex.paging.test
 
+
 import app.cash.turbine.test
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.mobilenativefoundation.storex.paging.*
+import org.mobilenativefoundation.storex.paging.custom.ErrorHandlingStrategy
+import org.mobilenativefoundation.storex.paging.custom.FetchingStrategy
+import org.mobilenativefoundation.storex.paging.internal.api.FetchingStateHolder
+import org.mobilenativefoundation.storex.paging.internal.api.NormalizedStore
+import org.mobilenativefoundation.storex.paging.internal.api.OperationManager
 import org.mobilenativefoundation.storex.paging.test.utils.TimelineAndroidxPagingSource
 import org.mobilenativefoundation.storex.paging.test.utils.TimelinePagerFactory
-import org.mobilenativefoundation.storex.paging.test.utils.models.GetFeedRequest
-import org.mobilenativefoundation.storex.paging.test.utils.models.PostId
+import org.mobilenativefoundation.storex.paging.test.utils.api.TimelineApi
+import org.mobilenativefoundation.storex.paging.test.utils.models.*
+import org.mobilenativefoundation.storex.paging.utils.timeline.server.Server
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -31,6 +45,27 @@ class RealPagerTest {
         strategy = LoadStrategy.SkipCache,
         direction = LoadDirection.Append
     )
+
+    private lateinit var fetchingStateHolder: FetchingStateHolder<String, PostId, GetFeedRequest>
+    private lateinit var normalizedStore: NormalizedStore<String, PostId, GetFeedRequest, Post, Throwable>
+    private lateinit var fetchingStrategy: FetchingStrategy<String, PostId, GetFeedRequest, Throwable>
+    private lateinit var errorHandlingStrategy: ErrorHandlingStrategy
+    private lateinit var operationManager: OperationManager<String, PostId, GetFeedRequest, Post>
+
+    private val server = Server()
+    private val api = TimelineApi(server)
+    private val pageSize = 20
+    private val pagingSource = TimelineAndroidxPagingSource(api, pageSize)
+
+    @BeforeTest
+    fun setup() {
+        fetchingStateHolder = mockk()
+        normalizedStore = mockk()
+        fetchingStrategy = mockk()
+        errorHandlingStrategy = mockk()
+        operationManager = mockk()
+    }
+
 
     @Test
     fun pagingState_givenEmptyFlow_shouldEagerLoad() = testScope.runTest {
@@ -187,4 +222,83 @@ class RealPagerTest {
         }
 
 
+    @Test
+    fun addOperation_givenOperation_shouldAddOperationToOperationsManager() = testScope.runTest {
+        // Given
+        val operation = TopPosts(TimeRange.DAY)
+
+        val pager = mockPager(coroutineDispatcher)
+
+        every { pager.addOperation(any()) } answers {}
+
+        advanceUntilIdle()
+
+        // When
+
+        pager.addOperation(operation)
+
+        // Then
+        verify { operationManager.addOperation(operation) }
+    }
+
+    @Test
+    fun removeOperation_givenOperation_shouldRemoveOperationFromOperationsManager() = testScope.runTest {
+        // Given
+        val operation = TopPosts(TimeRange.DAY)
+
+        val pager = mockPager(coroutineDispatcher)
+
+        every { pager.removeOperation(any()) } answers {}
+
+        advanceUntilIdle()
+
+        // When
+        pager.removeOperation(operation)
+
+        // Then
+        verify { operationManager.removeOperation(operation) }
+    }
+
+    @Test
+    fun pagingFlow_givenRequests_shouldReturnFlowOfPagingState() = testScope.runTest {
+        // Given
+        val requests = emptyFlow<PagingRequest<GetFeedRequest>>()
+        val pager = mockPager(coroutineDispatcher)
+
+        // When
+        val result = pager.pagingFlow(requests, RecompositionMode.Immediate)
+
+        // Then
+        assertIs<Flow<PagingState<String, PostId, Throwable>>>(result)
+    }
+
+    @Test
+    fun createSelfUpdatingItem_givenId_shouldReturnSelfUpdatingItem() = testScope.runTest {
+        // Given
+        val id = PostId("1")
+        val pager = mockPager(coroutineDispatcher)
+
+        advanceUntilIdle()
+
+        // When
+        val result = pager.createSelfUpdatingItem(id)
+
+        // Then
+        assertIs<SelfUpdatingItem<String, PostId, Post, Throwable>>(result)
+    }
+
+    private fun mockPager(
+        coroutineDispatcher: CoroutineDispatcher
+    ): Pager<String, PostId, GetFeedRequest, Post, Throwable> {
+
+        return Pager.Builder<String, PostId, GetFeedRequest, Post>(
+            pagingConfig = PagingConfig(
+                placeholderId = PostId(""),
+                initialKey = GetFeedRequest(null, size = 20)
+            ),
+        ).coroutineDispatcher(coroutineDispatcher)
+            .androidxPagingSource(pagingSource)
+            .operationManager(operationManager)
+            .build()
+    }
 }

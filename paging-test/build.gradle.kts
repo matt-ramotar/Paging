@@ -23,13 +23,12 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.core)
                 api(libs.store)
                 api(libs.store.cache)
-                // implementation(libs.kotlinx.datetime)
+                api(libs.kotlinx.datetime)
                 api(libs.androidx.paging)
 
 
                 implementation(libs.kotlin.stdlib)
                 implementation(libs.kotlinx.coroutines.core)
-                // api(libs.kotlinx.datetime)
                 api(libs.kotlinx.serialization.core)
                 api(libs.kotlinx.serialization.json)
                 api(compose.runtime)
@@ -74,6 +73,13 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.test)
                 implementation(libs.molecule.runtime)
                 implementation(libs.androidx.paging.testing)
+
+            }
+        }
+
+        jvmTest {
+            dependencies {
+                implementation(libs.mockk)
             }
         }
     }
