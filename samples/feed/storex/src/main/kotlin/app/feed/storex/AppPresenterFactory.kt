@@ -21,13 +21,7 @@ import com.slack.circuit.runtime.presenter.Presenter
 import com.slack.circuit.runtime.screen.Screen
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.MutableSharedFlow
-import org.mobilenativefoundation.storex.paging.ItemSnapshotList
-import org.mobilenativefoundation.storex.paging.LoadDirection
-import org.mobilenativefoundation.storex.paging.LoadStrategy
-import org.mobilenativefoundation.storex.paging.Pager
-import org.mobilenativefoundation.storex.paging.PagingRequest
-import org.mobilenativefoundation.storex.paging.PagingState
-import org.mobilenativefoundation.storex.paging.collectAsState
+import org.mobilenativefoundation.storex.paging.*
 import org.mobilenativefoundation.storex.paging.custom.Operation
 import org.mobilenativefoundation.storex.paging.internal.api.FetchingState
 import kotlin.time.Duration
@@ -165,9 +159,9 @@ class HomeTabPresenter(
 
         LaunchedEffect(sort) {
             val sortingOperation = when (sort) {
-                HomeFeedSort.Best -> SortedByRelevanceScore
-                HomeFeedSort.Hot -> SortedByTrendingScore
-                HomeFeedSort.New -> SortedByDateTimeCreated
+                HomeFeedSort.Best -> TODO()
+                HomeFeedSort.Hot -> TODO()
+                HomeFeedSort.New -> TODO()
                 is HomeFeedSort.Top -> {
                     val s = sort as HomeFeedSort.Top
                     val timespan = s.timespan
@@ -237,4 +231,12 @@ class AccountTabPresenter() : Presenter<AccountTab.State> {
         return AccountTab.State("")
     }
 }
+
+
+sealed interface SortingMethod {
+    data object New : SortingMethod
+    data object Best : SortingMethod
+    data class Top(val timespan: Timespan) : SortingMethod
+}
+
 

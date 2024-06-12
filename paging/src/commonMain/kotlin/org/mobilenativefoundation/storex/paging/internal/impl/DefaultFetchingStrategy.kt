@@ -50,3 +50,4 @@ class DefaultFetchingStrategy<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any
         return true
     }
 }
+
