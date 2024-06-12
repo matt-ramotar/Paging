@@ -9,7 +9,7 @@ class PostCollection {
 
     init {
         List(500) { index ->
-            val id = (index + 1).toString()
+            val id = index.toString()
             val postId = PostId(id)
             allIds.add(postId)
             byId[postId] = Post(postId)

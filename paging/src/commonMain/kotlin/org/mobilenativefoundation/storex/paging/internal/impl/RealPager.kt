@@ -183,6 +183,14 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
         }
     }
 
+    private suspend fun handleForwardPrefetching() {
+        processAppendQueue()
+    }
+
+    private fun handleBackwardPrefetching() {
+        processPrependQueue()
+    }
+
 
     @Composable
     private fun pagingState(requests: Flow<PagingRequest<K>>): PagingState<Id, Q, E> {
@@ -285,17 +293,18 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
             println("END OF LAUNCHED EFFECT")
         }
 
-//        LaunchedEffect(fetchingState) {
-//            println("LAUNCHING 2")
-//
-//            handleForwardPrefetching()
-//            handleBackwardPrefetching()
-//        }
-//
-//        LaunchedEffect(fetchingState.minItemAccessedSoFar?.value) {
-//            println("&&&& - FETCHING STATE MIN ITEM ACCESSED CHANGED ${fetchingState.minItemAccessedSoFar?.value}")
-//            processPrependQueue()
-//        }
+        LaunchedEffect(fetchingState) {
+            println("LAUNCHING 2")
+
+            handleForwardPrefetching()
+            // handleBackwardPrefetching()
+        }
+
+
+        LaunchedEffect(fetchingState.minItemAccessedSoFar?.value) {
+            println("&&&& - FETCHING STATE MIN ITEM ACCESSED CHANGED ${fetchingState.minItemAccessedSoFar?.value}")
+            processPrependQueue()
+        }
 
         LaunchedEffect(fetchingState.maxItemAccessedSoFar?.value) {
             println("&&&& - FETCHING STATE MAX ITEM ACCESSED CHANGED ${fetchingState.maxItemAccessedSoFar?.value}")

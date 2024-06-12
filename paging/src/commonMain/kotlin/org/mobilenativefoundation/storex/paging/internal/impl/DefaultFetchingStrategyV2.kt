@@ -3,6 +3,7 @@ package org.mobilenativefoundation.storex.paging.internal.impl
 import org.mobilenativefoundation.storex.paging.*
 import org.mobilenativefoundation.storex.paging.custom.FetchingStrategy
 import org.mobilenativefoundation.storex.paging.internal.api.FetchingState
+import kotlin.math.abs
 
 class DefaultFetchingStrategyV2<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any>(
     private val pagingConfig: PagingConfig<Id, Q, K>
@@ -29,6 +30,7 @@ class DefaultFetchingStrategyV2<Id : Comparable<Id>, Q : Quantifiable<Id>, K : A
         fetchingState: FetchingState<Id, Q, K>,
         fetchDirection: FetchDirection
     ): Boolean {
+        println("DECIDING WHETHER TO FETCH")
         val minItemLoadedSoFar = fetchingState.minItemLoadedSoFar
         val maxItemLoadedSoFar = fetchingState.maxItemLoadedSoFar
         val minItemAccessedSoFar = fetchingState.minItemAccessedSoFar
@@ -97,11 +99,14 @@ class DefaultFetchingStrategyV2<Id : Comparable<Id>, Q : Quantifiable<Id>, K : A
     }
 
     private fun isUnderPrefetchLimit(pagingState: PagingState<Id, Q, E>, itemLoadedSoFar: Q?): Boolean {
-        TODO()
+        if (itemLoadedSoFar == null) return true
+        val index = pagingState.ids.indexOfFirst { it == itemLoadedSoFar }
+        if (index == -1) return true
+        return index < pagingConfig.prefetchDistance - 1
     }
 
-    private fun PagingState<Id, Q, E>.distanceBetween(itemLoaded: Q?, itemAccessed: Q?, sortOrder: SortOrder): Int {
-        TODO()
+    private fun PagingState<Id, Q, E>.distanceBetween(itemLoaded: Q, itemAccessed: Q, sortOrder: SortOrder): Int {
+        return abs(itemAccessed - itemLoaded)
     }
 
     private fun checkFetchCondition(

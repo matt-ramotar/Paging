@@ -24,9 +24,6 @@ interface SelfUpdatingItemFactory<Id : Comparable<Id>, Q : Quantifiable<Id>, V :
 }
 
 
-
-
-
 interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any> :
     SelfUpdatingItemFactory<Id, Q, V, E>,
     OperationManager<Id, Q, K, V> {
@@ -76,7 +73,7 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
         private var initialFetchingState: FetchingState<Id, Q, K> = FetchingState()
         private var itemFetcher: Fetcher<Id, V>? = null
         private var fetchingStrategy: FetchingStrategy<Id, Q, K, E> =
-            DefaultFetchingStrategy(pagingConfig)
+            DefaultFetchingStrategyV2(pagingConfig)
 
 
         private var registry: KClassRegistry<Id, Q, K, V, E>? = null
@@ -317,6 +314,23 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
                     pagingConfig = pagingConfig,
                     driverFactory = driverFactory,
                     errorFactory = DefaultErrorFactory(),
+                    operations = emptyList()
+                )
+            }
+
+            inline operator fun <reified Id : Comparable<Id>, reified Q : Quantifiable<Id>, reified K : Comparable<K>, reified V : Identifiable<Id, Q>, reified E : Any> invoke(
+                pagingConfig: PagingConfig<Id, Q, K>,
+                errorFactory: ErrorFactory<E>
+            ): Builder<Id, Q, K, V, E> {
+                return Builder(
+                    idKClass = Id::class,
+                    keyKClass = K::class,
+                    valueKClass = V::class,
+                    qKClass = Q::class,
+                    errorKClass = E::class,
+                    pagingConfig = pagingConfig,
+                    driverFactory = null,
+                    errorFactory = errorFactory,
                     operations = emptyList()
                 )
             }

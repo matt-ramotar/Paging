@@ -10,6 +10,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -20,6 +21,7 @@ import org.mobilenativefoundation.storex.paging.custom.FetchingStrategy
 import org.mobilenativefoundation.storex.paging.internal.api.FetchingStateHolder
 import org.mobilenativefoundation.storex.paging.internal.api.NormalizedStore
 import org.mobilenativefoundation.storex.paging.internal.api.OperationManager
+import org.mobilenativefoundation.storex.paging.internal.impl.RealFetchingStateHolder
 import org.mobilenativefoundation.storex.paging.test.utils.TimelineAndroidxPagingSource
 import org.mobilenativefoundation.storex.paging.test.utils.TimelinePagerFactory
 import org.mobilenativefoundation.storex.paging.test.utils.api.TimelineApi
@@ -47,8 +49,8 @@ class RealPagerTest {
     )
 
     private lateinit var fetchingStateHolder: FetchingStateHolder<String, PostId, GetFeedRequest>
-    private lateinit var normalizedStore: NormalizedStore<String, PostId, GetFeedRequest, Post, Throwable>
-    private lateinit var fetchingStrategy: FetchingStrategy<String, PostId, GetFeedRequest, Throwable>
+    private lateinit var normalizedStore: NormalizedStore<String, PostId, GetFeedRequest, Post, TimelineError>
+    private lateinit var fetchingStrategy: FetchingStrategy<String, PostId, GetFeedRequest, TimelineError>
     private lateinit var errorHandlingStrategy: ErrorHandlingStrategy
     private lateinit var operationManager: OperationManager<String, PostId, GetFeedRequest, Post>
 
@@ -149,6 +151,59 @@ class RealPagerTest {
 
         }
 
+
+    @Test
+    fun pagingFlow_givenCompletedEagerLoad_whenUpdateFetchingState_shouldFetch() = testScope.runTest {
+        val pageSize = 20
+        val prefetchDistance = 100
+
+        fun nextCursor(prefetchDistance: Int, request: Int) =
+            (500 - (prefetchDistance + (pageSize * (request - 1)))).toString()
+
+        fun nextKey(prefetchDistance: Int, request: Int) =
+            GetFeedRequest(PostId(nextCursor(prefetchDistance, request)), pageSize)
+
+        val requests = MutableSharedFlow<PagingRequest<GetFeedRequest>>(replay = 5)
+
+        val fetchingStateHolder = RealFetchingStateHolder<String, PostId, GetFeedRequest>()
+
+        val pager = mockPager(coroutineDispatcher, fetchingStateHolder)
+
+
+        val state = pager.pagingFlow(
+            flowOf(PagingRequest.processQueue(LoadDirection.Append)),
+            recompositionMode = RecompositionMode.Immediate
+        )
+
+        advanceUntilIdle()
+
+        fetchingStateHolder.updateMinItemAccessedSoFar(PostId("480"))
+
+        state.test {
+
+
+            val eagerLoading = awaitItem()
+            assertIs<PagingLoadState.NotLoading>(eagerLoading.loadStates.append)
+            assertEquals(100, eagerLoading.ids.size)
+            assertEquals((499 downTo 400).map { PostId(it.toString()) }, eagerLoading.ids)
+
+            // Doesn't fetch further because of prefetchDistance
+            expectNoEvents()
+
+            advanceUntilIdle()
+
+            val loadingPrefetch1 = awaitItem()
+            assertIs<PagingLoadState.Loading>(loadingPrefetch1.loadStates.append)
+            assertEquals((499 downTo 400).map { PostId(it.toString()) }, loadingPrefetch1.ids)
+
+            val loadedPrefetch1 = awaitItem()
+            assertIs<PagingLoadState.NotLoading>(loadedPrefetch1.loadStates.append)
+            assertEquals((499 downTo 380).map { PostId(it.toString()) }, loadedPrefetch1.ids)
+
+            expectNoEvents()
+        }
+    }
+
     @Test
     fun pagingState_givenCompletedEagerLoad_whenSkipQueueRequest_shouldBypassFetchingStrategy() =
         testScope.runTest {
@@ -157,7 +212,7 @@ class RealPagerTest {
             val prefetchDistance = 100
 
             fun nextCursor(prefetchDistance: Int, request: Int) =
-                (500 - (prefetchDistance + (pageSize * (request - 1)))).toString()
+                (499 - (prefetchDistance + (pageSize * (request - 1)))).toString()
 
             fun nextKey(prefetchDistance: Int, request: Int) =
                 GetFeedRequest(PostId(nextCursor(prefetchDistance, request)), pageSize)
@@ -198,13 +253,13 @@ class RealPagerTest {
                 println("loading1 = $loading1")
                 assertIs<PagingLoadState.Loading>(loading1.loadStates.append)
                 assertEquals(100, loading1.ids.size)
-                assertEquals((500 downTo 401).toList().map { PostId(it.toString()) }, loading1.ids)
+                assertEquals((499 downTo 400).toList().map { PostId(it.toString()) }, loading1.ids)
 
 
                 val success1 = awaitItem()
                 assertIs<PagingLoadState.NotLoading>(success1.loadStates.append)
                 assertEquals(120, success1.ids.size)
-                assertEquals((500 downTo 381).toList().map { PostId(it.toString()) }, success1.ids)
+                assertEquals((499 downTo 380).toList().map { PostId(it.toString()) }, success1.ids)
                 println("success1 = $success1")
 
 
@@ -269,7 +324,7 @@ class RealPagerTest {
         val result = pager.pagingFlow(requests, RecompositionMode.Immediate)
 
         // Then
-        assertIs<Flow<PagingState<String, PostId, Throwable>>>(result)
+        assertIs<Flow<PagingState<String, PostId, TimelineError>>>(result)
     }
 
     @Test
@@ -284,21 +339,30 @@ class RealPagerTest {
         val result = pager.createSelfUpdatingItem(id)
 
         // Then
-        assertIs<SelfUpdatingItem<String, PostId, Post, Throwable>>(result)
+        assertIs<SelfUpdatingItem<String, PostId, Post, TimelineError>>(result)
     }
 
     private fun mockPager(
-        coroutineDispatcher: CoroutineDispatcher
-    ): Pager<String, PostId, GetFeedRequest, Post, Throwable> {
+        coroutineDispatcher: CoroutineDispatcher,
+        fetchingStateHolder: FetchingStateHolder<String, PostId, GetFeedRequest>? = null,
+    ): Pager<String, PostId, GetFeedRequest, Post, TimelineError> {
 
-        return Pager.Builder<String, PostId, GetFeedRequest, Post>(
+        return Pager.Builder<String, PostId, GetFeedRequest, Post, TimelineError>(
             pagingConfig = PagingConfig(
                 placeholderId = PostId(""),
+                pageSize = 20,
+                prefetchDistance = 100,
                 initialKey = GetFeedRequest(null, size = 20)
             ),
+            errorFactory = TimelineError.Factory()
         ).coroutineDispatcher(coroutineDispatcher)
             .androidxPagingSource(pagingSource)
             .operationManager(operationManager)
+            .apply {
+                if (fetchingStateHolder != null) {
+                    fetchingStateHolder(fetchingStateHolder)
+                }
+            }
             .build()
     }
 }
