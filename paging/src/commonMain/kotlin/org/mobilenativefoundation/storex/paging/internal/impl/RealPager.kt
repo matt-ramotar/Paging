@@ -70,7 +70,7 @@ class PagingOperationsManager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any
 
 class PagingRequestHandler<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V : Identifiable<Id, Q>, E : Any>(
     private val fetchingStateHolder: FetchingStateHolder<Id, Q, K>,
-    private val normalizedStore: NormalizedStore<Id, Q, K, V, E>,
+    private val concurrentNormalizedStore: NormalizedStore<Id, Q, K, V, E>,
     private val pagingStateManager: PagingStateManager<Id, Q, E>,
     private val fetchingStrategy: FetchingStrategy<Id, Q, K, E>,
     private val errorHandlingStrategy: ErrorHandlingStrategy
@@ -109,7 +109,7 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
     private val fetchingStrategy: FetchingStrategy<Id, Q, K, E>,
     private val initialLoadParams: PagingSource.LoadParams<K>,
     private val registry: KClassRegistry<Id, Q, K, V, E>,
-    private val normalizedStore: NormalizedStore<Id, Q, K, V, E>,
+    private val concurrentNormalizedStore: NormalizedStore<Id, Q, K, V, E>,
     private val operationManager: OperationManager<Id, Q, K, V>,
     private val initialState: PagingState<Id, Q, E> = PagingState.initial(),
 ) : Pager<Id, Q, K, V, E>, OperationManager<Id, Q, K, V> by operationManager {
@@ -138,7 +138,7 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
 
     override fun createSelfUpdatingItem(id: Q): SelfUpdatingItem<Id, Q, V, E> {
         println("SELF UPDATING ITEM CALLED")
-        return normalizedStore.selfUpdatingItem(id)
+        return concurrentNormalizedStore.selfUpdatingItem(id)
     }
 
     private fun PagingRequest.Enqueue<K>.toPagingSourceLoadParams(): PagingSource.LoadParams<K> {
@@ -179,7 +179,7 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
     // TODO(): This is not efficient - we should extract the common logic from [pagingState] - we shouldn't be getting ids and then remapping to values when we have values initially
     override fun pagingItems(coroutineScope: CoroutineScope, requests: Flow<PagingRequest<K>>): StateFlow<List<V>> {
         return coroutineScope.launchMolecule(RecompositionMode.ContextClock.toCashRecompositionMode()) {
-            pagingState(requests).ids.mapNotNull { id -> id?.let { normalizedStore.getItem(it) } }
+            pagingState(requests).ids.mapNotNull { id -> id?.let { concurrentNormalizedStore.getItem(it) } }
         }
     }
 
@@ -286,7 +286,7 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
                         appendLoadParamsQueue.clear()
                         prependLoadParamsQueue.clear()
 
-                        normalizedStore.invalidate()
+                        concurrentNormalizedStore.invalidate()
                     }
                 }
             }
@@ -421,7 +421,7 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
         try {
 
             println("*** HITTING IN PREPEND LOADING")
-            normalizedStore.loadPage(loadParams).first {
+            concurrentNormalizedStore.loadPage(loadParams).first {
 
                 println("*** PREPEND LOADING RESULT = $it")
 
@@ -551,7 +551,7 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
 
             fetchingStateHolder.updateMaxRequestSoFar(loadParams.key)
 
-            normalizedStore.loadPage(loadParams).first {
+            concurrentNormalizedStore.loadPage(loadParams).first {
                 println("FIRST for ${loadParams.key} - $it")
                 when (it) {
                     is PageLoadStatus.Empty -> {
@@ -657,7 +657,7 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
 
             ErrorHandlingStrategy.PassThrough -> {
                 // TODO(): Design decision to remove placeholders when passing an error through
-                normalizedStore.clear(loadParams.key)
+                concurrentNormalizedStore.clear(loadParams.key)
 
                 val error =
                     Json.decodeFromString(registry.error.serializer(), pagingError.encodedError)

@@ -74,7 +74,7 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
         private var initialFetchingState: FetchingState<Id, Q, K> = FetchingState()
         private var itemFetcher: Fetcher<Id, V>? = null
         private var fetchingStrategy: FetchingStrategy<Id, Q, K, E> =
-            DefaultFetchingStrategyV2(pagingConfig)
+            DefaultFetchingStrategy(pagingConfig)
 
 
         private var registry: KClassRegistry<Id, Q, K, V, E>? = null
@@ -241,19 +241,6 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
                 initialFetchingState
             )
 
-
-            val normalizedStore = this.normalizedStore ?: RealNormalizedStore(
-                pageFetcher = pageFetcher,
-                registry = registry,
-                errorFactory = errorFactory,
-                itemFetcher = itemFetcher,
-                driverFactory = driverFactory,
-                maxSize = pagingConfig.maxSize,
-                fetchingStateHolder = fetchingStateHolder,
-                sideEffects = sideEffects,
-                pagingConfig = pagingConfig,
-            )
-
             val db = driverFactory?.createDriver()?.let { PagingDb(it) }
 
             val linkedHashMap = PagingLinkedHashMap(
@@ -264,7 +251,7 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
                 db = db,
             )
 
-            val selfUpdatingItemPresenterV2 = SelfUpdatingItemPresenterV2(
+            val selfUpdatingItemPresenter = SelfUpdatingItemPresenter(
                 registry = registry,
                 itemMemoryCache = itemMemoryCache,
                 fetchingStateHolder = fetchingStateHolder,
@@ -274,7 +261,7 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
                 db = db
             )
 
-            val concurrentNormalizedStore = ConcurrentNormalizedStoreV2(
+            val concurrentNormalizedStore = ConcurrentNormalizedStore(
                 pageFetcher = pageFetcher,
                 registry = registry,
                 errorFactory = errorFactory,
@@ -282,7 +269,7 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
                 fetchingStateHolder = fetchingStateHolder,
                 sideEffects = sideEffects,
                 pagingConfig = pagingConfig,
-                selfUpdatingItemPresenterV2,
+                selfUpdatingItemPresenter,
                 linkedHashMap
             )
 
@@ -301,7 +288,7 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
                     direction = LoadDirection.Append
                 ),
                 registry = registry,
-                normalizedStore = concurrentNormalizedStore,
+                concurrentNormalizedStore = concurrentNormalizedStore,
                 operationManager = operationManager,
                 initialState = initialState,
             )

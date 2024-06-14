@@ -10,42 +10,42 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
 import org.mobilenativefoundation.store.store5.Fetcher
 import org.mobilenativefoundation.store.store5.FetcherResult
+import org.mobilenativefoundation.store.store5.Updater
 import org.mobilenativefoundation.storex.paging.*
-import org.mobilenativefoundation.storex.paging.custom.ErrorFactory
 import org.mobilenativefoundation.storex.paging.internal.api.FetchingStateHolder
 
 
-@Suppress("UNCHECKED_CAST")
 @OptIn(InternalSerializationApi::class)
-class SelfUpdatingItemPresenter<Id : Comparable<Id>, Q: Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any>(
-    private val itemFetcher: Fetcher<Id, V>?,
+class SelfUpdatingItemPresenter<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any>(
     private val registry: KClassRegistry<Id, Q, K, V, E>,
-    private val errorFactory: ErrorFactory<E>,
-    private val itemCache: ItemCache<Id, Q, V>,
-    private val db: PagingDb?,
-    private val fetchingStateHolder: FetchingStateHolder<Id, Q, K>
+    private val itemMemoryCache: ItemMemoryCache<Q, V>,
+    private val fetchingStateHolder: FetchingStateHolder<Id, Q, K>,
+    private val updater: Updater<Q, V, *>?,
+    private val linkedHashMap: PagingLinkedHashMap<Id, Q, K, V, E>,
+    private val itemFetcher: Fetcher<Id, V>?,
+    private val db: PagingDb?
 ) {
 
-    fun present(id: Q): SelfUpdatingItem<Id,Q, V, E> {
-        val presenter: @Composable (Flow<SelfUpdatingItem.Event<Id, Q, V, E>>) -> ItemState<Id, Q, V, E> = { events ->
-            itemState(id, events)
-        }
-        return SelfUpdatingItem(presenter)
-    }
-
     @Composable
-    private fun itemState(
+    fun present(
         id: Q,
         events: Flow<SelfUpdatingItem.Event<Id, Q, V, E>>
     ): ItemState<Id, Q, V, E> {
-        val encodedId = remember(id) { Json.encodeToString(registry.id.serializer(), id.value) }
-        val item by remember { derivedStateOf { itemCache.getItem(id) } }
+        val encoded = remember(id) { Json.encodeToString(registry.q.serializer(), id) }
+
+        var value by remember(id) {
+            mutableStateOf(itemMemoryCache[id])
+        }
 
         var itemVersion by remember(id) { mutableStateOf(0L) }
-        var singleLoadState by remember(id) {
-            mutableStateOf<SingleLoadState<E>>(
+
+        var singleLoadState: SingleLoadState<E> by remember(id) {
+            val item = value
+            // This is the initial state, because we are remembering by id
+            mutableStateOf(
                 if (item != null) {
-                    itemVersion++
+                    val nextItemVersion = itemVersion + 1
+                    itemVersion = nextItemVersion
                     SingleLoadState.Loaded
                 } else {
                     SingleLoadState.Initial
@@ -53,89 +53,159 @@ class SelfUpdatingItemPresenter<Id : Comparable<Id>, Q: Quantifiable<Id>, K : An
             )
         }
 
-        val state by remember(item, singleLoadState, itemVersion) {
-            derivedStateOf { ItemState(item, singleLoadState, itemVersion) }
+        fun updateItemVersion(reducer: (Long) -> Long) {
+            itemVersion = reducer(itemVersion)
+        }
+
+        fun updateSingleLoadState(reducer: (SingleLoadState<E>) -> SingleLoadState<E>) {
+            singleLoadState = reducer(singleLoadState)
+        }
+
+        val state by remember(value, singleLoadState, itemVersion) {
+            derivedStateOf {
+                ItemState(value, singleLoadState, itemVersion)
+            }
         }
 
         LaunchedEffect(id) {
-            fetchingStateHolder.updateMaxItemAccessedSoFar(id)
+            updateFetchingState(id)
         }
 
         LaunchedEffect(id, events) {
-            events.collect { event ->
-                when (event) {
-                    is SelfUpdatingItem.Event.Clear -> {
-                        itemCache.removeItem(id)
-                        itemVersion = 0L
-                        singleLoadState = SingleLoadState.Cleared
-                    }
-
-                    is SelfUpdatingItem.Event.Refresh -> {
-                        singleLoadState = SingleLoadState.Refreshing
-                        if (itemFetcher == null) {
-                            throw IllegalStateException("Item fetcher is null")
-                        }
-                        when (val fetcherResult = itemFetcher.invoke(id.value).first()) {
-                            is FetcherResult.Data -> {
-                                val item = fetcherResult.value
-                                itemCache.updateItem(item)
-                                singleLoadState = SingleLoadState.Loaded
-                                itemVersion++
-                            }
-
-                            is FetcherResult.Error.Custom<*> -> {
-                                val error = fetcherResult.error as E
-                                singleLoadState = SingleLoadState.Error.Refreshing(error)
-                            }
-
-                            is FetcherResult.Error.Exception -> {
-                                val error = handleFetcherException(fetcherResult)
-                                singleLoadState = SingleLoadState.Error.Refreshing(error)
-                            }
-
-                            is FetcherResult.Error.Message -> {
-                                val error = errorFactory.create(fetcherResult.message)
-                                singleLoadState = SingleLoadState.Error.Refreshing(error)
-                            }
-                        }
-                    }
-
-                    is SelfUpdatingItem.Event.Update -> {
-                        itemCache.updateItem(event.value)
-                        singleLoadState = SingleLoadState.Loaded
-                        itemVersion++
-                    }
-                }
-            }
+            handleEvents(id, events, ::updateSingleLoadState, ::updateItemVersion)
         }
 
-        LaunchedEffect(id) {
-            db?.itemQueries?.getItem(encodedId)?.asFlow()?.map { it.executeAsOneOrNull() }?.collect {
-                if (item == null) {
-                    if (itemCache.getItem(id) != null) {
-                        itemCache.removeItem(id)
-                        itemVersion = 0L
-                        singleLoadState = SingleLoadState.Cleared
-                    }
-                } else if (item != itemCache.getItem(id)) {
-                    val itemValue = item as V
-                    itemCache.updateItem(itemValue)
-                    singleLoadState = SingleLoadState.Loaded
-                    itemVersion++
-                }
-            }
+        LaunchedEffect(id, value) {
+            handleDatabaseUpdates(
+                id = id,
+                value = value,
+                updateItemVersion = ::updateItemVersion,
+                updateSingleLoadState = ::updateSingleLoadState
+            )
         }
 
         return state
     }
 
-    private fun handleFetcherException(fetcherResult: FetcherResult.Error.Exception): E {
-        return if (fetcherResult.error is PagingError) {
-            val pagingError = fetcherResult.error as PagingError
-            val error = Json.decodeFromString(registry.error.serializer(), pagingError.encodedError)
-            error
-        } else {
-            errorFactory.create(fetcherResult.error)
+    private suspend fun handleEvents(
+        id: Q,
+        events: Flow<SelfUpdatingItem.Event<Id, Q, V, E>>,
+        updateSingleLoadState: ((SingleLoadState<E>) -> SingleLoadState<E>) -> Unit,
+        updateItemVersion: ((Long) -> Long) -> Unit,
+    ) {
+        events.collect { event -> handleEvent(id, event, updateSingleLoadState, updateItemVersion) }
+    }
+
+    private suspend fun handleEvent(
+        id: Q,
+        event: SelfUpdatingItem.Event<Id, Q, V, E>,
+        updateSingleLoadState: ((SingleLoadState<E>) -> SingleLoadState<E>) -> Unit,
+        updateItemVersion: ((Long) -> Long) -> Unit,
+    ) {
+        when (event) {
+            is SelfUpdatingItem.Event.Clear -> handleClear(id, updateSingleLoadState, updateItemVersion)
+            is SelfUpdatingItem.Event.Refresh -> handleRefresh(id, updateSingleLoadState, updateItemVersion)
+            is SelfUpdatingItem.Event.Update -> handleUpdate(id, event, updateSingleLoadState, updateItemVersion)
         }
     }
+
+    private fun handleClear(
+        id: Q,
+        updateSingleLoadState: ((SingleLoadState<E>) -> SingleLoadState<E>) -> Unit,
+        updateItemVersion: ((Long) -> Long) -> Unit,
+    ) {
+        // Remove from memory cache
+        // Remove from database
+        linkedHashMap.removeItem(id)
+        updateItemVersion { 0L }
+        updateSingleLoadState { SingleLoadState.Cleared }
+
+        // TODO(): Support updating remote
+    }
+
+    private suspend fun handleRefresh(
+        id: Q,
+        updateSingleLoadState: ((SingleLoadState<E>) -> SingleLoadState<E>) -> Unit,
+        updateItemVersion: ((Long) -> Long) -> Unit,
+    ) {
+        // Load from network
+
+        updateSingleLoadState { SingleLoadState.Refreshing }
+
+        if (itemFetcher == null) {
+            throw IllegalStateException("Item fetcher is required.")
+        }
+
+        when (val fetcherResult = itemFetcher.invoke(id.value).first()) {
+            is FetcherResult.Data -> {
+                val item = fetcherResult.value
+
+                // Update memory cache and database
+                linkedHashMap.saveItem(item, null)
+
+                // Update state
+                updateSingleLoadState { SingleLoadState.Loaded }
+                updateItemVersion { it + 1 }
+            }
+
+            is FetcherResult.Error.Custom<*> -> TODO()
+            is FetcherResult.Error.Exception -> TODO()
+            is FetcherResult.Error.Message -> TODO()
+        }
+    }
+
+    private fun handleUpdate(
+        id: Q,
+        event: SelfUpdatingItem.Event.Update<Id, Q, V, E>,
+        updateSingleLoadState: ((SingleLoadState<E>) -> SingleLoadState<E>) -> Unit,
+        updateItemVersion: ((Long) -> Long) -> Unit,
+    ) {
+        // TODO()
+    }
+
+    private fun updateFetchingState(id: Q) {
+        fetchingStateHolder.updateMaxItemAccessedSoFar(id)
+        fetchingStateHolder.updateMinItemAccessedSoFar(id)
+    }
+
+    private suspend fun handleDatabaseUpdates(
+        id: Q,
+        value: V?,
+        updateSingleLoadState: ((SingleLoadState<E>) -> SingleLoadState<E>) -> Unit,
+        updateItemVersion: ((Long) -> Long) -> Unit,
+    ) {
+        db?.let {
+            val encoded = Json.encodeToString(registry.q.serializer(), id)
+            db.itemQueries.getItem(encoded).asFlow().map { query ->
+                val item = query.executeAsOneOrNull()
+                if (item != null) {
+                    Json.decodeFromString(registry.value.serializer(), item.data_)
+                } else {
+                    null
+                }
+            }.collect { item ->
+                if (item == null) {
+                    if (value != null) {
+                        // Remove the item
+                        linkedHashMap.removeItem(id)
+                        updateItemVersion { 0L }
+                    }
+
+                    // TODO(): When else does this happen
+                } else if (item != value) {
+                    // Re-save to memory cache
+                    itemMemoryCache[id] = item
+
+                    updateSingleLoadState {
+                        SingleLoadState.Loaded
+                    }
+
+                    updateItemVersion { it + 1 }
+
+                    updater?.post(id, item)
+                }
+            }
+        }
+    }
+
 }
