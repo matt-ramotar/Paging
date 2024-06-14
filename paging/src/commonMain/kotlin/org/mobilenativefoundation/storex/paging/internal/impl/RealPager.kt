@@ -12,89 +12,10 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.serializer
 import org.mobilenativefoundation.storex.paging.*
-import org.mobilenativefoundation.storex.paging.PagingRequest.Companion.enqueue
-import org.mobilenativefoundation.storex.paging.PagingRequest.Companion.invalidate
-import org.mobilenativefoundation.storex.paging.PagingRequest.Companion.processQueue
-import org.mobilenativefoundation.storex.paging.PagingRequest.Companion.skipQueue
 import org.mobilenativefoundation.storex.paging.custom.*
 import org.mobilenativefoundation.storex.paging.internal.api.FetchingStateHolder
 import org.mobilenativefoundation.storex.paging.internal.api.NormalizedStore
 import org.mobilenativefoundation.storex.paging.internal.api.OperationManager
-
-
-class PagingStateManager<Id : Comparable<Id>, Q : Quantifiable<Id>, E : Any>(
-    private val initialState: PagingState<Id, Q, E> = PagingState.initial()
-) {
-    private val _mutablePagingState = MutableStateFlow(initialState)
-    val pagingState: StateFlow<PagingState<Id, Q, E>> = _mutablePagingState
-
-    fun updateState(newState: PagingState<Id, Q, E>) {
-        _mutablePagingState.value = newState
-    }
-
-    // Other state management functions...
-}
-
-// PagingOperationsManager.kt
-class PagingOperationsManager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>>(
-) : OperationManager<Id, Q, K, V> {
-    private val operations = mutableListOf<Operation<Id, Q, K, V>>()
-    private var lastUntransformedSnapshot: ItemSnapshotList<Id, Q, V>? = null
-
-    override fun addOperation(operation: Operation<Id, Q, K, V>) {
-        operations.add(operation)
-        applyOperationsAndUpdateState()
-    }
-
-    override fun removeOperation(operation: Operation<Id, Q, K, V>) {
-        operations.remove(operation)
-        applyOperationsAndUpdateState()
-    }
-
-    override fun removeAll(predicate: (Operation<Id, Q, K, V>) -> Boolean) {
-        TODO("Not yet implemented")
-    }
-
-    override fun clearOperations() {
-        TODO("Not yet implemented")
-    }
-
-    override fun applyOperationsAndUpdateState() {
-        // Apply operations and update the state
-        // ...
-    }
-
-    // Other operation management functions...
-}
-
-
-class PagingRequestHandler<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V : Identifiable<Id, Q>, E : Any>(
-    private val fetchingStateHolder: FetchingStateHolder<Id, Q, K>,
-    private val concurrentNormalizedStore: NormalizedStore<Id, Q, K, V, E>,
-    private val pagingStateManager: PagingStateManager<Id, Q, E>,
-    private val fetchingStrategy: FetchingStrategy<Id, Q, K, E>,
-    private val errorHandlingStrategy: ErrorHandlingStrategy
-) {
-    private val pendingSkipQueueJobs = mutableMapOf<K, PendingSkipQueueJob<K>>()
-    private val appendLoadParamsQueue: LoadParamsQueue<K> = LoadParamsQueue()
-    private val prependLoadParamsQueue: LoadParamsQueue<K> = LoadParamsQueue()
-
-    suspend fun handleRequest(request: PagingRequest<K>) {
-        when (request) {
-            is PagingRequest.ProcessQueue -> processQueue(request.direction)
-            is PagingRequest.SkipQueue -> skipQueue(request.key, request.direction, request.strategy)
-            is PagingRequest.Enqueue -> enqueue(request.key, request.jump, request.strategy)
-            PagingRequest.Invalidate -> invalidate()
-        }
-    }
-
-    // Other request handling functions...
-}
-
-private data class PendingSkipQueueJob<K : Any>(
-    val key: K,
-    val inFlight: Boolean,
-)
 
 
 // TODO(): Design decision to support initial state (e.g., hardcoded)
@@ -255,18 +176,18 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
                     is PagingRequest.Enqueue -> {
                         when (request.direction) {
                             LoadDirection.Prepend -> {
-                                val queueElement = LoadParamsQueueElement(
+                                val queueElement = LoadParamsQueue.Element(
                                     params = request.toPagingSourceLoadParams(),
-                                    mechanism = LoadParamsQueueElement.Mechanism.EnqueueRequest
+                                    mechanism = LoadParamsQueue.Element.Mechanism.EnqueueRequest
                                 )
                                 prependLoadParamsQueue.addLast(queueElement)
                                 processPrependQueue()
                             }
 
                             LoadDirection.Append -> {
-                                val queueElement = LoadParamsQueueElement(
+                                val queueElement = LoadParamsQueue.Element(
                                     params = request.toPagingSourceLoadParams(),
-                                    mechanism = LoadParamsQueueElement.Mechanism.EnqueueRequest
+                                    mechanism = LoadParamsQueue.Element.Mechanism.EnqueueRequest
                                 )
 
                                 if (request.jump) {
@@ -385,7 +306,7 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
             // We want to track the load positions separate from access positions
 
 
-            if (firstQueueElement.mechanism == LoadParamsQueueElement.Mechanism.EnqueueRequest || fetchingStrategy.shouldFetchForward(
+            if (firstQueueElement.mechanism == LoadParamsQueue.Element.Mechanism.EnqueueRequest || fetchingStrategy.shouldFetchForward(
                     firstQueueElement.params,
                     pagingState,
                     fetchingState
@@ -469,8 +390,8 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
 
 
                             prependLoadParamsQueue.addLast(
-                                LoadParamsQueueElement(
-                                    loadParams, mechanism = LoadParamsQueueElement.Mechanism.NetworkLoadResponse
+                                LoadParamsQueue.Element(
+                                    loadParams, mechanism = LoadParamsQueue.Element.Mechanism.NetworkLoadResponse
                                 )
                             )
                         }
@@ -612,13 +533,13 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
                         if (addNextToQueue) {
                             it.nextKey?.let { key ->
                                 appendLoadParamsQueue.addLast(
-                                    LoadParamsQueueElement(
+                                    LoadParamsQueue.Element(
                                         PagingSource.LoadParams(
                                             key,
                                             LoadStrategy.SkipCache,
                                             LoadDirection.Append
                                         ),
-                                        mechanism = LoadParamsQueueElement.Mechanism.NetworkLoadResponse
+                                        mechanism = LoadParamsQueue.Element.Mechanism.NetworkLoadResponse
                                     )
                                 )
                             }
@@ -701,9 +622,9 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
     private fun handleEagerLoading() {
         coroutineScope.launch {
             appendLoadParamsQueue.addLast(
-                LoadParamsQueueElement(
+                LoadParamsQueue.Element(
                     initialLoadParams,
-                    LoadParamsQueueElement.Mechanism.InitialLoad
+                    LoadParamsQueue.Element.Mechanism.InitialLoad
                 )
             )
             processAppendQueue()
@@ -828,4 +749,9 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
             }
         }
     }
+
+    private data class PendingSkipQueueJob<K : Any>(
+        val key: K,
+        val inFlight: Boolean,
+    )
 }
