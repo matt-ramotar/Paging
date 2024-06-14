@@ -405,7 +405,6 @@ class RealPager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V 
                 println("SHOULD NOT FETCH")
                 keepFetching = false
             }
-
         }
 
         _processingAppendQueue.update { false }

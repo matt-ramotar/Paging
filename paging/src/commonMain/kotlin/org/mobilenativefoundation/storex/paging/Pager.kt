@@ -12,6 +12,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
 import org.mobilenativefoundation.store.store5.Fetcher
 import org.mobilenativefoundation.store.store5.FetcherResult
+import org.mobilenativefoundation.store.store5.Updater
 import org.mobilenativefoundation.storex.paging.custom.*
 import org.mobilenativefoundation.storex.paging.db.DriverFactory
 import org.mobilenativefoundation.storex.paging.internal.api.*
@@ -84,6 +85,10 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
 
         private var operationManager: OperationManager<Id, Q, K, V>? = null
 
+        private var pageMemoryCache: PageMemoryCache<K, Q> = mutableMapOf()
+        private var itemMemoryCache: ItemMemoryCache<Q, V> = mutableMapOf()
+        private var itemUpdater: Updater<Q, V, *>? = null
+
         @VisibleForTesting
         fun operationManager(operationManager: OperationManager<Id, Q, K, V>) = apply {
             this.operationManager = operationManager
@@ -104,6 +109,13 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
             this.normalizedStore = normalizedStore
         }
 
+        fun itemMemoryCache(itemMemoryCache: ItemMemoryCache<Q, V>) = apply {
+            this.itemMemoryCache = itemMemoryCache
+        }
+
+        fun pageMemoryCache(pageMemoryCache: PageMemoryCache<K, Q>) = apply {
+            this.pageMemoryCache = pageMemoryCache
+        }
 
         fun coroutineDispatcher(coroutineDispatcher: CoroutineDispatcher) = apply {
             this.coroutineDispatcher = coroutineDispatcher
@@ -242,6 +254,38 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
                 pagingConfig = pagingConfig,
             )
 
+            val db = driverFactory?.createDriver()?.let { PagingDb(it) }
+
+            val linkedHashMap = PagingLinkedHashMap(
+                pageMemoryCache = pageMemoryCache,
+                itemMemoryCache = itemMemoryCache,
+                registry = registry,
+                pagingConfig = pagingConfig,
+                db = db,
+            )
+
+            val selfUpdatingItemPresenterV2 = SelfUpdatingItemPresenterV2(
+                registry = registry,
+                itemMemoryCache = itemMemoryCache,
+                fetchingStateHolder = fetchingStateHolder,
+                updater = itemUpdater,
+                linkedHashMap = linkedHashMap,
+                itemFetcher = itemFetcher,
+                db = db
+            )
+
+            val concurrentNormalizedStore = ConcurrentNormalizedStoreV2(
+                pageFetcher = pageFetcher,
+                registry = registry,
+                errorFactory = errorFactory,
+                db = db,
+                fetchingStateHolder = fetchingStateHolder,
+                sideEffects = sideEffects,
+                pagingConfig = pagingConfig,
+                selfUpdatingItemPresenterV2,
+                linkedHashMap
+            )
+
             val operationManager = this.operationManager ?: RealOperationManager<Id, Q, K, V>()
 
             return RealPager(
@@ -257,7 +301,7 @@ interface Pager<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifi
                     direction = LoadDirection.Append
                 ),
                 registry = registry,
-                normalizedStore = normalizedStore,
+                normalizedStore = concurrentNormalizedStore,
                 operationManager = operationManager,
                 initialState = initialState,
             )

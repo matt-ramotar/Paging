@@ -391,6 +391,7 @@ class RealPagerTest {
         verify { operationManager.removeOperation(operation) }
     }
 
+
     @Test
     fun pagingFlow_givenRequests_shouldReturnFlowOfPagingState() = testScope.runTest {
         // Given
