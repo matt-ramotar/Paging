@@ -1,15 +1,15 @@
 package org.mobilenativefoundation.storex.paging
 
-data class CombinedPagingLoadStates<E : Any>(
-    val refresh: PagingLoadState<E>,
-    val prepend: PagingLoadState<E>,
-    val append: PagingLoadState<E>,
-    val pagingSource: PagingLoadStates<E>,
-    val remoteMediator: PagingLoadStates<E>? = null
+data class CombinedPagingLoadStates(
+    val refresh: PagingLoadState,
+    val prepend: PagingLoadState,
+    val append: PagingLoadState,
+    val pagingSource: PagingLoadStates,
+    val remoteMediator: PagingLoadStates? = null
 ) {
     companion object {
 
-        fun <E : Any> initial() = CombinedPagingLoadStates<E>(
+        fun initial() = CombinedPagingLoadStates(
             refresh = PagingLoadState.NotLoading(false),
             append = PagingLoadState.NotLoading(false),
             prepend = PagingLoadState.NotLoading(false),
@@ -20,24 +20,24 @@ data class CombinedPagingLoadStates<E : Any>(
             )
         )
 
-        fun <E : Any> fetchingEnd() = CombinedPagingLoadStates<E>(
+        fun fetchingEnd() = CombinedPagingLoadStates(
             refresh = PagingLoadState.NotLoading(false),
-            append = PagingLoadState.Loading(),
+            append = PagingLoadState.Loading,
             prepend = PagingLoadState.NotLoading(false),
             pagingSource = PagingLoadStates(
                 refresh = PagingLoadState.NotLoading(false),
                 prepend = PagingLoadState.NotLoading(false),
-                append = PagingLoadState.Loading(),
+                append = PagingLoadState.Loading,
             )
         )
 
-        fun <E : Any> fetchingStart() = CombinedPagingLoadStates<E>(
+        fun fetchingStart() = CombinedPagingLoadStates(
             refresh = PagingLoadState.NotLoading(false),
             append = PagingLoadState.NotLoading(false),
-            prepend = PagingLoadState.Loading(),
+            prepend = PagingLoadState.Loading,
             pagingSource = PagingLoadStates(
                 refresh = PagingLoadState.NotLoading(false),
-                prepend = PagingLoadState.Loading(),
+                prepend = PagingLoadState.Loading,
                 append = PagingLoadState.NotLoading(false),
             )
         )

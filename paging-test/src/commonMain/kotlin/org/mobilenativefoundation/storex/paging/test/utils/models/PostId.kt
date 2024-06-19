@@ -1,11 +1,11 @@
 package org.mobilenativefoundation.storex.paging.test.utils.models
 
 import kotlinx.serialization.Serializable
-import org.mobilenativefoundation.storex.paging.Quantifiable
+import org.mobilenativefoundation.storex.paging.Identifier
 
 @Serializable
-data class PostId(override val value: String) : Quantifiable<String> {
-    override fun minus(other: Quantifiable<String>): Int {
+data class PostId(val value: String) : Identifier<PostId> {
+    override fun minus(other: PostId): Int {
 
         return if (value == PLACEHOLDER && other.value == PLACEHOLDER) {
             // both ids are placeholders
@@ -30,17 +30,5 @@ data class PostId(override val value: String) : Quantifiable<String> {
     companion object {
         private const val PLACEHOLDER = "-1"
         val Placeholder = PostId(PLACEHOLDER)
-    }
-
-    override fun plus(other: Quantifiable<String>): Int {
-        TODO("Not yet implemented")
-    }
-
-    override fun times(other: Quantifiable<String>): Int {
-        TODO("Not yet implemented")
-    }
-
-    override fun div(other: Quantifiable<String>): Int {
-        TODO("Not yet implemented")
     }
 }

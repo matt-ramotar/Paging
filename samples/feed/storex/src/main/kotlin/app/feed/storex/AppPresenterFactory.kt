@@ -217,7 +217,8 @@ class HomeTabPresenter(
                     } else {
                         searchOperation.clearSearchQuery()
                     }
-                    pager.applyOperationsAndUpdateState()
+                    // TODO(): Apply operations and update state
+
                 }
             }
         }

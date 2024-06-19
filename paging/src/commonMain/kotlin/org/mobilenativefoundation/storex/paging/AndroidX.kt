@@ -1,10 +1,9 @@
 package org.mobilenativefoundation.storex.paging
 
-import org.mobilenativefoundation.storex.paging.custom.ErrorFactory
 import org.mobilenativefoundation.storex.paging.custom.Operation
 import org.mobilenativefoundation.storex.paging.db.DriverFactory
 
-fun <Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V : Identifiable<Id, Q>, E : Any>
+fun <Id : Identifier<Id>, K : Any, V : Identifiable<Id>>
         androidx.paging.PagingSource.LoadParams<K>.storex(strategy: LoadStrategy): PagingSource.LoadParams<K> {
     val direction = when (this) {
         is androidx.paging.PagingSource.LoadParams.Refresh -> {
@@ -23,7 +22,7 @@ fun <Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V : Identifia
     )
 }
 
-fun <K : Comparable<K>> PagingSource.LoadParams<K>.androidx(
+fun <K : Any> PagingSource.LoadParams<K>.androidx(
     loadSize: Int,
     placeholdersEnabled: Boolean
 ): androidx.paging.PagingSource.LoadParams<K> {
@@ -46,9 +45,9 @@ fun <K : Comparable<K>> PagingSource.LoadParams<K>.androidx(
     }
 }
 
-fun <Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V : Identifiable<Id, Q>, E : Any> androidx.paging.PagingSource.LoadResult.Page<K, V>.storex(
+fun <Id : Identifier<Id>, K : Any, V : Identifiable<Id>> androidx.paging.PagingSource.LoadResult.Page<K, V>.storex(
     params: PagingSource.LoadParams<K>,
-): PagingSource.LoadResult.Data<Id, Q, K, V, E> {
+): PagingSource.LoadResult.Data<Id, K, V> {
     return PagingSource.LoadResult.Data(
         items = data,
         prevKey = prevKey,
@@ -61,49 +60,33 @@ fun <Id : Comparable<Id>, Q : Quantifiable<Id>, K : Comparable<K>, V : Identifia
 }
 
 
-inline fun <reified Id : Comparable<Id>, reified Q : Quantifiable<Id>, reified K : Comparable<K>, reified V : Identifiable<Id, Q>> androidx.paging.PagingSource<K, V>.storex(
-    pagingConfig: PagingConfig<Id, Q, K>,
-): Pager<Id, Q, K, V, Throwable> {
-    return Pager.Builder<Id, Q, K, V>(
+inline fun <reified Id : Identifier<Id>, reified K : Comparable<K>, reified V : Identifiable<Id>> androidx.paging.PagingSource<K, V>.storex(
+    pagingConfig: PagingConfig<Id, K>,
+): Pager<Id, K, V> {
+    return Pager.Builder<Id, K, V>(
         pagingConfig = pagingConfig,
     ).androidxPagingSource(this).build()
 }
 
 
-inline fun <reified Id : Comparable<Id>, reified Q : Quantifiable<Id>, reified K : Comparable<K>, reified V : Identifiable<Id, Q>> androidx.paging.PagingSource<K, V>.storex(
-    pagingConfig: PagingConfig<Id, Q, K>,
+inline fun <reified Id : Identifier<Id>, reified K : Comparable<K>, reified V : Identifiable<Id>> androidx.paging.PagingSource<K, V>.storex(
+    pagingConfig: PagingConfig<Id, K>,
     driverFactory: DriverFactory
-): Pager<Id, Q, K, V, Throwable> {
-    return Pager.Builder<Id, Q, K, V>(
+): Pager<Id, K, V> {
+    return Pager.Builder<Id, K, V>(
         pagingConfig = pagingConfig,
         driverFactory = driverFactory
     ).androidxPagingSource(this).build()
 }
 
-
-inline fun <reified Id : Comparable<Id>, reified Q : Quantifiable<Id>, reified K : Comparable<K>, reified V : Identifiable<Id, Q>, reified E : Any> androidx.paging.PagingSource<K, V>.storex(
-    pagingConfig: PagingConfig<Id, Q, K>,
+inline fun <reified Id : Identifier<Id>, reified K : Comparable<K>, reified V : Identifiable<Id>> androidx.paging.PagingSource<K, V>.storex(
+    pagingConfig: PagingConfig<Id, K>,
     driverFactory: DriverFactory,
-    errorFactory: ErrorFactory<E>
-): Pager<Id, Q, K, V, E> {
-    return Pager.Builder<Id, Q, K, V, E>(
+    operations: List<Operation<Id, K, V>>,
+): Pager<Id, K, V> {
+    return Pager.Builder<Id, K, V>(
         pagingConfig = pagingConfig,
         driverFactory = driverFactory,
-        errorFactory = errorFactory
-    ).androidxPagingSource(this).build()
-}
-
-
-inline fun <reified Id : Comparable<Id>, reified Q : Quantifiable<Id>, reified K : Comparable<K>, reified V : Identifiable<Id, Q>, reified E : Any, reified P : Any> androidx.paging.PagingSource<K, V>.storex(
-    pagingConfig: PagingConfig<Id, Q, K>,
-    driverFactory: DriverFactory,
-    errorFactory: ErrorFactory<E>,
-    operations: List<Operation<Id, Q, K, V>>,
-): Pager<Id, Q, K, V, E> {
-    return Pager.Builder<Id, Q, K, V, E, P>(
-        pagingConfig = pagingConfig,
-        driverFactory = driverFactory,
-        errorFactory = errorFactory,
         operations = operations
     ).androidxPagingSource(this).build()
 }

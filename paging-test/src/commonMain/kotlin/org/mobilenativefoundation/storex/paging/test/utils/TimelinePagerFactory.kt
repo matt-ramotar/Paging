@@ -8,7 +8,6 @@ import org.mobilenativefoundation.storex.paging.test.utils.api.TimelineApi
 import org.mobilenativefoundation.storex.paging.test.utils.models.GetFeedRequest
 import org.mobilenativefoundation.storex.paging.test.utils.models.Post
 import org.mobilenativefoundation.storex.paging.test.utils.models.PostId
-import org.mobilenativefoundation.storex.paging.test.utils.models.TimelineError
 import org.mobilenativefoundation.storex.paging.utils.timeline.server.Server
 
 class TimelinePagerFactory(
@@ -21,17 +20,16 @@ class TimelinePagerFactory(
 
     fun create(
         coroutineDispatcher: CoroutineDispatcher,
-        storexPagingSourceFactory: ((api: TimelineApi) -> PagingSource<String, PostId, GetFeedRequest, Post, TimelineError>)? = null,
+        storexPagingSourceFactory: ((api: TimelineApi) -> PagingSource<PostId, GetFeedRequest, Post>)? = null,
         androidxPagingSourceFactory: ((api: TimelineApi) -> androidx.paging.PagingSource<GetFeedRequest, Post>)? = null,
-    ): Pager<String, PostId, GetFeedRequest, Post, TimelineError> {
+    ): Pager<PostId, GetFeedRequest, Post> {
 
-        val builder = Pager.Builder<String, PostId, GetFeedRequest, Post, TimelineError>(
+        val builder = Pager.Builder<PostId, GetFeedRequest, Post>(
             pagingConfig = PagingConfig(
                 placeholderId = PostId.Placeholder,
                 initialKey = GetFeedRequest(null, pageSize),
                 prefetchDistance = prefetchDistance
             ),
-            errorFactory = TimelineError.Factory()
         ).coroutineDispatcher(coroutineDispatcher)
 
         if (storexPagingSourceFactory != null) {
@@ -47,7 +45,7 @@ class TimelinePagerFactory(
 
 
     private fun storexPagingSource() =
-        PagingSource<String, PostId, GetFeedRequest, Post, TimelineError> { params ->
+        PagingSource<PostId, GetFeedRequest, Post> { params ->
             val response = api.getFeed(params.key)
 
             val nextKey = response.nextCursor?.let { nextCursor ->

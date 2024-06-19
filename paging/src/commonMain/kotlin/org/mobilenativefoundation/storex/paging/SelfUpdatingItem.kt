@@ -1,5 +1,3 @@
-@file:Suppress("UNCHECKED_CAST")
-
 package org.mobilenativefoundation.storex.paging
 
 import androidx.compose.runtime.Composable
@@ -8,30 +6,30 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 
 // TODO: Design decision to not have each item update pass down UI tree to optimize recompositions only recompose the item
 // So each item needs its own presenter
-class SelfUpdatingItem<Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any>(
-    private val presenter: @Composable (events: Flow<Event<Id, Q, V, E>>) -> ItemState<Id, Q, V, E>
+class SelfUpdatingItem<Id : Identifier<*>, V : Identifiable<Id>>(
+    private val presenter: @Composable (events: Flow<Event<Id, V>>) -> ItemState<Id, V>
 ) {
-    private val _events = MutableSharedFlow<Event<Id, Q, V, E>>(extraBufferCapacity = 20)
+    private val _events = MutableSharedFlow<Event<Id, V>>(extraBufferCapacity = 20)
 
     @Composable
     operator fun invoke() = presenter(_events)
 
-    suspend fun emit(event: Event<Id, Q, V, E>) {
+    suspend fun emit(event: Event<Id, V>) {
         _events.emit(event)
     }
 
-    sealed interface Event<Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any> {
+    sealed interface Event<Id : Identifier<*>, V : Identifiable<Id>> {
 
-        data class Refresh<Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any>(
+        data class Refresh<Id : Identifier<*>, V : Identifiable<Id>>(
             val message: String? = null,
-        ) : Event<Id, Q, V, E>
+        ) : Event<Id, V>
 
-        data class Update<Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any>(
+        data class Update<Id : Identifier<*>, V : Identifiable<Id>>(
             val value: V,
-        ) : Event<Id, Q, V, E>
+        ) : Event<Id, V>
 
-        data class Clear<Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any>(
+        data class Clear<Id : Identifier<*>, V : Identifiable<Id>>(
             val message: String? = null
-        ) : Event<Id, Q, V, E>
+        ) : Event<Id, V>
     }
 }

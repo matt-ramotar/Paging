@@ -1,27 +1,20 @@
 package org.mobilenativefoundation.storex.paging
 
-import kotlinx.serialization.json.JsonObject
-
-sealed class PagingLoadState<out E : Any>(
+sealed class PagingLoadState(
     val endOfPaginationReached: Boolean,
-    val extras: JsonObject? = null
 ) {
     class NotLoading(
         endOfPaginationReached: Boolean,
-        extras: JsonObject? = null
-    ) : PagingLoadState<Nothing>(endOfPaginationReached, extras) {
+    ) : PagingLoadState(endOfPaginationReached) {
         internal companion object {
             val Complete = NotLoading(endOfPaginationReached = true)
             val Incomplete = NotLoading(endOfPaginationReached = false)
         }
     }
 
-    class Loading(extras: JsonObject? = null) :
-        PagingLoadState<Nothing>(endOfPaginationReached = false, extras)
+    data object Loading : PagingLoadState(endOfPaginationReached = false)
 
-    class Error<E : Any>(
-        val error: E,
-        extras: JsonObject? = null,
-    ) : PagingLoadState<E>(endOfPaginationReached = false, extras)
-
+    data class Error(
+        val error: Throwable
+    ) : PagingLoadState(endOfPaginationReached = false)
 }

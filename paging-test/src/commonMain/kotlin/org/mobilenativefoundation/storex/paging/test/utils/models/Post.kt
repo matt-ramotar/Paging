@@ -17,4 +17,4 @@ data class Post(
     val relevanceScore: Float = 0f,
     val trendingScore: Float = 0f,
     val parentPostId: String? = null,
-) : Identifiable<String, PostId>
+) : Identifiable<PostId>

@@ -1,4 +1,4 @@
-package org.mobilenativefoundation.storex.paging.internal.impl
+package org.mobilenativefoundation.storex.paging.internal.impl.store
 
 import androidx.compose.runtime.*
 import app.cash.sqldelight.coroutines.asFlow
@@ -13,33 +13,32 @@ import org.mobilenativefoundation.store.store5.FetcherResult
 import org.mobilenativefoundation.store.store5.Updater
 import org.mobilenativefoundation.storex.paging.*
 import org.mobilenativefoundation.storex.paging.internal.api.FetchingStateHolder
+import org.mobilenativefoundation.storex.paging.internal.impl.KClassRegistry
 
 
 @OptIn(InternalSerializationApi::class)
-class SelfUpdatingItemPresenter<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any>(
-    private val registry: KClassRegistry<Id, Q, K, V, E>,
-    private val itemMemoryCache: ItemMemoryCache<Q, V>,
-    private val fetchingStateHolder: FetchingStateHolder<Id, Q, K>,
-    private val updater: Updater<Q, V, *>?,
-    private val linkedHashMap: PagingLinkedHashMap<Id, Q, K, V, E>,
+class SelfUpdatingItemPresenter<Id : Identifier<*>, K : Any, V : Identifiable<Id>>(
+    private val registry: KClassRegistry<Id, K, V>,
+    private val itemMemoryCache: ItemMemoryCache<Id, V>,
+    private val fetchingStateHolder: FetchingStateHolder<Id, K>,
+    private val updater: Updater<Id, V, *>?,
+    private val linkedHashMap: LinkedHashMapManager<Id, K, V>,
     private val itemFetcher: Fetcher<Id, V>?,
     private val db: PagingDb?
 ) {
 
     @Composable
     fun present(
-        id: Q,
-        events: Flow<SelfUpdatingItem.Event<Id, Q, V, E>>
-    ): ItemState<Id, Q, V, E> {
-        val encoded = remember(id) { Json.encodeToString(registry.q.serializer(), id) }
-
-        var value by remember(id) {
+        id: Id,
+        events: Flow<SelfUpdatingItem.Event<Id, V>>
+    ): ItemState<Id, V> {
+        val value by remember(id) {
             mutableStateOf(itemMemoryCache[id])
         }
 
         var itemVersion by remember(id) { mutableStateOf(0L) }
 
-        var singleLoadState: SingleLoadState<E> by remember(id) {
+        var singleLoadState: SingleLoadState by remember(id) {
             val item = value
             // This is the initial state, because we are remembering by id
             mutableStateOf(
@@ -57,7 +56,7 @@ class SelfUpdatingItemPresenter<Id : Comparable<Id>, Q : Quantifiable<Id>, K : A
             itemVersion = reducer(itemVersion)
         }
 
-        fun updateSingleLoadState(reducer: (SingleLoadState<E>) -> SingleLoadState<E>) {
+        fun updateSingleLoadState(reducer: (SingleLoadState) -> SingleLoadState) {
             singleLoadState = reducer(singleLoadState)
         }
 
@@ -88,18 +87,18 @@ class SelfUpdatingItemPresenter<Id : Comparable<Id>, Q : Quantifiable<Id>, K : A
     }
 
     private suspend fun handleEvents(
-        id: Q,
-        events: Flow<SelfUpdatingItem.Event<Id, Q, V, E>>,
-        updateSingleLoadState: ((SingleLoadState<E>) -> SingleLoadState<E>) -> Unit,
+        id: Id,
+        events: Flow<SelfUpdatingItem.Event<Id, V>>,
+        updateSingleLoadState: ((SingleLoadState) -> SingleLoadState) -> Unit,
         updateItemVersion: ((Long) -> Long) -> Unit,
     ) {
         events.collect { event -> handleEvent(id, event, updateSingleLoadState, updateItemVersion) }
     }
 
     private suspend fun handleEvent(
-        id: Q,
-        event: SelfUpdatingItem.Event<Id, Q, V, E>,
-        updateSingleLoadState: ((SingleLoadState<E>) -> SingleLoadState<E>) -> Unit,
+        id: Id,
+        event: SelfUpdatingItem.Event<Id, V>,
+        updateSingleLoadState: ((SingleLoadState) -> SingleLoadState) -> Unit,
         updateItemVersion: ((Long) -> Long) -> Unit,
     ) {
         when (event) {
@@ -110,8 +109,8 @@ class SelfUpdatingItemPresenter<Id : Comparable<Id>, Q : Quantifiable<Id>, K : A
     }
 
     private fun handleClear(
-        id: Q,
-        updateSingleLoadState: ((SingleLoadState<E>) -> SingleLoadState<E>) -> Unit,
+        id: Id,
+        updateSingleLoadState: ((SingleLoadState) -> SingleLoadState) -> Unit,
         updateItemVersion: ((Long) -> Long) -> Unit,
     ) {
         // Remove from memory cache
@@ -124,8 +123,8 @@ class SelfUpdatingItemPresenter<Id : Comparable<Id>, Q : Quantifiable<Id>, K : A
     }
 
     private suspend fun handleRefresh(
-        id: Q,
-        updateSingleLoadState: ((SingleLoadState<E>) -> SingleLoadState<E>) -> Unit,
+        id: Id,
+        updateSingleLoadState: ((SingleLoadState) -> SingleLoadState) -> Unit,
         updateItemVersion: ((Long) -> Long) -> Unit,
     ) {
         // Load from network
@@ -136,7 +135,7 @@ class SelfUpdatingItemPresenter<Id : Comparable<Id>, Q : Quantifiable<Id>, K : A
             throw IllegalStateException("Item fetcher is required.")
         }
 
-        when (val fetcherResult = itemFetcher.invoke(id.value).first()) {
+        when (val fetcherResult = itemFetcher.invoke(id).first()) {
             is FetcherResult.Data -> {
                 val item = fetcherResult.value
 
@@ -155,27 +154,27 @@ class SelfUpdatingItemPresenter<Id : Comparable<Id>, Q : Quantifiable<Id>, K : A
     }
 
     private fun handleUpdate(
-        id: Q,
-        event: SelfUpdatingItem.Event.Update<Id, Q, V, E>,
-        updateSingleLoadState: ((SingleLoadState<E>) -> SingleLoadState<E>) -> Unit,
+        id: Id,
+        event: SelfUpdatingItem.Event.Update<Id, V>,
+        updateSingleLoadState: ((SingleLoadState) -> SingleLoadState) -> Unit,
         updateItemVersion: ((Long) -> Long) -> Unit,
     ) {
         // TODO()
     }
 
-    private fun updateFetchingState(id: Q) {
+    private fun updateFetchingState(id: Id) {
         fetchingStateHolder.updateMaxItemAccessedSoFar(id)
         fetchingStateHolder.updateMinItemAccessedSoFar(id)
     }
 
     private suspend fun handleDatabaseUpdates(
-        id: Q,
+        id: Id,
         value: V?,
-        updateSingleLoadState: ((SingleLoadState<E>) -> SingleLoadState<E>) -> Unit,
+        updateSingleLoadState: ((SingleLoadState) -> SingleLoadState) -> Unit,
         updateItemVersion: ((Long) -> Long) -> Unit,
     ) {
         db?.let {
-            val encoded = Json.encodeToString(registry.q.serializer(), id)
+            val encoded = Json.encodeToString(registry.id.serializer(), id)
             db.itemQueries.getItem(encoded).asFlow().map { query ->
                 val item = query.executeAsOneOrNull()
                 if (item != null) {

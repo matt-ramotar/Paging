@@ -2,9 +2,9 @@ package org.mobilenativefoundation.storex.paging
 
 import kotlinx.serialization.json.JsonObject
 
-data class ItemState<Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any>(
+data class ItemState<Id : Identifier<*>, V : Identifiable<Id>>(
     val item: V?,
-    val loadState: SingleLoadState<E>,
+    val loadState: SingleLoadState,
     // TODO(): When do we update version?
     val itemVersion: Long = 0,
 ) {
@@ -17,31 +17,31 @@ data class ItemState<Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable
     }
 
     companion object {
-        fun <Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any> initial() =
-            ItemState<Id, Q, V, E>(null, SingleLoadState.Initial)
+        fun <Id : Identifier<*>, V : Identifiable<Id>> initial() =
+            ItemState<Id, V>(null, SingleLoadState.Initial)
 
-        fun <Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any> loaded(
+        fun <Id : Identifier<*>, V : Identifiable<Id>> loaded(
             item: V,
             version: Long
         ) =
-            ItemState<Id, Q, V, E>(item, SingleLoadState.Loaded, version)
+            ItemState<Id, V>(item, SingleLoadState.Loaded, version)
 
-        fun <Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any> loading(
+        fun <Id : Identifier<*>, V : Identifiable<Id>> loading(
             item: V?,
             version: Long
         ) =
-            ItemState<Id, Q, V, E>(item, SingleLoadState.Loading, version)
+            ItemState<Id, V>(item, SingleLoadState.Loading, version)
 
-        fun <Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any> errorRefreshing(
+        fun <Id : Identifier<*>, V : Identifiable<Id>> errorRefreshing(
             item: V?,
-            error: E,
+            error: Throwable,
             version: Long,
             extras: JsonObject? = null
         ) =
-            ItemState<Id, Q, V, E>(item, SingleLoadState.Error.Refreshing(error, extras), version)
+            ItemState<Id, V>(item, SingleLoadState.Error.Refreshing(error, extras), version)
 
-        fun <Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any> cleared(
-        ) = ItemState<Id, Q, V, E>(null, SingleLoadState.Cleared)
+        fun <Id : Identifier<*>, V : Identifiable<Id>> cleared(
+        ) = ItemState<Id, V>(null, SingleLoadState.Cleared)
     }
 
 }

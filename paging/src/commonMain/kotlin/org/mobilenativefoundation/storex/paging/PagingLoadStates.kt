@@ -1,9 +1,9 @@
 package org.mobilenativefoundation.storex.paging
 
-data class PagingLoadStates<E: Any>(
-    val refresh: PagingLoadState<E>,
-    val prepend: PagingLoadState<E>,
-    val append: PagingLoadState<E>,
+data class PagingLoadStates(
+    val refresh: PagingLoadState,
+    val prepend: PagingLoadState,
+    val append: PagingLoadState,
 ) {
     val hasError =
         refresh is PagingLoadState.Error || append is PagingLoadState.Error || prepend is PagingLoadState.Error

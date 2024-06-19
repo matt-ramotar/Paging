@@ -1,21 +1,22 @@
-package org.mobilenativefoundation.storex.paging.internal.impl
+package org.mobilenativefoundation.storex.paging.internal.impl.store
 
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
 import org.mobilenativefoundation.store.store5.FetcherResult
 import org.mobilenativefoundation.storex.paging.*
+import org.mobilenativefoundation.storex.paging.internal.impl.KClassRegistry
 
 
-typealias PageMemoryCache<K, Q> = MutableMap<K, List<Q>>
+typealias PageMemoryCache<K, Id> = MutableMap<K, List<Id>>
 typealias ItemMemoryCache<Q, V> = MutableMap<Q, V>
 
 @OptIn(InternalSerializationApi::class)
-class PagingLinkedHashMap<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any>(
-    private val pageMemoryCache: PageMemoryCache<K, Q>,
-    private val itemMemoryCache: ItemMemoryCache<Q, V>,
-    private val registry: KClassRegistry<Id, Q, K, V, E>,
-    private val pagingConfig: PagingConfig<Id, Q, K>,
+class LinkedHashMapManager<Id : Identifier<*>, K : Any, V : Identifiable<Id>>(
+    private val pageMemoryCache: PageMemoryCache<K, Id>,
+    private val itemMemoryCache: ItemMemoryCache<Id, V>,
+    private val registry: KClassRegistry<Id, K, V>,
+    private val pagingConfig: PagingConfig<Id, K>,
     private val db: PagingDb?,
 ) {
     private var headPage: PageNode<K>? = null
@@ -27,14 +28,14 @@ class PagingLinkedHashMap<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
     private val pageNodeMap = mutableMapOf<K, PageNode<K>>()
 
     private val keyToParamsMap = mutableMapOf<K, PagingSource.LoadParams<K>>()
-    private val idToKeyMap = mutableMapOf<Q, K>()
+    private val idToKeyMap = mutableMapOf<Id, K>()
 
     fun getPageNode(key: K): PageNode<K>? {
         return pageNodeMap[key]
     }
 
 
-    fun getItem(id: Q): V? {
+    fun getItem(id: Id): V? {
         return itemMemoryCache[id]
     }
 
@@ -78,9 +79,10 @@ class PagingLinkedHashMap<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
         saveItemToDb(item, encodedParams)
     }
 
+    @OptIn(InternalSerializationApi::class)
     private fun saveItemToDb(item: V, encodedParams: String?) {
         db?.let {
-            val id = Json.encodeToString(registry.q.serializer(), item.id)
+            val id = Json.encodeToString(registry.id.serializer(), item.id)
 
             if (encodedParams != null) {
 
@@ -103,7 +105,7 @@ class PagingLinkedHashMap<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
     fun appendPage(
         params: PagingSource.LoadParams<K>,
         encodedParams: String,
-        fetcherResult: FetcherResult.Data<PagingSource.LoadResult.Data<Id, Q, K, V, E>>
+        fetcherResult: FetcherResult.Data<PagingSource.LoadResult.Data<Id, K, V>>
     ) {
         val pageNode = if (params.key !in pageNodeMap) {
             val node = PageNode(key = params.key)
@@ -139,7 +141,7 @@ class PagingLinkedHashMap<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
     fun prependPage(
         params: PagingSource.LoadParams<K>,
         encodedParams: String,
-        fetcherResult: FetcherResult.Data<PagingSource.LoadResult.Data<Id, Q, K, V, E>>
+        fetcherResult: FetcherResult.Data<PagingSource.LoadResult.Data<Id, K, V>>
     ) {
         val pageNode = if (params.key !in pageNodeMap) {
             val node = PageNode(key = params.key)
@@ -225,7 +227,7 @@ class PagingLinkedHashMap<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
         pageCount++
     }
 
-    fun removeItem(id: Q) {
+    fun removeItem(id: Id) {
         // Update pointers
         val key = idToKeyMap[id]
         if (key != null) {
@@ -243,7 +245,7 @@ class PagingLinkedHashMap<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
         }
 
         db?.let {
-            val encodedItemId = Json.encodeToString(registry.q.serializer(), id)
+            val encodedItemId = Json.encodeToString(registry.id.serializer(), id)
             db.itemQueries.removeItem(encodedItemId)
             itemMemoryCache.remove(id)
             itemCount--
@@ -290,7 +292,7 @@ class PagingLinkedHashMap<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V 
 
     private fun saveNormalizedPageToDb(
         encodedParams: String,
-        fetcherResult: FetcherResult.Data<PagingSource.LoadResult.Data<Id, Q, K, V, E>>
+        fetcherResult: FetcherResult.Data<PagingSource.LoadResult.Data<Id, K, V>>
     ) {
         db?.let {
             val page = Page(

@@ -2,8 +2,8 @@ package org.mobilenativefoundation.storex.paging.custom
 
 import org.mobilenativefoundation.storex.paging.Identifiable
 import org.mobilenativefoundation.storex.paging.ItemSnapshotList
-import org.mobilenativefoundation.storex.paging.Quantifiable
+import org.mobilenativefoundation.storex.paging.Identifier
 
-fun interface SideEffect<Id : Comparable<Id>, Q: Quantifiable<Id>, V : Identifiable<Id, Q>> {
-    operator fun invoke(snapshot: ItemSnapshotList<Id, Q, V>)
+fun interface SideEffect<Id : Identifier<*>, V : Identifiable<Id>> {
+    operator fun invoke(snapshot: ItemSnapshotList<Id, V>)
 }

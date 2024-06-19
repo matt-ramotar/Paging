@@ -1,17 +1,17 @@
 package org.mobilenativefoundation.storex.paging.internal.api
 
 import kotlinx.coroutines.flow.StateFlow
-import org.mobilenativefoundation.storex.paging.Quantifiable
+import org.mobilenativefoundation.storex.paging.Identifier
 
-interface FetchingStateHolder<Id : Comparable<Id>, Q: Quantifiable<Id>, K : Any> {
-    val state: StateFlow<FetchingState<Id, Q, K>>
+interface FetchingStateHolder<Id : Identifier<*>, K : Any> {
+    val state: StateFlow<FetchingState<Id, K>>
 
-    fun update(reducer: (prevState: FetchingState<Id, Q, K>) -> FetchingState<Id, Q, K>)
-    fun update(nextState: FetchingState<Id, Q, K>)
-    fun updateMaxItemAccessedSoFar(id: Q)
-    fun updateMinItemAccessedSoFar(id: Q)
+    fun update(reducer: (prevState: FetchingState<Id, K>) -> FetchingState<Id, K>)
+    fun update(nextState: FetchingState<Id, K>)
+    fun updateMaxItemAccessedSoFar(id: Id)
+    fun updateMinItemAccessedSoFar(id: Id)
     fun updateMaxRequestSoFar(key: K)
     fun updateMinRequestSoFar(key: K)
-    fun updateMinItemLoadedSoFar(id: Q)
-    fun updateMaxItemLoadedSoFar(id: Q)
+    fun updateMinItemLoadedSoFar(id: Id)
+    fun updateMaxItemLoadedSoFar(id: Id)
 }

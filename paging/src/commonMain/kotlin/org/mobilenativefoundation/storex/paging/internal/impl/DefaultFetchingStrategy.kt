@@ -5,29 +5,29 @@ import org.mobilenativefoundation.storex.paging.custom.FetchingStrategy
 import org.mobilenativefoundation.storex.paging.internal.api.FetchingState
 import kotlin.math.abs
 
-class DefaultFetchingStrategy<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any>(
-    private val pagingConfig: PagingConfig<Id, Q, K>
-) : FetchingStrategy<Id, Q, K, E> {
+class DefaultFetchingStrategy<Id : Identifier<Id>, K : Any, V : Identifiable<Id>>(
+    private val pagingConfig: PagingConfig<Id, K>
+) : FetchingStrategy<Id, K> {
 
     override fun shouldFetchForward(
         params: PagingSource.LoadParams<K>,
-        pagingState: PagingState<Id, Q, E>,
-        fetchingState: FetchingState<Id, Q, K>
+        pagingState: PagingState<Id>,
+        fetchingState: FetchingState<Id, K>
     ): Boolean {
         return shouldFetch(pagingState, fetchingState, FetchDirection.FORWARD)
     }
 
     override fun shouldFetchBackward(
         params: PagingSource.LoadParams<K>,
-        pagingState: PagingState<Id, Q, E>,
-        fetchingState: FetchingState<Id, Q, K>
+        pagingState: PagingState<Id>,
+        fetchingState: FetchingState<Id, K>
     ): Boolean {
         return shouldFetch(pagingState, fetchingState, FetchDirection.BACKWARD)
     }
 
     private fun shouldFetch(
-        pagingState: PagingState<Id, Q, E>,
-        fetchingState: FetchingState<Id, Q, K>,
+        pagingState: PagingState<Id>,
+        fetchingState: FetchingState<Id, K>,
         fetchDirection: FetchDirection
     ): Boolean {
         println("DECIDING WHETHER TO FETCH")
@@ -87,32 +87,32 @@ class DefaultFetchingStrategy<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any
         }
     }
 
-    private fun PagingState<Id, Q, E>.determineSortOrder(): SortOrder {
+    private fun PagingState<Id>.determineSortOrder(): SortOrder {
         val firstItem = ids.firstOrNull()
         val lastItem = ids.lastOrNull()
 
         return if (firstItem != null && lastItem != null) {
-            if (firstItem.value < lastItem.value) SortOrder.ASCENDING else SortOrder.DESCENDING
+            if (firstItem < lastItem) SortOrder.ASCENDING else SortOrder.DESCENDING
         } else {
             SortOrder.UNKNOWN
         }
     }
 
-    private fun isUnderPrefetchLimit(pagingState: PagingState<Id, Q, E>, itemLoadedSoFar: Q?): Boolean {
+    private fun isUnderPrefetchLimit(pagingState: PagingState<Id>, itemLoadedSoFar: Id?): Boolean {
         if (itemLoadedSoFar == null) return true
         val index = pagingState.ids.indexOfFirst { it == itemLoadedSoFar }
         if (index == -1) return true
         return index < pagingConfig.prefetchDistance - 1
     }
 
-    private fun PagingState<Id, Q, E>.distanceBetween(itemLoaded: Q, itemAccessed: Q, sortOrder: SortOrder): Int {
+    private fun PagingState<Id>.distanceBetween(itemLoaded: Id, itemAccessed: Id, sortOrder: SortOrder): Int {
         return abs(itemAccessed - itemLoaded)
     }
 
     private fun checkFetchCondition(
-        pagingState: PagingState<Id, Q, E>,
-        itemLoadedSoFar: Q?,
-        itemAccessedSoFar: Q?,
+        pagingState: PagingState<Id>,
+        itemLoadedSoFar: Id?,
+        itemAccessedSoFar: Id?,
         sortOrder: SortOrder
     ): Boolean {
         return itemLoadedSoFar?.let { itemLoaded ->

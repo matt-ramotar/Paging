@@ -48,7 +48,7 @@ fun RecompositionMode.toCashRecompositionMode() = when (this) {
 }
 
 //
-//fun <Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> CoroutineScope.launchPager(
+//fun <Id : Comparable<Id>, K: Comparable<K>, V : Identifiable<Id>> CoroutineScope.launchPager(
 //    pager: Pager<Id, K, V, E>,
 //    requests: Flow<PagingRequest<K>>,
 //    recompositionMode: RecompositionMode = RecompositionMode.ContextClock
@@ -57,7 +57,7 @@ fun RecompositionMode.toCashRecompositionMode() = when (this) {
 //        pager.pagingState(requests)
 //    }
 //
-//fun <Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> CoroutineScope.launchPager(
+//fun <Id : Comparable<Id>, K: Comparable<K>, V : Identifiable<Id>> CoroutineScope.launchPager(
 //    pager: Pager<Id, K, V, E>,
 //    requests: Flow<PagingRequest<K>>,
 //): StateFlow<PagingState<Id, E>> =
@@ -65,7 +65,7 @@ fun RecompositionMode.toCashRecompositionMode() = when (this) {
 //        pager.pagingState(requests)
 //    }
 //
-//fun <Id : Comparable<Id>, K : Any, V : Identifiable<Id>, E : Any> Pager<Id, K, V, E>.pagingFlow(
+//fun <Id : Comparable<Id>, K: Comparable<K>, V : Identifiable<Id>> Pager<Id, K, V, E>.pagingFlow(
 //    requests: Flow<PagingRequest<K>>,
 //    recompositionMode: RecompositionMode = RecompositionMode.ContextClock
 //): Flow<PagingState<Id, E>> =
@@ -74,15 +74,15 @@ fun RecompositionMode.toCashRecompositionMode() = when (this) {
 //    }
 //
 //
-fun <Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any> Pager<Id, Q, K, V, E>.launchPagingFlow(
+fun <Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> Pager<Id, K, V>.launchPagingFlow(
     requests: Flow<PagingRequest<K>> = emptyFlow(),
-): Flow<PagingState<Id, Q, E>> = this.pagingFlow(requests, RecompositionMode.Immediate)
+): Flow<PagingState<Id>> = this.pagingFlow(requests, RecompositionMode.Immediate)
 
 
 @OptIn(ExperimentalTypeInference::class)
-fun <Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any> Pager<Id, Q, K, V, E>.launchPagingFlow(
+fun <Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> Pager<Id, K, V>.launchPagingFlow(
     @BuilderInference block: suspend FlowCollector<PagingRequest<K>>.() -> Unit
-): Flow<PagingState<Id, Q, E>> = this.pagingFlow(flow(block), RecompositionMode.Immediate)
+): Flow<PagingState<Id>> = this.pagingFlow(flow(block), RecompositionMode.Immediate)
 
 
 

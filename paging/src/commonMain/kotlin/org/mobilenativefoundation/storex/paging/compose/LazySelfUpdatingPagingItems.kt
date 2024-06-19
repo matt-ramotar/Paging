@@ -19,11 +19,11 @@ import org.mobilenativefoundation.storex.paging.*
 
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
-fun <Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any> LazySelfUpdatingPagingItems(
-    ids: List<Q?>,
+fun <Id : Identifier<Id>, V : Identifiable<Id>> LazySelfUpdatingPagingItems(
+    ids: List<Id?>,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
-    content: @Composable (itemState: ItemState<Id, Q, V, E>) -> Unit
+    content: @Composable (itemState: ItemState<Id, V>) -> Unit
 ) {
     val items = remember(ids) {
         ids.map { id ->
@@ -56,7 +56,7 @@ fun <Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any
                     Nullable.Null -> null
                 }
 
-                SelfUpdatingItemContent<Id, Q, V, E>(id) { itemState ->
+                SelfUpdatingItemContent<Id, V>(id) { itemState ->
                     content(itemState)
                 }
             }
@@ -79,11 +79,11 @@ sealed class Nullable<T : Any> {
 }
 
 @Composable
-fun <Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any> SelfUpdatingItemContent(
-    id: Q?,
+fun <Id : Identifier<Id>, V : Identifiable<Id>> SelfUpdatingItemContent(
+    id: Id?,
     coroutineScope: CoroutineScope = rememberCoroutineScope(),
-    selfUpdatingItem: SelfUpdatingItem<Id, Q, V, E>? = rememberSelfUpdatingItem(id),
-    content: @Composable (state: ItemState<Id, Q, V, E>) -> Unit
+    selfUpdatingItem: SelfUpdatingItem<Id, V>? = rememberSelfUpdatingItem(id),
+    content: @Composable (state: ItemState<Id, V>) -> Unit
 ) {
     val itemState = selfUpdatingItem.stateIn(coroutineScope, key = selfUpdatingItem).collectAsState()
     content(itemState.value)

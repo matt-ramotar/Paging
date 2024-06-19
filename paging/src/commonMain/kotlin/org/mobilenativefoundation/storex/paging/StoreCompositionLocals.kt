@@ -8,32 +8,37 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlin.experimental.ExperimentalTypeInference
 
+
 @Composable
-fun <Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any> StoreCompositionLocals(
-    pager: Pager<Id, Q, K, V, E>,
-    content: @Composable () -> Unit,
+fun <Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> PagingScope(
+    pagingScope: PagingScope<Id, K, V>,
+    content: @Composable () -> Unit
 ) {
+
     CompositionLocalProvider(
-        LocalSelfUpdatingItemFactory provides pager,
-        LocalPager provides pager,
+        LocalPagingScope provides pagingScope
     ) {
         content()
     }
 }
 
 
-val LocalSelfUpdatingItemFactory: ProvidableCompositionLocal<SelfUpdatingItemFactory<*, *, *, *>> =
+val LocalPagingScope: ProvidableCompositionLocal<PagingScope<*, *, *>> =
+    staticCompositionLocalOf { throw IllegalStateException("PagingScope not provided") }
+
+
+val LocalSelfUpdatingItemFactory: ProvidableCompositionLocal<SelfUpdatingItemFactory<*, *>> =
     staticCompositionLocalOf { throw IllegalStateException("SelfUpdatingItemFactory not provided") }
 
-val LocalPager: ProvidableCompositionLocal<Pager<*, *, *, *, *>> =
+val LocalPager: ProvidableCompositionLocal<Pager<*, *, *>> =
     staticCompositionLocalOf { throw IllegalStateException("Pager not provided") }
 
 
 @Composable
-inline fun <Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any> SelfUpdatingItem<Id, Q, V, E>?.stateIn(
+inline fun <Id : Identifier<Id>, V : Identifiable<Id>> SelfUpdatingItem<Id, V>?.stateIn(
     scope: CoroutineScope,
     key: Any? = null
-): StateFlow<ItemState<Id, Q, V, E>> {
+): StateFlow<ItemState<Id, V>> {
 
     return remember(key) {
         scope.launchMolecule(RecompositionMode.ContextClock) {
@@ -42,16 +47,15 @@ inline fun <Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, 
     }
 }
 
-@Suppress("UNCHECKED_CAST")
 @Composable
-inline fun <Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, E : Any> rememberSelfUpdatingItem(
-    id: Q?
-): SelfUpdatingItem<Id, Q, V, E>? {
+inline fun <Id : Identifier<Id>, V : Identifiable<Id>> rememberSelfUpdatingItem(
+    id: Id?
+): SelfUpdatingItem<Id, V>? {
     if (id == null) {
         return null
     }
 
-    val selfUpdatingItemFactory = LocalSelfUpdatingItemFactory.current as SelfUpdatingItemFactory<Id, Q, V, E>
+    val selfUpdatingItemFactory = LocalSelfUpdatingItemFactory.current as SelfUpdatingItemFactory<Id, V>
     return remember(id) {
         selfUpdatingItemFactory.createSelfUpdatingItem(id)
     }
@@ -59,11 +63,11 @@ inline fun <Id : Comparable<Id>, Q : Quantifiable<Id>, V : Identifiable<Id, Q>, 
 
 
 @Composable
-inline fun <Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any> Pager<Id, Q, K, V, E>.collectAsState(
+inline fun <Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> Pager<Id, K, V>.collectAsState(
     requests: PagingRequestFlow<K>,
     key: Any = Unit,
     coroutineScope: CoroutineScope = rememberCoroutineScope()
-): State<PagingState<Id, Q, E>> {
+): State<PagingState<Id>> {
     val pagingStateFlow = remember(key) {
         pagingStateFlow(coroutineScope, requests)
     }
@@ -74,10 +78,10 @@ inline fun <Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable
 }
 
 @Composable
-inline fun <Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any> Pager<Id, Q, K, V, E>.collectAsState(
+inline fun <Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> Pager<Id, K, V>.collectAsState(
     key: Any = Unit,
     coroutineScope: CoroutineScope = rememberCoroutineScope()
-): State<PagingStateWithEventSink<Id, Q, K, E>> {
+): State<PagingStateWithEventSink<Id, K>> {
 
     val requests = remember(key) {
         MutableSharedFlow<PagingRequest<K>>(replay = 20)
@@ -113,11 +117,11 @@ inline fun <Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable
 
 @OptIn(ExperimentalTypeInference::class)
 @Composable
-inline fun <Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any> Pager<Id, Q, K, V, E>.collectAsState(
+inline fun <Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> Pager<Id, K, V>.collectAsState(
     key: Any = Unit,
     coroutineScope: CoroutineScope = rememberCoroutineScope(),
     @BuilderInference noinline block: suspend FlowCollector<PagingRequest<K>>.() -> Unit
-): State<PagingState<Id, Q, E>> {
+): State<PagingState<Id>> {
     val pagingStateFlow = remember(key) {
         pagingStateFlow(coroutineScope, flow(block))
     }

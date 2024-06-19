@@ -2,13 +2,15 @@ package org.mobilenativefoundation.storex.paging.internal.api
 
 import kotlinx.coroutines.flow.Flow
 import org.mobilenativefoundation.storex.paging.*
-import org.mobilenativefoundation.storex.paging.internal.impl.PageLoadStatus
+import org.mobilenativefoundation.storex.paging.internal.impl.PageLoadState
 
-interface NormalizedStore<Id : Comparable<Id>, Q : Quantifiable<Id>, K : Any, V : Identifiable<Id, Q>, E : Any> {
-    fun selfUpdatingItem(id: Q): SelfUpdatingItem<Id, Q, V, E>
-    fun selfUpdatingPage(key: K): SelfUpdatingPage<Id, Q, K, V, E>
-    fun loadPage(params: PagingSource.LoadParams<K>): Flow<PageLoadStatus<Id,Q, K, V, E>>
-    fun getItem(id: Q): V?
+interface NormalizedStore<Id : Identifier<*>, K : Any, V : Identifiable<Id>> {
+    fun selfUpdatingItem(id: Id): SelfUpdatingItem<Id, V>
+    fun selfUpdatingPage(key: K): SelfUpdatingPage<Id, V>
+    fun loadPage(params: PagingSource.LoadParams<K>): Flow<PageLoadState<Id, K, V>>
+    fun getItem(id: Id): V?
     fun clear(key: K)
     fun invalidate()
 }
+
+

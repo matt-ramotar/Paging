@@ -3,12 +3,12 @@ package app.feed.common.models
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
 import kotlinx.serialization.Serializable
-import org.mobilenativefoundation.storex.paging.Quantifiable
+import org.mobilenativefoundation.storex.paging.Identifier
 
 @Serializable
 @Parcelize
-data class PostId(override val value: String) : Quantifiable<String>, Parcelable {
-    override fun minus(other: Quantifiable<String>): Int {
+data class PostId(override val value: String) : Identifier<String>, Parcelable {
+    override fun minus(other: Identifier<String>): Int {
 
         return if (value == PLACEHOLDER && other.value == PLACEHOLDER) {
             // both ids are placeholders
@@ -35,15 +35,15 @@ data class PostId(override val value: String) : Quantifiable<String>, Parcelable
         val Placeholder = PostId(PLACEHOLDER)
     }
 
-    override fun plus(other: Quantifiable<String>): Int {
+    override fun plus(other: Identifier<String>): Int {
         TODO("Not yet implemented")
     }
 
-    override fun times(other: Quantifiable<String>): Int {
+    override fun times(other: Identifier<String>): Int {
         TODO("Not yet implemented")
     }
 
-    override fun div(other: Quantifiable<String>): Int {
+    override fun div(other: Identifier<String>): Int {
         TODO("Not yet implemented")
     }
 }

@@ -5,7 +5,7 @@ package org.mobilenativefoundation.storex.paging
  * in comparison to [androidx.paging.ItemSnapshotList]. [androidx.paging.ItemSnapshotList]
  * has `placeholdersBefore` and `placeholdersAfter`, meaning placeholders are at the group-level.
  */
-class ItemSnapshotList<Id : Comparable<Id>, Q: Quantifiable<Id>, V : Identifiable<Id, Q>>(
+class ItemSnapshotList<Id : Identifier<*>, V : Identifiable<Id>>(
     private val items: List<V?>,
 ) : AbstractList<V?>() {
 
@@ -14,5 +14,5 @@ class ItemSnapshotList<Id : Comparable<Id>, Q: Quantifiable<Id>, V : Identifiabl
 
     fun getAll(): List<V?> = items
 
-    fun getAllIds(): List<Q?> = items.map { it?.id }
+    fun getAllIds(): List<Id?> = items.map { it?.id }
 }

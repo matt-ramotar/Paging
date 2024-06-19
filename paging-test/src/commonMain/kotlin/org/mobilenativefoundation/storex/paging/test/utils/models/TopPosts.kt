@@ -20,7 +20,7 @@ enum class TimeRange(val duration: Duration) {
 
 
 class TopPosts(private val timeRange: TimeRange) :
-    Operation<String, PostId, GetFeedRequest, Post>() {
+    Operation<PostId, GetFeedRequest, Post>() {
 
     private fun isWithinRange(timestamp: Long?, range: TimeRange): Boolean {
         if (timestamp == null) return false
@@ -30,7 +30,7 @@ class TopPosts(private val timeRange: TimeRange) :
         return now - timestamp <= durationMillis
     }
 
-    override operator fun invoke(snapshot: ItemSnapshotList<String, PostId, Post>): ItemSnapshotList<String, PostId, Post> {
+    override operator fun invoke(snapshot: ItemSnapshotList<PostId, Post>): ItemSnapshotList<PostId, Post> {
         val filteredAndSorted = snapshot.filter { isWithinRange(it?.createdAt, timeRange) }
             .sortedByDescending { it?.favoriteCount }
         return ItemSnapshotList(filteredAndSorted)
