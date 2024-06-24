@@ -1,30 +1,26 @@
 package org.mobilenativefoundation.storex.paging.internal.impl.store
 
 import androidx.compose.runtime.*
-import app.cash.sqldelight.coroutines.asFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlinx.serialization.InternalSerializationApi
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.serializer
 import org.mobilenativefoundation.store.store5.Fetcher
 import org.mobilenativefoundation.store.store5.FetcherResult
 import org.mobilenativefoundation.store.store5.Updater
 import org.mobilenativefoundation.storex.paging.*
 import org.mobilenativefoundation.storex.paging.internal.api.FetchingStateHolder
 import org.mobilenativefoundation.storex.paging.internal.impl.KClassRegistry
+import org.mobilenativefoundation.storex.paging.scope.Database
 
 
 @OptIn(InternalSerializationApi::class)
-class SelfUpdatingItemPresenter<Id : Identifier<*>, K : Any, V : Identifiable<Id>>(
-    private val registry: KClassRegistry<Id, K, V>,
+class SelfUpdatingItemPresenter<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>>(
     private val itemMemoryCache: ItemMemoryCache<Id, V>,
     private val fetchingStateHolder: FetchingStateHolder<Id, K>,
     private val updater: Updater<Id, V, *>?,
     private val linkedHashMap: LinkedHashMapManager<Id, K, V>,
     private val itemFetcher: Fetcher<Id, V>?,
-    private val db: PagingDb?
+    private val db: Database<Id, K, V>?
 ) {
 
     @Composable
@@ -174,15 +170,7 @@ class SelfUpdatingItemPresenter<Id : Identifier<*>, K : Any, V : Identifiable<Id
         updateItemVersion: ((Long) -> Long) -> Unit,
     ) {
         db?.let {
-            val encoded = Json.encodeToString(registry.id.serializer(), id)
-            db.itemQueries.getItem(encoded).asFlow().map { query ->
-                val item = query.executeAsOneOrNull()
-                if (item != null) {
-                    Json.decodeFromString(registry.value.serializer(), item.data_)
-                } else {
-                    null
-                }
-            }.collect { item ->
+            db.itemQueries.streamItem(id).collect { item ->
                 if (item == null) {
                     if (value != null) {
                         // Remove the item

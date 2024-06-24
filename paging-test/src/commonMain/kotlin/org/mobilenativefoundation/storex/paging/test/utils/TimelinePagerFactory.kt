@@ -1,9 +1,10 @@
 package org.mobilenativefoundation.storex.paging.test.utils
 
 import kotlinx.coroutines.CoroutineDispatcher
-import org.mobilenativefoundation.storex.paging.Pager
 import org.mobilenativefoundation.storex.paging.PagingConfig
 import org.mobilenativefoundation.storex.paging.PagingSource
+import org.mobilenativefoundation.storex.paging.RecompositionMode
+import org.mobilenativefoundation.storex.paging.scope.PagingScope
 import org.mobilenativefoundation.storex.paging.test.utils.api.TimelineApi
 import org.mobilenativefoundation.storex.paging.test.utils.models.GetFeedRequest
 import org.mobilenativefoundation.storex.paging.test.utils.models.Post
@@ -22,15 +23,15 @@ class TimelinePagerFactory(
         coroutineDispatcher: CoroutineDispatcher,
         storexPagingSourceFactory: ((api: TimelineApi) -> PagingSource<PostId, GetFeedRequest, Post>)? = null,
         androidxPagingSourceFactory: ((api: TimelineApi) -> androidx.paging.PagingSource<GetFeedRequest, Post>)? = null,
-    ): Pager<PostId, GetFeedRequest, Post> {
+    ): PagingScope<PostId, GetFeedRequest, Post> {
 
-        val builder = Pager.Builder<PostId, GetFeedRequest, Post>(
+        val builder = PagingScope.Builder<PostId, GetFeedRequest, Post>(
             pagingConfig = PagingConfig(
                 placeholderId = PostId.Placeholder,
                 initialKey = GetFeedRequest(null, pageSize),
                 prefetchDistance = prefetchDistance
             ),
-        ).coroutineDispatcher(coroutineDispatcher)
+        ).coroutineDispatcher(coroutineDispatcher).recompositionMode(RecompositionMode.Immediate)
 
         if (storexPagingSourceFactory != null) {
             builder.storexPagingSource(storexPagingSourceFactory(api))

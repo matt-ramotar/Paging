@@ -5,8 +5,6 @@ import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.InternalSerializationApi
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.serializer
 import org.mobilenativefoundation.store.store5.Fetcher
 import org.mobilenativefoundation.store.store5.FetcherResult
 import org.mobilenativefoundation.storex.paging.*
@@ -15,6 +13,7 @@ import org.mobilenativefoundation.storex.paging.internal.api.FetchingStateHolder
 import org.mobilenativefoundation.storex.paging.internal.api.NormalizedStore
 import org.mobilenativefoundation.storex.paging.internal.impl.KClassRegistry
 import org.mobilenativefoundation.storex.paging.internal.impl.PageLoadState
+import org.mobilenativefoundation.storex.paging.scope.Database
 
 typealias PageLoadStatusFlow<Id, K, V> = FlowCollector<PageLoadState<Id, K, V>>
 
@@ -22,10 +21,9 @@ typealias WithDb = ((suspend (PagingDb) -> Unit) -> Unit)
 
 
 @OptIn(InternalSerializationApi::class)
-class ConcurrentNormalizedStore<Id : Identifier<Id>, K : Any, V : Identifiable<Id>>(
+class ConcurrentNormalizedStore<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>>(
     private val pageFetcher: Fetcher<PagingSource.LoadParams<K>, PagingSource.LoadResult.Data<Id, K, V>>,
-    private val registry: KClassRegistry<Id, K, V>,
-    private val db: PagingDb? = null,
+    private val db: Database<Id, K, V>? = null,
     private val fetchingStateHolder: FetchingStateHolder<Id, K>,
     private val sideEffects: List<SideEffect<Id, V>>,
     private val pagingConfig: PagingConfig<Id, K>,
@@ -62,14 +60,7 @@ class ConcurrentNormalizedStore<Id : Identifier<Id>, K : Any, V : Identifiable<I
     }
 
     private fun getItemFromDb(id: Id): V? {
-
-        if (db != null) {
-            val encodedId = Json.encodeToString(registry.id.serializer(), id)
-            val encodedItem = db.itemQueries.getItem(encodedId).executeAsOneOrNull()
-            return encodedItem?.let { Json.decodeFromString(registry.value.serializer(), it.data_) }
-        }
-
-        return null
+        return db?.itemQueries?.getItem(id)
     }
 
 
@@ -170,18 +161,13 @@ class ConcurrentNormalizedStore<Id : Identifier<Id>, K : Any, V : Identifiable<I
         if (fetcherResult.value.items.isEmpty()) {
             emit(PageLoadState.Empty(isTerminal = true, PageLoadState.Empty.Reason.NetworkResponse))
         } else {
-            val encodedParams = Json.encodeToString(
-                serializer = PagingSource.LoadParams.serializer(registry.key.serializer()),
-                value = params
-            )
-
             var maxItemLoaded = fetcherResult.value.items[0].id
             var minItemLoaded = fetcherResult.value.items[0].id
 
             when (params.direction) {
                 LoadDirection.Prepend -> {
                     fetcherResult.value.items.asReversed().forEach { item ->
-                        linkedHashMapManager.saveItem(item, encodedParams)
+                        linkedHashMapManager.saveItem(item, params)
 
                         if (item.id < minItemLoaded) {
                             minItemLoaded = item.id
@@ -192,12 +178,12 @@ class ConcurrentNormalizedStore<Id : Identifier<Id>, K : Any, V : Identifiable<I
                         }
                     }
 
-                    linkedHashMapManager.prependPage(params, encodedParams, fetcherResult)
+                    linkedHashMapManager.prependPage(params, fetcherResult)
                 }
 
                 LoadDirection.Append -> {
                     fetcherResult.value.items.forEach { item ->
-                        linkedHashMapManager.saveItem(item, encodedParams)
+                        linkedHashMapManager.saveItem(item, params)
 
                         if (item.id < minItemLoaded) {
                             minItemLoaded = item.id
@@ -208,7 +194,7 @@ class ConcurrentNormalizedStore<Id : Identifier<Id>, K : Any, V : Identifiable<I
                         }
                     }
 
-                    linkedHashMapManager.appendPage(params, encodedParams, fetcherResult)
+                    linkedHashMapManager.appendPage(params, fetcherResult)
                 }
             }
 

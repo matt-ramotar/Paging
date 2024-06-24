@@ -5,10 +5,7 @@ import app.cash.turbine.test
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -21,6 +18,7 @@ import org.mobilenativefoundation.storex.paging.internal.api.FetchingStateHolder
 import org.mobilenativefoundation.storex.paging.internal.api.NormalizedStore
 import org.mobilenativefoundation.storex.paging.internal.api.PagingOperationsManager
 import org.mobilenativefoundation.storex.paging.internal.impl.RealFetchingStateHolder
+import org.mobilenativefoundation.storex.paging.scope.PagingScope
 import org.mobilenativefoundation.storex.paging.test.utils.TimelineAndroidxPagingSource
 import org.mobilenativefoundation.storex.paging.test.utils.TimelinePagerFactory
 import org.mobilenativefoundation.storex.paging.test.utils.api.TimelineApi
@@ -73,14 +71,12 @@ class RealPagerTest {
     @Test
     fun pagingState_givenEmptyFlow_shouldEagerLoad() = testScope.runTest {
 
-        val pager =
+        val pagingScope =
             TimelinePagerFactory().create(coroutineDispatcher)
 
         advanceUntilIdle()
 
-        val state = pager.launchPagingFlow()
-
-        state.test {
+        pagingScope.pager.flow.test {
             // BECAUSE OF EAGER LOADING WE DON'T COLLECT THE OTHER EMISSIONS, JUST THE LAST WHICH IS ALL LOADED DATA AND NOT LOADING STATUS
             val eagerLoading = awaitItem()
             println("ITEM = $eagerLoading")
@@ -97,7 +93,7 @@ class RealPagerTest {
         val pageSize = 20
         val prefetchDistance = 100
 
-        val pager =
+        val pagingScope =
             org.mobilenativefoundation.storex.paging.test.utils.TimelinePagerFactory(
                 pageSize = pageSize,
                 prefetchDistance = prefetchDistance
@@ -108,9 +104,8 @@ class RealPagerTest {
 
         advanceUntilIdle()
 
-        val state = pager.launchPagingFlow()
 
-        state.test {
+        pagingScope.pager.flow.test {
             // BECAUSE OF EAGER LOADING WE DON'T COLLECT THE OTHER EMISSIONS, JUST THE LAST WHICH IS ALL LOADED DATA AND NOT LOADING STATUS
             val eagerLoading = awaitItem()
             println("ITEM = $eagerLoading")
@@ -128,18 +123,14 @@ class RealPagerTest {
             val pageSize = 20
             val prefetchDistance = 100
 
-            val pager = org.mobilenativefoundation.storex.paging.test.utils.TimelinePagerFactory(
+            val pagingScope = org.mobilenativefoundation.storex.paging.test.utils.TimelinePagerFactory(
                 pageSize,
                 prefetchDistance
             ).create(coroutineDispatcher)
 
             advanceUntilIdle()
 
-            val state = pager.launchPagingFlow {
-                PagingRequest.processQueue(LoadDirection.Append)
-            }
-
-            state.test {
+            pagingScope.pager.flow.test {
                 val eagerLoading = awaitItem()
                 assertIs<PagingLoadState.NotLoading>(eagerLoading.loadStates.append)
                 assertEquals(100, eagerLoading.ids.size)
@@ -168,18 +159,13 @@ class RealPagerTest {
 
         val fetchingStateHolder = RealFetchingStateHolder<PostId, GetFeedRequest>()
 
-        val pager = mockPager(coroutineDispatcher, fetchingStateHolder)
-
-        val state = pager.pagingFlow(
-            flowOf(PagingRequest.processQueue(LoadDirection.Append)),
-            recompositionMode = RecompositionMode.Immediate
-        )
+        val pagingScope = mockPagingScope(coroutineDispatcher, fetchingStateHolder)
 
         advanceUntilIdle()
 
 //        fetchingStateHolder.updateMinItemAccessedSoFar(PostId("480"))
 
-        state.test {
+        pagingScope.pager.flow.test {
 
             val eagerLoading = awaitItem()
             assertIs<PagingLoadState.NotLoading>(eagerLoading.loadStates.append)
@@ -244,19 +230,13 @@ class RealPagerTest {
 
         val fetchingStateHolder = RealFetchingStateHolder<PostId, GetFeedRequest>()
 
-        val pager = mockPager(coroutineDispatcher, fetchingStateHolder)
-
-
-        val state = pager.pagingFlow(
-            flowOf(PagingRequest.processQueue(LoadDirection.Append)),
-            recompositionMode = RecompositionMode.Immediate
-        )
+        val pagingScope = mockPagingScope(coroutineDispatcher, fetchingStateHolder)
 
         advanceUntilIdle()
 
         fetchingStateHolder.updateMinItemAccessedSoFar(PostId("480"))
 
-        state.test {
+        pagingScope.pager.flow.test {
 
             val eagerLoading = awaitItem()
             assertIs<PagingLoadState.NotLoading>(eagerLoading.loadStates.append)
@@ -296,16 +276,14 @@ class RealPagerTest {
 
             val requests = MutableSharedFlow<PagingRequest<GetFeedRequest>>(replay = 5)
 
-            val pager = org.mobilenativefoundation.storex.paging.test.utils.TimelinePagerFactory(
+            val pagingScope = org.mobilenativefoundation.storex.paging.test.utils.TimelinePagerFactory(
                 pageSize,
                 prefetchDistance
             ).create(coroutineDispatcher)
 
             advanceUntilIdle()
 
-            val state = pager.pagingFlow(requests, RecompositionMode.Immediate)
-
-            state.test {
+            pagingScope.pager.flow.test {
                 val eagerLoading = awaitItem()
                 assertIs<PagingLoadState.NotLoading>(eagerLoading.loadStates.append)
                 assertEquals(100, eagerLoading.ids.size)
@@ -359,7 +337,7 @@ class RealPagerTest {
 //        // Given
 //        val operation = TopPosts(TimeRange.DAY)
 //
-//        val pager = mockPager(coroutineDispatcher)
+//        val pagingScope = mockPagingScope(coroutineDispatcher)
 //
 //        every { pager.addOperation(any()) } answers {}
 //
@@ -378,7 +356,7 @@ class RealPagerTest {
 //        // Given
 //        val operation = TopPosts(TimeRange.DAY)
 //
-//        val pager = mockPager(coroutineDispatcher)
+//        val pagingScope = mockPagingScope(coroutineDispatcher)
 //
 //        every { pager.removeOperation(any()) } answers {}
 //
@@ -392,24 +370,11 @@ class RealPagerTest {
 //    }
 //
 
-    @Test
-    fun pagingFlow_givenRequests_shouldReturnFlowOfPagingState() = testScope.runTest {
-        // Given
-        val requests = emptyFlow<PagingRequest<GetFeedRequest>>()
-        val pager = mockPager(coroutineDispatcher)
-
-        // When
-        val result = pager.pagingFlow(requests, RecompositionMode.Immediate)
-
-        // Then
-        assertIs<Flow<PagingState<PostId>>>(result)
-    }
-
 //    @Test
 //    fun createSelfUpdatingItem_givenId_shouldReturnSelfUpdatingItem() = testScope.runTest {
 //        // Given
 //        val id = PostId("1")
-//        val pager = mockPager(coroutineDispatcher)
+//        val pagingScope = mockPagingScope(coroutineDispatcher)
 //
 //        advanceUntilIdle()
 //
@@ -420,12 +385,12 @@ class RealPagerTest {
 //        assertIs<SelfUpdatingItem<String, PostId, Post, TimelineError>>(result)
 //    }
 
-    private fun mockPager(
+    private fun mockPagingScope(
         coroutineDispatcher: CoroutineDispatcher,
         fetchingStateHolder: FetchingStateHolder<PostId, GetFeedRequest>? = null,
-    ): Pager<PostId, GetFeedRequest, Post> {
+    ): PagingScope<PostId, GetFeedRequest, Post> {
 
-        return Pager.Builder<PostId, GetFeedRequest, Post>(
+        return PagingScope.Builder<PostId, GetFeedRequest, Post>(
             pagingConfig = PagingConfig(
                 placeholderId = PostId(""),
                 pageSize = 20,

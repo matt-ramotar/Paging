@@ -6,7 +6,8 @@ import app.cash.molecule.launchMolecule
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlin.experimental.ExperimentalTypeInference
+import org.mobilenativefoundation.storex.paging.scope.PagingScope
+import org.mobilenativefoundation.storex.paging.scope.UpdatingItemV2
 
 
 @Composable
@@ -27,15 +28,8 @@ val LocalPagingScope: ProvidableCompositionLocal<PagingScope<*, *, *>> =
     staticCompositionLocalOf { throw IllegalStateException("PagingScope not provided") }
 
 
-val LocalSelfUpdatingItemFactory: ProvidableCompositionLocal<SelfUpdatingItemFactory<*, *>> =
-    staticCompositionLocalOf { throw IllegalStateException("SelfUpdatingItemFactory not provided") }
-
-val LocalPager: ProvidableCompositionLocal<Pager<*, *, *>> =
-    staticCompositionLocalOf { throw IllegalStateException("Pager not provided") }
-
-
 @Composable
-inline fun <Id : Identifier<Id>, V : Identifiable<Id>> SelfUpdatingItem<Id, V>?.stateIn(
+inline fun <Id : Identifier<Id>, V : Identifiable<Id>> UpdatingItemV2<Id, V>?.stateIn(
     scope: CoroutineScope,
     key: Any? = null
 ): StateFlow<ItemState<Id, V>> {
@@ -47,89 +41,72 @@ inline fun <Id : Identifier<Id>, V : Identifiable<Id>> SelfUpdatingItem<Id, V>?.
     }
 }
 
+@Suppress("UNCHECKED_CAST")
 @Composable
 inline fun <Id : Identifier<Id>, V : Identifiable<Id>> rememberSelfUpdatingItem(
     id: Id?
-): SelfUpdatingItem<Id, V>? {
+): UpdatingItemV2<Id, V>? {
     if (id == null) {
         return null
     }
 
-    val selfUpdatingItemFactory = LocalSelfUpdatingItemFactory.current as SelfUpdatingItemFactory<Id, V>
-    return remember(id) {
-        selfUpdatingItemFactory.createSelfUpdatingItem(id)
-    }
+    val scope = LocalPagingScope.current as PagingScope<Id, *, V>
+    val updatingItemProvider = scope.updatingItemProvider
+
+    return remember(id) { updatingItemProvider[id] }
 }
 
 
 @Composable
-inline fun <Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> Pager<Id, K, V>.collectAsState(
-    requests: PagingRequestFlow<K>,
+inline fun <Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> PagingScope<Id, K, V>.collectPagingState(
     key: Any = Unit,
     coroutineScope: CoroutineScope = rememberCoroutineScope()
 ): State<PagingState<Id>> {
-    val pagingStateFlow = remember(key) {
-        pagingStateFlow(coroutineScope, requests)
+
+
+    // TODO(): Better way to do this for initial value
+    val stateFlow = remember(key) {
+        pager.flow.stateIn(coroutineScope, started = SharingStarted.Lazily, initialValue = PagingState.initial())
     }
 
-    val pagingState = pagingStateFlow.collectAsState()
-
-    return pagingState
+    return stateFlow.collectAsState()
 }
 
 @Composable
-inline fun <Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> Pager<Id, K, V>.collectAsState(
+inline fun <Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> PagingScope<Id, K, V>.collectAsState(
     key: Any = Unit,
     coroutineScope: CoroutineScope = rememberCoroutineScope()
 ): State<PagingStateWithEventSink<Id, K>> {
 
-    val requests = remember(key) {
-        MutableSharedFlow<PagingRequest<K>>(replay = 20)
+    val stateFlow = remember(key) {
+        pager.flow.stateIn(
+            coroutineScope,
+            started = SharingStarted.Lazily,
+            initialValue = PagingState.initial()
+        )
     }
 
-    val pagingStateFlow = remember(key) {
-        pagingStateFlow(coroutineScope, requests)
-    }
-
-    val pagingState = pagingStateFlow.map {
+    val pagingState = stateFlow.map {
         PagingStateWithEventSink(
             it.ids,
             it.loadStates,
         ) { event ->
             coroutineScope.launch {
-                requests.emit(event)
+                dispatcher.dispatch(event)
             }
         }
     }.collectAsState(
         PagingStateWithEventSink(
-            pagingStateFlow.value.ids,
-            pagingStateFlow.value.loadStates
+            stateFlow.value.ids,
+            stateFlow.value.loadStates
         ) { event ->
             coroutineScope.launch {
-                requests.emit(event)
+                dispatcher.dispatch(event)
             }
         }
     )
 
     return pagingState
 }
-
-
-@OptIn(ExperimentalTypeInference::class)
-@Composable
-inline fun <Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> Pager<Id, K, V>.collectAsState(
-    key: Any = Unit,
-    coroutineScope: CoroutineScope = rememberCoroutineScope(),
-    @BuilderInference noinline block: suspend FlowCollector<PagingRequest<K>>.() -> Unit
-): State<PagingState<Id>> {
-    val pagingStateFlow = remember(key) {
-        pagingStateFlow(coroutineScope, flow(block))
-    }
-
-    val pagingState = pagingStateFlow.collectAsState()
-
-    return pagingState
-}
-
 
 typealias PagingRequestFlow<K> = Flow<PagingRequest<K>>

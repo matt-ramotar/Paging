@@ -1,4 +1,4 @@
-package org.mobilenativefoundation.storex.paging.internal.impl
+package org.mobilenativefoundation.storex.paging.scope
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -16,13 +16,14 @@ import org.mobilenativefoundation.storex.paging.*
 import org.mobilenativefoundation.storex.paging.custom.*
 import org.mobilenativefoundation.storex.paging.internal.api.FetchingStateHolder
 import org.mobilenativefoundation.storex.paging.internal.api.NormalizedStore
-
+import org.mobilenativefoundation.storex.paging.internal.impl.LoadParamsQueue
+import org.mobilenativefoundation.storex.paging.internal.impl.PageLoadState
 
 // TODO(): Design decision to support initial state (e.g., hardcoded)
 
 
 @OptIn(InternalSerializationApi::class)
-class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>>(
+class RealPagerV2<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>>(
     coroutineDispatcher: CoroutineDispatcher,
     private val fetchingStateHolder: FetchingStateHolder<Id, K>,
     private val launchEffects: List<LaunchEffect>,
@@ -30,10 +31,11 @@ class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>>(
     private val middleware: List<Middleware<K>>,
     private val fetchingStrategy: FetchingStrategy<Id, K>,
     private val initialLoadParams: PagingSource.LoadParams<K>,
-    private val registry: KClassRegistry<Id, K, V>,
     private val concurrentNormalizedStore: NormalizedStore<Id, K, V>,
     initialState: PagingState<Id> = PagingState.initial(),
-) : Pager<Id, K, V> {
+    private val requests: Flow<PagingRequest<K>>,
+    private val recompositionMode: RecompositionMode
+) : PagerV2<Id> {
 
     private val coroutineScope = CoroutineScope(coroutineDispatcher)
 
@@ -72,31 +74,18 @@ class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>>(
         )
     }
 
-    override fun pagingFlow(
-        requests: Flow<PagingRequest<K>>,
-        recompositionMode: RecompositionMode
-    ): Flow<PagingState<Id>> =
-        coroutineScope.launchMolecule(recompositionMode.toCashRecompositionMode()) {
+    override val flow: Flow<PagingState<Id>>
+        get() = coroutineScope.launchMolecule(recompositionMode.toCashRecompositionMode()) {
             pagingState(requests)
         }
 
-    override fun pagingStateFlow(
-        coroutineScope: CoroutineScope,
-        requests: Flow<PagingRequest<K>>
-    ): StateFlow<PagingState<Id>> {
 
-        println("*** BEFORE LAUNCHING MOLECULE")
-        return coroutineScope.launchMolecule(RecompositionMode.ContextClock.toCashRecompositionMode()) {
-            pagingState(requests)
-        }
-    }
-
-    // TODO(): This is not efficient - we should extract the common logic from [pagingState] - we shouldn't be getting ids and then remapping to values when we have values initially
-    override fun pagingItems(coroutineScope: CoroutineScope, requests: Flow<PagingRequest<K>>): StateFlow<List<V>> {
-        return coroutineScope.launchMolecule(RecompositionMode.ContextClock.toCashRecompositionMode()) {
-            pagingState(requests).ids.mapNotNull { id -> id?.let { concurrentNormalizedStore.getItem(it) } }
-        }
-    }
+//    // TODO(): This is not efficient - we should extract the common logic from [pagingState] - we shouldn't be getting ids and then remapping to values when we have values initially
+//    override fun pagingItems(coroutineScope: CoroutineScope, requests: Flow<PagingRequest<K>>): StateFlow<List<V>> {
+//        return coroutineScope.launchMolecule(RecompositionMode.ContextClock.toCashRecompositionMode()) {
+//            pagingState(requests).ids.mapNotNull { id -> id?.let { concurrentNormalizedStore.getItem(it) } }
+//        }
+//    }
 
     private suspend fun handleForwardPrefetching() {
         processAppendQueue()
@@ -747,4 +736,6 @@ class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>>(
         val key: K,
         val inFlight: Boolean,
     )
+
+
 }

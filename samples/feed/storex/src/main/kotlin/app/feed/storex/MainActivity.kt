@@ -7,7 +7,7 @@ import app.feed.common.CommonAppScaffold
 import app.feed.common.TimelineAndroidxPagingSource
 import com.slack.circuit.foundation.Circuit
 import com.slack.circuit.foundation.CircuitCompositionLocals
-import org.mobilenativefoundation.storex.paging.PagingScope
+import org.mobilenativefoundation.storex.paging.scope.PagingScope
 
 class MainActivity : ComponentActivity() {
 

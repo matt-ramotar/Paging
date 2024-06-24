@@ -15,6 +15,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.mobilenativefoundation.storex.paging.*
+import org.mobilenativefoundation.storex.paging.scope.UpdatingItemV2
 
 
 @OptIn(ExperimentalMaterialApi::class)
@@ -82,7 +83,7 @@ sealed class Nullable<T : Any> {
 fun <Id : Identifier<Id>, V : Identifiable<Id>> SelfUpdatingItemContent(
     id: Id?,
     coroutineScope: CoroutineScope = rememberCoroutineScope(),
-    selfUpdatingItem: SelfUpdatingItem<Id, V>? = rememberSelfUpdatingItem(id),
+    selfUpdatingItem: UpdatingItemV2<Id, V>? = rememberSelfUpdatingItem(id),
     content: @Composable (state: ItemState<Id, V>) -> Unit
 ) {
     val itemState = selfUpdatingItem.stateIn(coroutineScope, key = selfUpdatingItem).collectAsState()

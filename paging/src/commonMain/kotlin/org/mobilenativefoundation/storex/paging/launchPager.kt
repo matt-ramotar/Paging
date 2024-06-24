@@ -18,12 +18,7 @@ package org.mobilenativefoundation.storex.paging
  */
 
 import androidx.compose.runtime.MonotonicFrameClock
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.FlowCollector
-import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.flow
 import kotlin.coroutines.CoroutineContext
-import kotlin.experimental.ExperimentalTypeInference
 
 /** The different recomposition modes of Molecule. */
 public enum class RecompositionMode {
@@ -74,17 +69,17 @@ fun RecompositionMode.toCashRecompositionMode() = when (this) {
 //    }
 //
 //
-fun <Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> Pager<Id, K, V>.launchPagingFlow(
-    requests: Flow<PagingRequest<K>> = emptyFlow(),
-): Flow<PagingState<Id>> = this.pagingFlow(requests, RecompositionMode.Immediate)
-
-
-@OptIn(ExperimentalTypeInference::class)
-fun <Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> Pager<Id, K, V>.launchPagingFlow(
-    @BuilderInference block: suspend FlowCollector<PagingRequest<K>>.() -> Unit
-): Flow<PagingState<Id>> = this.pagingFlow(flow(block), RecompositionMode.Immediate)
-
-
+//fun <Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> Pager<Id, K, V>.launchPagingFlow(
+//    requests: Flow<PagingRequest<K>> = emptyFlow(),
+//): Flow<PagingState<Id>> = this.pagingFlow(requests, RecompositionMode.Immediate)
+//
+//
+//@OptIn(ExperimentalTypeInference::class)
+//fun <Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> Pager<Id, K, V>.launchPagingFlow(
+//    @BuilderInference block: suspend FlowCollector<PagingRequest<K>>.() -> Unit
+//): Flow<PagingState<Id>> = this.pagingFlow(flow(block), RecompositionMode.Immediate)
+//
+//
 
 
 

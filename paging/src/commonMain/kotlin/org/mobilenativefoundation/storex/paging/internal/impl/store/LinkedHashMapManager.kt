@@ -1,23 +1,23 @@
 package org.mobilenativefoundation.storex.paging.internal.impl.store
 
 import kotlinx.serialization.InternalSerializationApi
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.serializer
 import org.mobilenativefoundation.store.store5.FetcherResult
-import org.mobilenativefoundation.storex.paging.*
-import org.mobilenativefoundation.storex.paging.internal.impl.KClassRegistry
+import org.mobilenativefoundation.storex.paging.Identifiable
+import org.mobilenativefoundation.storex.paging.Identifier
+import org.mobilenativefoundation.storex.paging.PagingConfig
+import org.mobilenativefoundation.storex.paging.PagingSource
+import org.mobilenativefoundation.storex.paging.scope.Database
 
 
 typealias PageMemoryCache<K, Id> = MutableMap<K, List<Id>>
 typealias ItemMemoryCache<Q, V> = MutableMap<Q, V>
 
 @OptIn(InternalSerializationApi::class)
-class LinkedHashMapManager<Id : Identifier<*>, K : Any, V : Identifiable<Id>>(
+class LinkedHashMapManager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>>(
     private val pageMemoryCache: PageMemoryCache<K, Id>,
     private val itemMemoryCache: ItemMemoryCache<Id, V>,
-    private val registry: KClassRegistry<Id, K, V>,
     private val pagingConfig: PagingConfig<Id, K>,
-    private val db: PagingDb?,
+    private val db: Database<Id, K, V>?,
 ) {
     private var headPage: PageNode<K>? = null
     private var tailPage: PageNode<K>? = null
@@ -68,7 +68,7 @@ class LinkedHashMapManager<Id : Identifier<*>, K : Any, V : Identifiable<Id>>(
         pageNodeMap[key] = pageNode
     }
 
-    fun saveItem(item: V, encodedParams: String?) {
+    fun saveItem(item: V, params: PagingSource.LoadParams<K>?) {
         // Save item to memory cache.
         if (item.id !in itemMemoryCache) {
             itemCount++
@@ -76,35 +76,22 @@ class LinkedHashMapManager<Id : Identifier<*>, K : Any, V : Identifiable<Id>>(
         itemMemoryCache[item.id] = item
 
         // Save item to database.
-        saveItemToDb(item, encodedParams)
+        saveItemToDb(item, params)
     }
 
-    @OptIn(InternalSerializationApi::class)
-    private fun saveItemToDb(item: V, encodedParams: String?) {
+    private fun saveItemToDb(item: V, params: PagingSource.LoadParams<K>?) {
         db?.let {
-            val id = Json.encodeToString(registry.id.serializer(), item.id)
 
-            if (encodedParams != null) {
-
-                db.itemQueries.setItem(
-                    Item(
-                        id,
-                        Json.encodeToString(registry.value.serializer(), item),
-                        encodedParams
-                    )
-                )
+            if (params != null) {
+                db.itemQueries.setItem(item.id, item, params)
             } else {
-                db.itemQueries.updateItem(
-                    Json.encodeToString(registry.value.serializer(), item),
-                    id
-                )
+                db.itemQueries.updateItem(item.id, item)
             }
         }
     }
 
     fun appendPage(
         params: PagingSource.LoadParams<K>,
-        encodedParams: String,
         fetcherResult: FetcherResult.Data<PagingSource.LoadResult.Data<Id, K, V>>
     ) {
         val pageNode = if (params.key !in pageNodeMap) {
@@ -130,17 +117,17 @@ class LinkedHashMapManager<Id : Identifier<*>, K : Any, V : Identifiable<Id>>(
         pageCount++
 
         db?.let {
+            // TODO()
             db.itemQueries
         }
 
-        saveNormalizedPageToDb(encodedParams, fetcherResult)
+        saveNormalizedPageToDb(params, fetcherResult)
 
         trimToMaxSize()
     }
 
     fun prependPage(
         params: PagingSource.LoadParams<K>,
-        encodedParams: String,
         fetcherResult: FetcherResult.Data<PagingSource.LoadResult.Data<Id, K, V>>
     ) {
         val pageNode = if (params.key !in pageNodeMap) {
@@ -165,7 +152,7 @@ class LinkedHashMapManager<Id : Identifier<*>, K : Any, V : Identifiable<Id>>(
         pageNodeMap[params.key] = pageNode
         pageCount++
 
-        saveNormalizedPageToDb(encodedParams, fetcherResult)
+        saveNormalizedPageToDb(params, fetcherResult)
 
         trimToMaxSize()
     }
@@ -244,12 +231,9 @@ class LinkedHashMapManager<Id : Identifier<*>, K : Any, V : Identifiable<Id>>(
             }
         }
 
-        db?.let {
-            val encodedItemId = Json.encodeToString(registry.id.serializer(), id)
-            db.itemQueries.removeItem(encodedItemId)
-            itemMemoryCache.remove(id)
-            itemCount--
-        }
+        db?.let { db.itemQueries.removeItem(id) }
+        itemMemoryCache.remove(id)
+        itemCount--
     }
 
 
@@ -279,35 +263,15 @@ class LinkedHashMapManager<Id : Identifier<*>, K : Any, V : Identifiable<Id>>(
             pageMemoryCache.remove(node.key)
 
             // Remove from database
-            db?.let {
-                val encodedParams = Json.encodeToString(
-                    PagingSource.LoadParams.serializer(registry.key.serializer()),
-                    keyToParamsMap[node.key]!!
-                )
-
-                db.pageQueries.removePage(encodedParams)
-            }
+            db?.let { db.pageQueries.removePage(keyToParamsMap[node.key]!!) }
         }
     }
 
     private fun saveNormalizedPageToDb(
-        encodedParams: String,
+        params: PagingSource.LoadParams<K>,
         fetcherResult: FetcherResult.Data<PagingSource.LoadResult.Data<Id, K, V>>
     ) {
-        db?.let {
-            val page = Page(
-                params = encodedParams,
-                nextKey = fetcherResult.value.nextKey?.let { key ->
-                    Json.encodeToString(registry.key.serializer(), key)
-                },
-                prevKey = fetcherResult.value.prevKey?.let { key ->
-                    Json.encodeToString(registry.key.serializer(), key)
-                },
-                extras = fetcherResult.value.extras?.toString()
-            )
-
-            db.pageQueries.setPage(page)
-        }
+        db?.let { db.pageQueries.setPage(params, fetcherResult.value) }
     }
 
     fun isInFlight(key: K): Boolean {
@@ -323,13 +287,7 @@ class LinkedHashMapManager<Id : Identifier<*>, K : Any, V : Identifiable<Id>>(
         var isInDatabase = false
 
         db?.let {
-            val encodedParams = Json.encodeToString(
-                PagingSource.LoadParams.serializer(registry.key.serializer()),
-                params
-            )
-
-            val encodedPage = db.pageQueries.getPage(encodedParams).executeAsOneOrNull()
-            isInDatabase = encodedPage != null
+            isInDatabase = db.pageQueries.exists(params)
         }
 
         return isInDatabase

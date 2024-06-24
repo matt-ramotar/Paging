@@ -1,7 +1,7 @@
 package org.mobilenativefoundation.storex.paging
 
-import org.mobilenativefoundation.storex.paging.custom.Operation
 import org.mobilenativefoundation.storex.paging.db.DriverFactory
+import org.mobilenativefoundation.storex.paging.scope.PagingScope
 
 fun <Id : Identifier<Id>, K : Any, V : Identifiable<Id>>
         androidx.paging.PagingSource.LoadParams<K>.storex(strategy: LoadStrategy): PagingSource.LoadParams<K> {
@@ -62,8 +62,8 @@ fun <Id : Identifier<Id>, K : Any, V : Identifiable<Id>> androidx.paging.PagingS
 
 inline fun <reified Id : Identifier<Id>, reified K : Comparable<K>, reified V : Identifiable<Id>> androidx.paging.PagingSource<K, V>.storex(
     pagingConfig: PagingConfig<Id, K>,
-): Pager<Id, K, V> {
-    return Pager.Builder<Id, K, V>(
+): PagingScope<Id, K, V> {
+    return PagingScope.Builder<Id, K, V>(
         pagingConfig = pagingConfig,
     ).androidxPagingSource(this).build()
 }
@@ -72,21 +72,9 @@ inline fun <reified Id : Identifier<Id>, reified K : Comparable<K>, reified V : 
 inline fun <reified Id : Identifier<Id>, reified K : Comparable<K>, reified V : Identifiable<Id>> androidx.paging.PagingSource<K, V>.storex(
     pagingConfig: PagingConfig<Id, K>,
     driverFactory: DriverFactory
-): Pager<Id, K, V> {
-    return Pager.Builder<Id, K, V>(
+): PagingScope<Id, K, V> {
+    return PagingScope.Builder<Id, K, V>(
         pagingConfig = pagingConfig,
         driverFactory = driverFactory
-    ).androidxPagingSource(this).build()
-}
-
-inline fun <reified Id : Identifier<Id>, reified K : Comparable<K>, reified V : Identifiable<Id>> androidx.paging.PagingSource<K, V>.storex(
-    pagingConfig: PagingConfig<Id, K>,
-    driverFactory: DriverFactory,
-    operations: List<Operation<Id, K, V>>,
-): Pager<Id, K, V> {
-    return Pager.Builder<Id, K, V>(
-        pagingConfig = pagingConfig,
-        driverFactory = driverFactory,
-        operations = operations
     ).androidxPagingSource(this).build()
 }
