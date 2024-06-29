@@ -1,9 +1,11 @@
 plugins {
-    alias(libs.plugins.androidApplication) apply false
-    alias(libs.plugins.androidLibrary) apply false
-    alias(libs.plugins.jetbrainsCompose) apply false
-    alias(libs.plugins.kotlinMultiplatform) apply false
+    //alias(libs.plugins.android.application) apply false
+    // alias(libs.plugins.android.library) apply false
+    alias(libs.plugins.compose) apply false
     alias(libs.plugins.ktlint)
+    alias(libs.plugins.kotlinx.benchmark) apply false
+    alias(libs.plugins.allopen) apply false
+    alias(libs.plugins.kotlin.plugin.parcelize) apply false
 }
 
 buildscript {
@@ -16,12 +18,15 @@ buildscript {
     dependencies {
         classpath(libs.kover.plugin)
         classpath(libs.dokka.gradle.plugin)
+        classpath(libs.android.gradle.plugin)
+        classpath(libs.kotlin.gradle.plugin)
     }
 }
 
 allprojects {
     repositories {
         mavenCentral()
+        gradlePluginPortal()
         google()
     }
 }
@@ -33,3 +38,4 @@ configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
         ),
     )
 }
+
