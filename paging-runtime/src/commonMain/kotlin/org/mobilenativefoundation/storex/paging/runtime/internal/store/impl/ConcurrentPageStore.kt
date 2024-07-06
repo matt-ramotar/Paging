@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.mobilenativefoundation.storex.paging.custom.SideEffect
 import org.mobilenativefoundation.storex.paging.persistence.PagePersistence
 import org.mobilenativefoundation.storex.paging.persistence.PersistenceResult
 import org.mobilenativefoundation.storex.paging.runtime.Identifiable
@@ -36,7 +37,8 @@ internal class ConcurrentPageStore<Id : Identifier<Id>, K : Comparable<K>, V : I
     private val pageMemoryCache: MutableMap<K, PagingSource.LoadResult.Data<Id, K, V>>,
     private val pagePersistence: PagePersistence<Id, K, V>,
     private val fetchingStateHolder: FetchingStateHolder<Id, K>,
-    private val pagingConfig: PagingConfig<Id, K>
+    private val pagingConfig: PagingConfig<Id, K>,
+    private val sideEffects: List<SideEffect<Id, V>>
 ) : PageStore<Id, K, V> {
 
     // Mutex for ensuring thread-safe access to shared resources
@@ -170,13 +172,26 @@ internal class ConcurrentPageStore<Id : Identifier<Id>, K : Comparable<K>, V : I
         page: PagingSource.LoadResult.Data<Id, K, V>,
         source: PageLoadState.Success.Source
     ): PageLoadState.Success<Id, K, V> {
+
+        val snapshot = takeSnapshot(page)
+
         return PageLoadState.Success(
-            snapshot = ItemSnapshotList(page.items),
+            snapshot = snapshot,
             isTerminal = page.nextKey == null && page.prevKey == null,
             source = source,
             nextKey = page.nextKey,
             prevKey = page.prevKey
-        )
+        ).also {
+            launchSideEffects(snapshot)
+        }
+    }
+
+    private fun takeSnapshot(page: PagingSource.LoadResult.Data<Id, K, V>): ItemSnapshotList<Id, V> {
+        return ItemSnapshotList(page.items)
+    }
+
+    private fun launchSideEffects(snapshot: ItemSnapshotList<Id, V>) {
+        sideEffects.forEach { sideEffect -> sideEffect.invoke(snapshot) }
     }
 
     /**

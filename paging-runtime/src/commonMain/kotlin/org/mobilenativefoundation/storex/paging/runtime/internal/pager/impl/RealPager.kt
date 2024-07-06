@@ -80,10 +80,8 @@ internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
         middleware = middleware,
         operationApplier = operationApplier
     ),
+    private val coroutineScope: CoroutineScope = CoroutineScope(coroutineDispatcher)
 ) : Pager<Id> {
-
-    private val coroutineScope = CoroutineScope(coroutineDispatcher)
-
 
     init {
 
@@ -306,8 +304,13 @@ internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
         pagingState: PagingState<Id>,
         fetchingState: FetchingState<Id, K>
     ): Boolean {
-        val shouldFetch = queueElement.mechanism == LoadParamsQueue.Element.Mechanism.EnqueueRequest ||
-                fetchingStrategy.shouldFetchForward(queueElement.params, pagingState, fetchingState)
+        val shouldFetch =
+            queueElement.mechanism == LoadParamsQueue.Element.Mechanism.EnqueueRequest ||
+                    fetchingStrategy.shouldFetchForward(
+                        queueElement.params,
+                        pagingState,
+                        fetchingState
+                    )
 
         logIfDebug("Should fetch forward: $shouldFetch for key: ${queueElement.params.key}")
 
