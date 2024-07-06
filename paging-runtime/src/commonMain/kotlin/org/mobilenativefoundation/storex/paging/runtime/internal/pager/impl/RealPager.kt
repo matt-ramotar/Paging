@@ -1,0 +1,335 @@
+package org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import app.cash.molecule.launchMolecule
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
+import org.mobilenativefoundation.storex.paging.custom.FetchingStrategy
+import org.mobilenativefoundation.storex.paging.custom.LaunchEffect
+import org.mobilenativefoundation.storex.paging.custom.Middleware
+import org.mobilenativefoundation.storex.paging.runtime.Action
+import org.mobilenativefoundation.storex.paging.runtime.ErrorHandlingStrategy
+import org.mobilenativefoundation.storex.paging.runtime.FetchingState
+import org.mobilenativefoundation.storex.paging.runtime.Identifiable
+import org.mobilenativefoundation.storex.paging.runtime.Identifier
+import org.mobilenativefoundation.storex.paging.runtime.LoadDirection
+import org.mobilenativefoundation.storex.paging.runtime.Pager
+import org.mobilenativefoundation.storex.paging.runtime.PagingConfig
+import org.mobilenativefoundation.storex.paging.runtime.PagingLogger
+import org.mobilenativefoundation.storex.paging.runtime.PagingSource
+import org.mobilenativefoundation.storex.paging.runtime.PagingState
+import org.mobilenativefoundation.storex.paging.runtime.RecompositionMode
+import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.FetchingStateHolder
+import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.LoadParamsQueue
+import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.LoadingHandler
+import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.OperationApplier
+import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.PagingStateManager
+import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.QueueManager
+import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.NormalizedStore
+
+
+/**
+ * Implementation of [Pager] that coordinates paging operations.
+ *
+ * @param Id The type of the item identifier.
+ * @param K The type of the paging key, which must be Comparable.
+ * @param V The type of the item value, which must be Identifiable.
+ * @property coroutineDispatcher The dispatcher to use for coroutine operations.
+ * @property fetchingStateHolder Holds the current fetching state.
+ * @property launchEffects List of effects to launch on initialization.
+ * @property errorHandlingStrategy Strategy for handling errors during paging.
+ * @property middleware List of middleware to apply to load parameters.
+ * @property fetchingStrategy Strategy for determining when to fetch more data.
+ * @property initialLoadParams Initial load parameters for the first fetch.
+ * @property store Store for normalized data.
+ * @property actions Flow of paging actions.
+ * @property recompositionMode Mode for recomposition in Molecule.
+ * @property config Configuration for the pager.
+ * @param initialState Initial paging state.
+ */
+internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>>(
+    private val coroutineDispatcher: CoroutineDispatcher,
+    private val fetchingStateHolder: FetchingStateHolder<Id, K>,
+    private val launchEffects: List<LaunchEffect>,
+    private val errorHandlingStrategy: ErrorHandlingStrategy,
+    private val middleware: List<Middleware<K>>,
+    private val fetchingStrategy: FetchingStrategy<Id, K>,
+    private val initialLoadParams: PagingSource.LoadParams<K>,
+    private val store: NormalizedStore<Id, K, V>,
+    private val actions: Flow<Action<K>>,
+    private val recompositionMode: RecompositionMode,
+    private val config: PagingConfig<Id, K>,
+    private val logger: PagingLogger,
+    initialState: PagingState<Id> = PagingState.initial(),
+    private val pagingStateManager: PagingStateManager<Id> = RealPagingStateManager(initialState),
+    private val queueManager: QueueManager<K> = RealQueueManager(),
+    private val operationApplier: OperationApplier<Id, K, V> = ConcurrentOperationApplier(),
+    private val loadingHandler: LoadingHandler<Id, K, V> = RealLoadingHandler(
+        store = store,
+        pagingStateManager = pagingStateManager,
+        queueManager = queueManager,
+        fetchingStateHolder = fetchingStateHolder,
+        errorHandlingStrategy = errorHandlingStrategy,
+        middleware = middleware,
+        operationApplier = operationApplier
+    ),
+) : Pager<Id> {
+
+    private val coroutineScope = CoroutineScope(coroutineDispatcher)
+
+
+    init {
+
+        logIfDebug("Initializing RealPager")
+
+        handleLaunchEffects()
+        handleEagerLoading()
+    }
+
+    override val flow: Flow<PagingState<Id>> =
+        coroutineScope.launchMolecule(recompositionMode.toCash()) {
+            pagingState(actions)
+        }
+
+    /**
+     * Composable function that manages the paging state.
+     * @param actions Flow of [Action] objects.
+     */
+    @Composable
+    private fun pagingState(actions: Flow<Action<K>>): PagingState<Id> {
+        val fetchingState by fetchingStateHolder.state.collectAsState()
+        val pagingState by pagingStateManager.pagingState.collectAsState()
+
+        logIfDebug("Recomposing")
+        logIfDebug("Current fetching state: $fetchingState")
+        logIfDebug("Current paging state: $pagingState")
+
+        LaunchedEffect(Unit) {
+            handleActions(actions)
+        }
+
+        LaunchedEffect(fetchingState) {
+            handlePrefetching()
+        }
+
+        LaunchedEffect(fetchingState.minItemAccessedSoFar) {
+            processPrependQueue()
+        }
+
+        LaunchedEffect(fetchingState.maxItemAccessedSoFar) {
+            processAppendQueue()
+        }
+
+        return pagingState
+    }
+
+
+    /**
+     * Handles launch effects.
+     */
+    private fun handleLaunchEffects() {
+        logIfDebug("Handling launch effects")
+
+        coroutineScope.launch {
+            launchEffects.forEach {
+                logIfDebug("Invoking launch effect")
+                it.invoke()
+            }
+        }
+    }
+
+    /**
+     * Handles eager loading on initialization.
+     */
+    private fun handleEagerLoading() {
+        logIfDebug("Handling eager loading with initial key: ${initialLoadParams.key}")
+
+        coroutineScope.launch {
+            queueManager.enqueueAppend(
+                Action.Enqueue(
+                    key = initialLoadParams.key,
+                    strategy = initialLoadParams.strategy,
+                    direction = LoadDirection.Append,
+                    jump = false
+                )
+            )
+
+            processAppendQueue()
+        }
+    }
+
+    /**
+     * Handles incoming paging actions.
+     *
+     * @param actions Flow of paging actions.
+     */
+    private suspend fun handleActions(actions: Flow<Action<K>>) {
+        actions.distinctUntilChanged().collect { action ->
+            logIfDebug("Handling action: $action")
+
+            when (action) {
+                is Action.ProcessQueue -> handleProcessQueueAction(action)
+                is Action.SkipQueue -> handleSkipQueueAction(action)
+                is Action.Enqueue -> handleEnqueueAction(action)
+                Action.Invalidate -> handleInvalidateAction()
+            }
+        }
+    }
+
+    /**
+     * Handles prefetching for both append and prepend directions.
+     */
+    private suspend fun handlePrefetching() {
+        logIfDebug("Handling prefetching")
+
+        processAppendQueue()
+        processPrependQueue()
+    }
+
+    /**
+     * Handles a process queue action.
+     *
+     * @param action The process queue action.
+     */
+    private suspend fun handleProcessQueueAction(action: Action.ProcessQueue) {
+        logIfDebug("Handling ProcessQueue action: $action")
+
+        when (action.direction) {
+            LoadDirection.Prepend -> processPrependQueue()
+            LoadDirection.Append -> processAppendQueue()
+        }
+    }
+
+    /**
+     * Handles a skip queue action.
+     *
+     * @param action The skip queue action.
+     */
+    private suspend fun handleSkipQueueAction(action: Action.SkipQueue<K>) {
+        logIfDebug("Handling SkipQueue action: $action")
+
+        queueManager.addPendingJob(action.key, inFlight = true)
+
+        when (action.direction) {
+            LoadDirection.Prepend -> loadingHandler.handlePrependLoading(action.toPagingSourceLoadParams())
+            LoadDirection.Append -> loadingHandler.handleAppendLoading(
+                action.toPagingSourceLoadParams(),
+                addNextToQueue = false
+            )
+        }
+    }
+
+    /**
+     * Handles an enqueue action.
+     *
+     * @param action The enqueue action.
+     */
+    private suspend fun handleEnqueueAction(action: Action.Enqueue<K>) {
+        logIfDebug("Handling Enqueue action: $action")
+
+        when (action.direction) {
+            LoadDirection.Prepend -> queueManager.enqueuePrepend(action)
+            LoadDirection.Append -> queueManager.enqueueAppend(action)
+        }
+    }
+
+    /**
+     * Handles an invalidate action.
+     */
+    private suspend fun handleInvalidateAction() {
+        logIfDebug("Handling Invalidate action")
+
+        queueManager.clearQueues()
+        store.invalidateAll()
+    }
+
+    /**
+     * Processes the prepend queue.
+     */
+    private suspend fun processPrependQueue() {
+        logIfDebug("Processing prepend queue")
+        while (queueManager.prependQueue.isNotEmpty()) {
+            val lastQueueElement = queueManager.prependQueue.removeLast()
+            loadingHandler.handlePrependLoading(lastQueueElement.params)
+        }
+    }
+
+
+    /**
+     * Processes the append queue.
+     */
+    private suspend fun processAppendQueue() {
+        logIfDebug("Processing prepend queue")
+
+        var keepFetching = true
+        while (queueManager.appendQueue.isNotEmpty() && keepFetching) {
+            if (queueManager.hasPendingJobs()) {
+                logIfDebug("Pending jobs exist, delaying append processing")
+                delay(100)
+                continue
+            }
+
+            val pagingState = pagingStateManager.pagingState.value
+            val fetchingState = fetchingStateHolder.state.value
+            val firstQueueElement = queueManager.appendQueue.first()
+
+            if (shouldFetchForward(firstQueueElement, pagingState, fetchingState)) {
+                logIfDebug("Fetching forward for key: ${firstQueueElement.params.key}")
+
+                val queueElement = queueManager.appendQueue.removeFirst()
+                loadingHandler.handleAppendLoading(queueElement.params)
+            } else {
+                logIfDebug("Stopping forward fetch")
+
+                keepFetching = false
+            }
+        }
+    }
+
+    /**
+     * Determines if we should fetch more data in the forward direction.
+     *
+     * @param queueElement The queue element to consider.
+     * @param pagingState The current paging state.
+     * @param fetchingState The current fetching state.
+     * @return True if we should fetch more data, false otherwise.
+     */
+    private fun shouldFetchForward(
+        queueElement: LoadParamsQueue.Element<K>,
+        pagingState: PagingState<Id>,
+        fetchingState: FetchingState<Id, K>
+    ): Boolean {
+        val shouldFetch = queueElement.mechanism == LoadParamsQueue.Element.Mechanism.EnqueueRequest ||
+                fetchingStrategy.shouldFetchForward(queueElement.params, pagingState, fetchingState)
+
+        logIfDebug("Should fetch forward: $shouldFetch for key: ${queueElement.params.key}")
+
+        return shouldFetch
+    }
+
+
+    /**
+     * Converts [Action.SkipQueue] to [PagingSource.LoadParams].
+     */
+    private fun Action.SkipQueue<K>.toPagingSourceLoadParams(): PagingSource.LoadParams<K> {
+        return PagingSource.LoadParams(
+            key = key,
+            strategy = strategy,
+            direction = direction
+        )
+    }
+
+    private fun logIfDebug(message: String) {
+        if (config.debug) {
+            logger.debug(message)
+        }
+    }
+
+}
