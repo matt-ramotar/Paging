@@ -107,8 +107,25 @@ internal class RealLinkedHashMapManager<Id : Identifier<Id>, K : Comparable<K>, 
         return pageMemoryCache[key]
     }
 
-    override suspend fun getPersistedPage(key: K): PagingSource.LoadResult.Data<Id, K, V>? {
-        TODO("Not yet implemented")
+    override suspend fun getPersistedPage(params: PagingSource.LoadParams<K>): PagingSource.LoadResult.Data<Id, K, V>? {
+        val result = persistence?.pages?.getPage(params) ?: return null
+
+        return when (result) {
+            is PersistenceResult.Success -> result.data?.also { page ->
+                // If found in persistent storage, update the memory cache
+                pageMemoryCache[params.key] = page
+            }
+
+            is PersistenceResult.Error -> {
+                logger.debug("Error retrieving page: ${result.message}")
+                null
+            }
+
+            PersistenceResult.Skipped -> {
+                // Do nothing
+                null
+            }
+        }
     }
 
     override suspend fun getItemsInOrder(): List<V?> {

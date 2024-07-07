@@ -103,9 +103,10 @@ class PagingScopeBuilder<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
     override fun setErrorHandlingStrategy(strategy: ErrorHandlingStrategy) =
         apply { errorHandlingStrategy = strategy }
 
-    override fun setPlaceholderFactory(placeholderFactory: PlaceholderFactory<Id, K, V>): PagingScope.Builder<Id, K, V> {
-        TODO("Not yet implemented")
-    }
+    override fun setPlaceholderFactory(placeholderFactory: PlaceholderFactory<Id, K, V>): PagingScope.Builder<Id, K, V> =
+        apply {
+            this.placeholderFactory = placeholderFactory
+        }
 
     override fun setItemMemoryCache(cache: MutableMap<Id, V>) = apply { itemMemoryCache = cache }
     override fun setPageMemoryCache(cache: MutableMap<K, PagingSource.LoadResult.Data<Id, K, V>>) =

@@ -82,7 +82,7 @@ internal class ConcurrentPageStore<Id : Identifier<Id>, K : Comparable<K>, V : I
 
                 // Attempt to load from persistent storage
                 logger.debug("Attempting to load page from persistent storage")
-                val persistedPage = linkedHashMapManager.getPersistedPage(params.key)
+                val persistedPage = linkedHashMapManager.getPersistedPage(params)
 
                 if (persistedPage != null) {
                     logger.debug("Found page in persistent storage: $persistedPage")

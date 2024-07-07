@@ -23,7 +23,7 @@ internal interface LinkedHashMapManager<Id : Identifier<Id>, K : Comparable<K>, 
     suspend fun getPersistedItem(id: Id): V?
 
     suspend fun getCachedPage(key: K):  PagingSource. LoadResult. Data<Id, K, V>?
-    suspend fun getPersistedPage(key: K):  PagingSource. LoadResult. Data<Id, K, V>?
+    suspend fun getPersistedPage(params: PagingSource.LoadParams<K>):  PagingSource. LoadResult. Data<Id, K, V>?
 
     suspend fun saveItem(item: V) : PersistenceResult<Unit>
     suspend fun getItemsInOrder(): List<V?>
