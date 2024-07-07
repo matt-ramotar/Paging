@@ -1,7 +1,7 @@
 package org.mobilenativefoundation.storex.paging.runtime.internal.store.api
 
 import kotlinx.coroutines.flow.Flow
-import org.mobilenativefoundation.storex.paging.persistence.PersistenceResult
+import org.mobilenativefoundation.storex.paging.persistence.api.PersistenceResult
 import org.mobilenativefoundation.storex.paging.runtime.Identifiable
 import org.mobilenativefoundation.storex.paging.runtime.Identifier
 import org.mobilenativefoundation.storex.paging.runtime.PagingSource

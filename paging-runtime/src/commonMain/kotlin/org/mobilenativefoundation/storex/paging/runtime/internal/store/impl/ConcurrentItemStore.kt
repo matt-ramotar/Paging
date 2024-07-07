@@ -1,13 +1,12 @@
 package org.mobilenativefoundation.storex.paging.runtime.internal.store.impl
 
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import org.mobilenativefoundation.storex.paging.persistence.ItemPersistence
-import org.mobilenativefoundation.storex.paging.persistence.PersistenceResult
+import org.mobilenativefoundation.storex.paging.persistence.api.ItemPersistence
+import org.mobilenativefoundation.storex.paging.persistence.api.PersistenceResult
 import org.mobilenativefoundation.storex.paging.runtime.Identifiable
 import org.mobilenativefoundation.storex.paging.runtime.Identifier
+import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.LinkedHashMapManager
 import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.ItemStore
 
 /**
@@ -25,33 +24,15 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.ItemS
 internal class ConcurrentItemStore<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>>(
     private val itemMemoryCache: MutableMap<Id, V>,
     private val itemPersistence: ItemPersistence<Id, K, V>,
-) : ItemStore<Id, V> {
+    private val linkedHashMapManager: LinkedHashMapManager<Id, K, V>
+) : ItemStore<Id, K, V> {
 
     // Mutex for ensuring thread-safe access to shared resources
     private val mutex = Mutex()
 
-    /**
-     * Retrieves an item by its identifier.
-     *
-     * This method first checks the in-memory cache, and if the item is not found,
-     * it attempts to retrieve it from the persistent storage.
-     *
-     * @param id The identifier of the item to retrieve.
-     * @return The item if found, null otherwise.
-     */
-    override suspend fun getItem(id: Id): V? = mutex.withLock {
-        itemMemoryCache[id] ?: when (val result = itemPersistence.getItem(id)) {
-            is PersistenceResult.Success -> result.data?.also { item ->
-                // If found in persistent storage, update the memory cache
-                itemMemoryCache[id] = item
-            }
 
-            is PersistenceResult.Error -> {
-                // Log the error or handle it as appropriate for your application
-                println("Error retrieving item: ${result.message}")
-                null
-            }
-        }
+    override suspend fun getItem(id: Id): V? {
+        return linkedHashMapManager.getItem(id)
     }
 
     /**
@@ -60,9 +41,12 @@ internal class ConcurrentItemStore<Id : Identifier<Id>, K : Comparable<K>, V : I
      * @param item The item to save.
      * @return A PersistenceResult indicating success or failure of the operation.
      */
-    override suspend fun saveItem(item: V): PersistenceResult<Unit> = mutex.withLock {
-        itemMemoryCache[item.id] = item
-        itemPersistence.saveItem(item)
+    override suspend fun saveItem(
+        item: V
+    ): PersistenceResult<Unit> {
+        val result = linkedHashMapManager.saveItem(item)
+        // TODO(): Update network?
+        return result
     }
 
     /**
@@ -71,9 +55,8 @@ internal class ConcurrentItemStore<Id : Identifier<Id>, K : Comparable<K>, V : I
      * @param id The identifier of the item to remove.
      * @return A PersistenceResult indicating success or failure of the operation.
      */
-    override suspend fun removeItem(id: Id): PersistenceResult<Unit> = mutex.withLock {
-        itemMemoryCache.remove(id)
-        itemPersistence.removeItem(id)
+    override suspend fun removeItem(id: Id): PersistenceResult<Unit> {
+        return linkedHashMapManager.removeItem(id)
     }
 
     /**
@@ -81,9 +64,8 @@ internal class ConcurrentItemStore<Id : Identifier<Id>, K : Comparable<K>, V : I
      *
      * @return A PersistenceResult indicating success or failure of the operation.
      */
-    override suspend fun clearAllItems(): PersistenceResult<Unit> = mutex.withLock {
-        itemMemoryCache.clear()
-        itemPersistence.clearAllItems()
+    override suspend fun clearAllItems(): PersistenceResult<Unit> {
+        return linkedHashMapManager.removeAllItems()
     }
 
     /**
@@ -94,20 +76,9 @@ internal class ConcurrentItemStore<Id : Identifier<Id>, K : Comparable<K>, V : I
      * @param predicate A function that determines whether an item should be included in the result.
      * @return A PersistenceResult containing a list of items that match the predicate.
      */
-    override suspend fun queryItems(predicate: (V) -> Boolean): PersistenceResult<List<V>> =
-        mutex.withLock {
-            val memoryItems = itemMemoryCache.values.filter(predicate)
-            when (val persistenceResult = itemPersistence.queryItems(predicate)) {
-                is PersistenceResult.Success -> {
-                    val persistenceItems = persistenceResult.data
-                    val combinedItems =
-                        (memoryItems + persistenceItems).distinctBy { it.id }
-                    PersistenceResult.Success(combinedItems)
-                }
-
-                is PersistenceResult.Error -> persistenceResult
-            }
-        }
+    override suspend fun queryItems(predicate: (V) -> Boolean): PersistenceResult<List<V>> {
+        return linkedHashMapManager.queryItems(predicate)
+    }
 
     /**
      * Provides a flow of updates for a specific item.
@@ -118,10 +89,6 @@ internal class ConcurrentItemStore<Id : Identifier<Id>, K : Comparable<K>, V : I
      * @return A Flow emitting the latest state of the item, or null if the item is deleted.
      */
     override fun observeItem(id: Id): Flow<V?> {
-        return itemPersistence.observeItem(id).map { persistentItem ->
-            mutex.withLock {
-                itemMemoryCache[id] ?: persistentItem?.also { itemMemoryCache[id] = it }
-            }
-        }
+        return linkedHashMapManager.observeItem(id)
     }
 }

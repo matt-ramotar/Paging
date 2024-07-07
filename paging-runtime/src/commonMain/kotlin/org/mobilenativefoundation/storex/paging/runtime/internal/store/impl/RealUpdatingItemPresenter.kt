@@ -30,7 +30,7 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.Updat
  * @property updater An optional updater for posting item updates to an external system.
  */
 internal class RealUpdatingItemPresenter<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>>(
-    private val itemStore: ItemStore<Id, V>,
+    private val itemStore: ItemStore<Id, K, V>,
     private val updater: Updater<Id, V, *>?,
     private val fetchingStateHolder: FetchingStateHolder<Id, K>,
 ) : UpdatingItemPresenter<Id, V> {

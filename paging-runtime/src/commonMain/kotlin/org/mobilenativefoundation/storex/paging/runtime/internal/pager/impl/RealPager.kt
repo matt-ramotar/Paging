@@ -5,7 +5,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import app.cash.molecule.launchMolecule
-import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -13,23 +12,20 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import org.mobilenativefoundation.storex.paging.custom.FetchingStrategy
 import org.mobilenativefoundation.storex.paging.custom.LaunchEffect
-import org.mobilenativefoundation.storex.paging.custom.Middleware
 import org.mobilenativefoundation.storex.paging.runtime.Action
-import org.mobilenativefoundation.storex.paging.runtime.ErrorHandlingStrategy
 import org.mobilenativefoundation.storex.paging.runtime.FetchingState
 import org.mobilenativefoundation.storex.paging.runtime.Identifiable
 import org.mobilenativefoundation.storex.paging.runtime.Identifier
 import org.mobilenativefoundation.storex.paging.runtime.LoadDirection
 import org.mobilenativefoundation.storex.paging.runtime.Pager
 import org.mobilenativefoundation.storex.paging.runtime.PagingConfig
-import org.mobilenativefoundation.storex.paging.runtime.internal.logger.api.PagingLogger
 import org.mobilenativefoundation.storex.paging.runtime.PagingSource
 import org.mobilenativefoundation.storex.paging.runtime.PagingState
 import org.mobilenativefoundation.storex.paging.runtime.RecompositionMode
+import org.mobilenativefoundation.storex.paging.runtime.internal.logger.api.PagingLogger
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.FetchingStateHolder
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.LoadParamsQueue
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.LoadingHandler
-import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.OperationApplier
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.PagingStateManager
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.QueueManager
 import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.NormalizedStore
@@ -47,7 +43,6 @@ internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
     private val initialLoadParams: PagingSource.LoadParams<K>,
     private val store: NormalizedStore<Id, K, V>,
     private val actions: Flow<Action<K>>,
-    private val config: PagingConfig<Id, K>,
     private val logger: PagingLogger,
     private val pagingStateManager: PagingStateManager<Id>,
     private val queueManager: QueueManager<K>,
@@ -57,7 +52,7 @@ internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
 
     init {
 
-        logIfDebug("Initializing RealPager")
+        logger.debug("Initializing RealPager")
 
         handleLaunchEffects()
         handleEagerLoading()
@@ -77,9 +72,9 @@ internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
         val fetchingState by fetchingStateHolder.state.collectAsState()
         val pagingState by pagingStateManager.pagingState.collectAsState()
 
-        logIfDebug("Recomposing")
-        logIfDebug("Current fetching state: $fetchingState")
-        logIfDebug("Current paging state: $pagingState")
+        logger.debug("Recomposing")
+        logger.debug("Current fetching state: $fetchingState")
+        logger.debug("Current paging state: $pagingState")
 
         LaunchedEffect(Unit) {
             handleActions(actions)
@@ -105,11 +100,11 @@ internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
      * Handles launch effects.
      */
     private fun handleLaunchEffects() {
-        logIfDebug("Handling launch effects")
+        logger.debug("Handling launch effects")
 
         coroutineScope.launch {
             launchEffects.forEach {
-                logIfDebug("Invoking launch effect")
+                logger.debug("Invoking launch effect")
                 it.invoke()
             }
         }
@@ -119,7 +114,7 @@ internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
      * Handles eager loading on initialization.
      */
     private fun handleEagerLoading() {
-        logIfDebug("Handling eager loading with initial key: ${initialLoadParams.key}")
+        logger.debug("Handling eager loading with initial key: ${initialLoadParams.key}")
 
         coroutineScope.launch {
             queueManager.enqueueAppend(
@@ -142,7 +137,7 @@ internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
      */
     private suspend fun handleActions(actions: Flow<Action<K>>) {
         actions.distinctUntilChanged().collect { action ->
-            logIfDebug("Handling action: $action")
+            logger.debug("Handling action: $action")
 
             when (action) {
                 is Action.ProcessQueue -> handleProcessQueueAction(action)
@@ -157,7 +152,7 @@ internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
      * Handles prefetching for both append and prepend directions.
      */
     private suspend fun handlePrefetching() {
-        logIfDebug("Handling prefetching")
+        logger.debug("Handling prefetching")
 
         processAppendQueue()
         processPrependQueue()
@@ -169,7 +164,7 @@ internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
      * @param action The process queue action.
      */
     private suspend fun handleProcessQueueAction(action: Action.ProcessQueue) {
-        logIfDebug("Handling ProcessQueue action: $action")
+        logger.debug("Handling ProcessQueue action: $action")
 
         when (action.direction) {
             LoadDirection.Prepend -> processPrependQueue()
@@ -183,7 +178,7 @@ internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
      * @param action The skip queue action.
      */
     private suspend fun handleSkipQueueAction(action: Action.SkipQueue<K>) {
-        logIfDebug("Handling SkipQueue action: $action")
+        logger.debug("Handling SkipQueue action: $action")
 
         queueManager.addPendingJob(action.key, inFlight = true)
 
@@ -202,7 +197,7 @@ internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
      * @param action The enqueue action.
      */
     private suspend fun handleEnqueueAction(action: Action.Enqueue<K>) {
-        logIfDebug("Handling Enqueue action: $action")
+        logger.debug("Handling Enqueue action: $action")
 
         when (action.direction) {
             LoadDirection.Prepend -> queueManager.enqueuePrepend(action)
@@ -214,7 +209,7 @@ internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
      * Handles an invalidate action.
      */
     private suspend fun handleInvalidateAction() {
-        logIfDebug("Handling Invalidate action")
+        logger.debug("Handling Invalidate action")
 
         queueManager.clearQueues()
         store.invalidateAll()
@@ -224,7 +219,7 @@ internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
      * Processes the prepend queue.
      */
     private suspend fun processPrependQueue() {
-        logIfDebug("Processing prepend queue")
+        logger.debug("Processing prepend queue")
         while (queueManager.prependQueue.isNotEmpty()) {
             val lastQueueElement = queueManager.prependQueue.removeLast()
             loadingHandler.handlePrependLoading(lastQueueElement.params)
@@ -236,12 +231,12 @@ internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
      * Processes the append queue.
      */
     private suspend fun processAppendQueue() {
-        logIfDebug("Processing prepend queue")
+        logger.debug("Processing prepend queue")
 
         var keepFetching = true
         while (queueManager.appendQueue.isNotEmpty() && keepFetching) {
             if (queueManager.hasPendingJobs()) {
-                logIfDebug("Pending jobs exist, delaying append processing")
+                logger.debug("Pending jobs exist, delaying append processing")
                 delay(100)
                 continue
             }
@@ -251,12 +246,12 @@ internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
             val firstQueueElement = queueManager.appendQueue.first()
 
             if (shouldFetchForward(firstQueueElement, pagingState, fetchingState)) {
-                logIfDebug("Fetching forward for key: ${firstQueueElement.params.key}")
+                logger.debug("Fetching forward for key: ${firstQueueElement.params.key}")
 
                 val queueElement = queueManager.appendQueue.removeFirst()
                 loadingHandler.handleAppendLoading(queueElement.params)
             } else {
-                logIfDebug("Stopping forward fetch")
+                logger.debug("Stopping forward fetch")
 
                 keepFetching = false
             }
@@ -284,7 +279,7 @@ internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
                         fetchingState
                     )
 
-        logIfDebug("Should fetch forward: $shouldFetch for key: ${queueElement.params.key}")
+        logger.debug("Should fetch forward: $shouldFetch for key: ${queueElement.params.key}")
 
         return shouldFetch
     }
@@ -300,11 +295,4 @@ internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
             direction = direction
         )
     }
-
-    private fun logIfDebug(message: String) {
-        if (config.debug) {
-            logger.debug(message)
-        }
-    }
-
 }

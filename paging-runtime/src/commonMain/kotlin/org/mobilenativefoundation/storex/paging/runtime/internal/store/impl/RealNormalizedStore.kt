@@ -1,7 +1,7 @@
 package org.mobilenativefoundation.storex.paging.runtime.internal.store.impl
 
 import kotlinx.coroutines.flow.Flow
-import org.mobilenativefoundation.storex.paging.persistence.PersistenceResult
+import org.mobilenativefoundation.storex.paging.persistence.api.PersistenceResult
 import org.mobilenativefoundation.storex.paging.runtime.Identifiable
 import org.mobilenativefoundation.storex.paging.runtime.Identifier
 import org.mobilenativefoundation.storex.paging.runtime.PagingSource
@@ -12,7 +12,7 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.PageS
 import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.StoreInvalidation
 
 internal class RealNormalizedStore<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>>(
-    private val itemStore: ItemStore<Id, V>,
+    private val itemStore: ItemStore<Id, K, V>,
     private val pageStore: PageStore<Id, K, V>,
     private val storeInvalidation: StoreInvalidation
 ) : NormalizedStore<Id, K, V> {
@@ -20,7 +20,9 @@ internal class RealNormalizedStore<Id : Identifier<Id>, K : Comparable<K>, V : I
         return itemStore.getItem(id)
     }
 
-    override suspend fun saveItem(item: V): PersistenceResult<Unit> {
+    override suspend fun saveItem(
+        item: V
+    ): PersistenceResult<Unit> {
         return itemStore.saveItem(item)
     }
 

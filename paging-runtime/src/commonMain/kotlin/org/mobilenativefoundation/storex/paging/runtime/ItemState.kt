@@ -1,7 +1,5 @@
 package org.mobilenativefoundation.storex.paging.runtime
 
-import kotlinx.serialization.json.JsonObject
-
 data class ItemState<Id : Identifier<*>, V : Identifiable<Id>>(
     val item: V?,
     val loadState: SingleLoadState,
@@ -33,9 +31,12 @@ data class ItemState<Id : Identifier<*>, V : Identifiable<Id>>(
         fun <Id : Identifier<*>, V : Identifiable<Id>> errorRefreshing(
             item: V?,
             error: Throwable,
-            version: Long,
-            extras: JsonObject? = null
-        ) = ItemState<Id, V>(item, SingleLoadState.Error.Refreshing(error, extras), version)
+            version: Long
+        ) = ItemState(
+            item,
+            SingleLoadState.Error.Exception(error, SingleLoadState.Error.Context.Refresh),
+            version
+        )
 
         fun <Id : Identifier<*>, V : Identifiable<Id>> cleared(
         ) = ItemState<Id, V>(null, SingleLoadState.Cleared)

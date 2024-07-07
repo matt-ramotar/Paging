@@ -29,7 +29,8 @@ fun interface PagingSource<Id : Identifier<*>, K : Any, V : Identifiable<Id>> {
             enum class Origin {
                 Network,
                 MemoryCache,
-                SourceOfTruth
+                SourceOfTruth,
+                Placeholder
             }
 
             val normalized: Normalized<Id, K>

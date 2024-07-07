@@ -1,11 +1,9 @@
 package org.mobilenativefoundation.storex.paging.runtime.internal.store.api
 
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.sync.withLock
-import org.mobilenativefoundation.storex.paging.persistence.PersistenceResult
+import org.mobilenativefoundation.storex.paging.persistence.api.PersistenceResult
 import org.mobilenativefoundation.storex.paging.runtime.Identifiable
 import org.mobilenativefoundation.storex.paging.runtime.Identifier
-import org.mobilenativefoundation.storex.paging.runtime.UpdatingItem
 
 /**
  * Represents a store for managing individual items.
@@ -13,7 +11,7 @@ import org.mobilenativefoundation.storex.paging.runtime.UpdatingItem
  * @param Id The type of the item identifier.
  * @param V The type of the item value, which must be Identifiable by Id.
  */
-internal interface ItemStore<Id : Identifier<Id>, V : Identifiable<Id>> {
+internal interface ItemStore<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> {
     /**
      * Retrieves an item by its identifier.
      *

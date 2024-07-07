@@ -5,8 +5,8 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.mobilenativefoundation.storex.paging.custom.SideEffect
-import org.mobilenativefoundation.storex.paging.persistence.PagePersistence
-import org.mobilenativefoundation.storex.paging.persistence.PersistenceResult
+import org.mobilenativefoundation.storex.paging.persistence.api.PagePersistence
+import org.mobilenativefoundation.storex.paging.persistence.api.PersistenceResult
 import org.mobilenativefoundation.storex.paging.runtime.Identifiable
 import org.mobilenativefoundation.storex.paging.runtime.Identifier
 import org.mobilenativefoundation.storex.paging.runtime.ItemSnapshotList
@@ -14,7 +14,10 @@ import org.mobilenativefoundation.storex.paging.runtime.LoadDirection
 import org.mobilenativefoundation.storex.paging.runtime.LoadStrategy
 import org.mobilenativefoundation.storex.paging.runtime.PagingConfig
 import org.mobilenativefoundation.storex.paging.runtime.PagingSource
+import org.mobilenativefoundation.storex.paging.runtime.internal.logger.api.PagingLogger
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.FetchingStateHolder
+import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.LinkedHashMapManager
+import org.mobilenativefoundation.storex.paging.runtime.internal.pagingScope.api.PageMemoryCache
 import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.PageLoadState
 import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.PageStore
 
@@ -34,12 +37,14 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.PageS
  * @property pagingConfig Configuration for paging behavior.
  */
 internal class ConcurrentPageStore<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>>(
-    private val pageMemoryCache: MutableMap<K, PagingSource.LoadResult.Data<Id, K, V>>,
+    private val pageMemoryCache: PageMemoryCache<Id, K, V>,
     private val pagePersistence: PagePersistence<Id, K, V>,
     private val fetchingStateHolder: FetchingStateHolder<Id, K>,
     private val pagingConfig: PagingConfig<Id, K>,
     private val sideEffects: List<SideEffect<Id, V>>,
-
+    private val pagingSource: PagingSource<Id, K, V>,
+    private val linkedHashMapManager: LinkedHashMapManager<Id, K, V>,
+    private val logger: PagingLogger
 ) : PageStore<Id, K, V> {
 
     // Mutex for ensuring thread-safe access to shared resources
@@ -66,48 +71,65 @@ internal class ConcurrentPageStore<Id : Identifier<Id>, K : Comparable<K>, V : I
                 }
 
                 // Attempt to load from memory cache
-                val cachedPage = pageMemoryCache[params.key]
+                logger.debug("Attempting to load page from memory cache")
+                val cachedPage = linkedHashMapManager.getCachedPage(params.key)
                 if (cachedPage != null) {
+                    logger.debug("Found page in memory cache: $cachedPage")
                     emit(PageLoadState.Loading.memoryCache())
                     emit(createSuccessState(cachedPage, PageLoadState.Success.Source.MemoryCache))
                     return@flow
                 }
 
                 // Attempt to load from persistent storage
-                when (val persistenceResult = pagePersistence.getPage(params)) {
-                    is PersistenceResult.Success -> {
-                        val persistedPage = persistenceResult.data
-                        if (persistedPage != null) {
-                            emit(PageLoadState.Loading.database())
-                            pageMemoryCache[params.key] = persistedPage
-                            emit(
-                                createSuccessState(
-                                    persistedPage,
-                                    PageLoadState.Success.Source.Database
-                                )
-                            )
-                            return@flow
-                        }
-                    }
+                logger.debug("Attempting to load page from persistent storage")
+                val persistedPage = linkedHashMapManager.getPersistedPage(params.key)
 
-                    is PersistenceResult.Error -> {
-                        // Log the error, but continue to try remote fetching
-                        println("Error loading page from persistence: ${persistenceResult.message}")
-                    }
+                if (persistedPage != null) {
+                    logger.debug("Found page in persistent storage: $persistedPage")
+                    emit(PageLoadState.Loading.database())
+                    pageMemoryCache[params.key] = persistedPage
+                    emit(
+                        createSuccessState(
+                            persistedPage,
+                            PageLoadState.Success.Source.Database
+                        )
+                    )
+                    return@flow
                 }
 
                 // If we reach here, we need to fetch from remote
+                logger.debug("Attempting to load page from remote")
                 emit(PageLoadState.Loading.remote())
-                when (val fetchResult = fetchPageFromRemote(params)) {
-                    is PersistenceResult.Success -> {
-                        val fetchedPage = fetchResult.data
-                        pageMemoryCache[params.key] = fetchedPage
-                        pagePersistence.savePage(params, fetchedPage)
-                        emit(createSuccessState(fetchedPage, PageLoadState.Success.Source.Network))
+
+                when (val loadResult = loadPageFromRemote(params)) {
+
+                    is PagingSource.LoadResult.Data -> {
+
+                        logger.debug("Success loading page from remote: $loadResult")
+
+                        when (params.direction) {
+                            LoadDirection.Prepend -> linkedHashMapManager.prependPage(
+                                params,
+                                loadResult
+                            )
+
+                            LoadDirection.Append -> linkedHashMapManager.appendPage(
+                                params,
+                                loadResult
+                            )
+                        }
+
+                        emit(createSuccessState(loadResult, PageLoadState.Success.Source.Network))
                     }
 
-                    is PersistenceResult.Error -> {
-                        emit(PageLoadState.Error.Exception(Exception(fetchResult.message), true))
+                    is PagingSource.LoadResult.Error.Exception -> {
+                        logger.debug("Error loading page from remote: ${loadResult.error}")
+                        emit(PageLoadState.Error.Exception(loadResult.error, true))
+                    }
+
+                    is PagingSource.LoadResult.Error.Message -> {
+                        logger.debug("Error loading page from remote: ${loadResult.error}")
+                        emit(PageLoadState.Error.Exception(Exception(loadResult.error), true))
                     }
                 }
             }
@@ -119,6 +141,7 @@ internal class ConcurrentPageStore<Id : Identifier<Id>, K : Comparable<K>, V : I
      * @param key The key of the page to clear.
      */
     override suspend fun clearPage(key: K) {
+        logger.debug("Clearing page for key: $key")
         mutex.withLock {
             pageMemoryCache.remove(key)
             pagePersistence.removePage(
@@ -137,6 +160,7 @@ internal class ConcurrentPageStore<Id : Identifier<Id>, K : Comparable<K>, V : I
      * @return A PersistenceResult indicating success or failure of the operation.
      */
     override suspend fun clearAllPages(): PersistenceResult<Unit> = mutex.withLock {
+        logger.debug("Clearing all pages")
         pageMemoryCache.clear()
         pagePersistence.clearAllPages()
     }
@@ -148,7 +172,11 @@ internal class ConcurrentPageStore<Id : Identifier<Id>, K : Comparable<K>, V : I
      * @return True if placeholders should be added, false otherwise.
      */
     private fun shouldAddPlaceholders(params: PagingSource.LoadParams<K>): Boolean {
-        return pagingConfig.placeholderId != null && params.strategy != LoadStrategy.LocalOnly
+        val placeholdersAreEnabled = pagingConfig.placeholderId != null
+        val mightFetchFromRemote = params.strategy != LoadStrategy.LocalOnly
+        val should = placeholdersAreEnabled && mightFetchFromRemote
+        logger.debug("Should add placeholders: $should")
+        return should
     }
 
     /**
@@ -156,12 +184,12 @@ internal class ConcurrentPageStore<Id : Identifier<Id>, K : Comparable<K>, V : I
      *
      * @param params The load parameters for which to add placeholders.
      */
-    private fun addPlaceholders(params: PagingSource.LoadParams<K>) {
-        // Implementation of placeholder addition is omitted for brevity
-        // This would typically involve creating a page of placeholder items
-        // and adding it to the pageMemoryCache
-
-        TODO()
+    private suspend fun addPlaceholders(params: PagingSource.LoadParams<K>) {
+        logger.debug("Adding placeholders for params: $params")
+        when (params.direction) {
+            LoadDirection.Prepend -> linkedHashMapManager.prependPlaceholders(params)
+            LoadDirection.Append -> linkedHashMapManager.appendPlaceholders(params)
+        }
     }
 
     /**
@@ -194,20 +222,18 @@ internal class ConcurrentPageStore<Id : Identifier<Id>, K : Comparable<K>, V : I
     }
 
     private fun launchSideEffects(snapshot: ItemSnapshotList<Id, V>) {
-        sideEffects.forEach { sideEffect -> sideEffect.invoke(snapshot) }
+        sideEffects.forEachIndexed { index, sideEffect ->
+            logger.debug("Launching side effect #$index")
+            sideEffect.invoke(snapshot)
+        }
     }
 
     /**
      * Fetches a page from a remote source.
-     *
-     * This method is a placeholder and should be replaced with actual remote fetching logic.
-     *
      * @param params The load parameters for the page to fetch.
-     * @return A PersistenceResult containing the fetched page or an error.
+     * @return A [PagingSource.LoadResult] instance.
      */
-    private suspend fun fetchPageFromRemote(params: PagingSource.LoadParams<K>): PersistenceResult<PagingSource.LoadResult.Data<Id, K, V>> {
-        // This is a placeholder. In a real implementation, this would involve
-        // calling an API or other remote data source.
-        TODO("Implement remote fetching logic")
+    private suspend fun loadPageFromRemote(params: PagingSource.LoadParams<K>): PagingSource.LoadResult<Id, K, V> {
+        return pagingSource.load(params)
     }
 }

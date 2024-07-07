@@ -1,4 +1,4 @@
-package org.mobilenativefoundation.storex.paging.persistence
+package org.mobilenativefoundation.storex.paging.persistence.api
 
 
 import org.mobilenativefoundation.storex.paging.runtime.Identifiable
@@ -33,6 +33,6 @@ import org.mobilenativefoundation.storex.paging.runtime.Identifier
  * @param V The type of the item value.
  */
 interface DataPersistence<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> {
-    val itemPersistence: ItemPersistence<Id, K, V>
-    val pagePersistence: PagePersistence<Id, K, V>
+    val items: ItemPersistence<Id, K, V>
+    val pages: PagePersistence<Id, K, V>
 }

@@ -1,8 +1,9 @@
-package org.mobilenativefoundation.storex.paging.persistence
+package org.mobilenativefoundation.storex.paging.persistence.api
 
 import kotlinx.coroutines.flow.Flow
 import org.mobilenativefoundation.storex.paging.runtime.Identifiable
 import org.mobilenativefoundation.storex.paging.runtime.Identifier
+import org.mobilenativefoundation.storex.paging.runtime.PagingSource
 
 /**
  * Interface for persistence operations related to individual items.
@@ -33,7 +34,7 @@ interface ItemPersistence<Id : Identifier<Id>, K : Comparable<K>, V : Identifiab
      * @param item The item to save or update.
      * @return A PersistenceResult indicating success or failure of the operation.
      */
-    suspend fun saveItem(item: V): PersistenceResult<Unit>
+    suspend fun saveItem(item: V, params: PagingSource.LoadParams<K>?): PersistenceResult<Unit>
 
     /**
      * Removes an item by its identifier.

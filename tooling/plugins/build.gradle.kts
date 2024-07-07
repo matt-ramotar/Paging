@@ -37,5 +37,10 @@ gradlePlugin {
             implementationClass =
                 "org.mobilenativefoundation.storex.paging.tooling.plugins.AndroidApplicationConventionPlugin"
         }
+
+        register("composeConventionPlugin") {
+            id = "storex.compose"
+            implementationClass = "org.mobilenativefoundation.storex.paging.tooling.plugins.ComposeConventionPlugin"
+        }
     }
 }

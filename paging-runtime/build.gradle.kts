@@ -1,6 +1,7 @@
 plugins {
     id("storex.android.library")
     id("storex.multiplatform")
+    id("storex.compose")
 }
 
 kotlin {

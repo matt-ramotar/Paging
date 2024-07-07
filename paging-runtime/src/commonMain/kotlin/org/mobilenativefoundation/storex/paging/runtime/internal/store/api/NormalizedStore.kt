@@ -36,8 +36,8 @@ import org.mobilenativefoundation.storex.paging.runtime.Identifier
  * @param K The type of the paging key.
  * @param V The type of the item value, which must be Identifiable by Id.
  */
-internal interface NormalizedStore<Id : Identifier<Id>, K : Any, V : Identifiable<Id>> :
-    ItemStore<Id, V>,
+internal interface NormalizedStore<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> :
+    ItemStore<Id, K, V>,
     PageStore<Id, K, V>,
     StoreInvalidation
 

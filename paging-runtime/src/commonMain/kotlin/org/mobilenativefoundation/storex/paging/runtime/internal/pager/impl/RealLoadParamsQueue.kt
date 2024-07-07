@@ -8,7 +8,7 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.LoadP
  *
  * @param K The type of the paging key, which must be Comparable.
  */
-class RealLoadParamsQueue<K : Comparable<K>> : LoadParamsQueue<K> {
+internal class RealLoadParamsQueue<K : Comparable<K>> : LoadParamsQueue<K> {
 
     // Queue is ordered from lowest key (first) to highest key (last)
     private val queue: ArrayDeque<LoadParamsQueue.Element<K>> = ArrayDeque()

@@ -1,4 +1,4 @@
-package org.mobilenativefoundation.storex.paging.persistence
+package org.mobilenativefoundation.storex.paging.persistence.api
 
 import org.mobilenativefoundation.storex.paging.runtime.Identifiable
 import org.mobilenativefoundation.storex.paging.runtime.Identifier
@@ -19,7 +19,7 @@ interface PagePersistence<Id : Identifier<Id>, K : Comparable<K>, V : Identifiab
      * @param params The load parameters of the page to check.
      * @return A PersistenceResult containing a boolean indicating whether the page exists.
      */
-    suspend fun pageExists(params: PagingSource.LoadParams<K>): PersistenceResult<Boolean>
+    suspend fun exists(params: PagingSource.LoadParams<K>): PersistenceResult<Boolean>
 
     /**
      * Saves a page of data.
