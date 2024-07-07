@@ -8,9 +8,7 @@ import org.mobilenativefoundation.storex.paging.persistence.ItemPersistence
 import org.mobilenativefoundation.storex.paging.persistence.PersistenceResult
 import org.mobilenativefoundation.storex.paging.runtime.Identifiable
 import org.mobilenativefoundation.storex.paging.runtime.Identifier
-import org.mobilenativefoundation.storex.paging.runtime.UpdatingItem
 import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.ItemStore
-import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.UpdatingItemPresenter
 
 /**
  * A thread-safe implementation of ItemStore that manages individual items.
@@ -23,12 +21,10 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.Updat
  * @param V The type of the item value.
  * @property itemMemoryCache In-memory cache for quick access to items.
  * @property itemPersistence Persistent storage layer for items.
- * @property updatingItemPresenter Presenter for creating self-updating items.
  */
 internal class ConcurrentItemStore<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>>(
     private val itemMemoryCache: MutableMap<Id, V>,
     private val itemPersistence: ItemPersistence<Id, K, V>,
-    private val updatingItemPresenter: UpdatingItemPresenter<Id, V>
 ) : ItemStore<Id, V> {
 
     // Mutex for ensuring thread-safe access to shared resources
@@ -59,27 +55,13 @@ internal class ConcurrentItemStore<Id : Identifier<Id>, K : Comparable<K>, V : I
     }
 
     /**
-     * Retrieves a self-updating item for the given identifier.
-     *
-     * This method creates a UpdatingItem that can react to changes in the underlying data.
-     *
-     * @param id The identifier of the item.
-     * @return A UpdatingItem for the given identifier.
-     */
-    override fun getUpdatingItem(id: Id): UpdatingItem<Id, V> {
-        return UpdatingItem {
-            updatingItemPresenter.present(id)
-        }
-    }
-
-    /**
      * Saves an item to both the memory cache and the persistent storage.
      *
      * @param item The item to save.
      * @return A PersistenceResult indicating success or failure of the operation.
      */
-    suspend fun saveItem(item: V): PersistenceResult<Unit> = mutex.withLock {
-        itemMemoryCache[getItemId(item)] = item
+    override suspend fun saveItem(item: V): PersistenceResult<Unit> = mutex.withLock {
+        itemMemoryCache[item.id] = item
         itemPersistence.saveItem(item)
     }
 
@@ -89,7 +71,7 @@ internal class ConcurrentItemStore<Id : Identifier<Id>, K : Comparable<K>, V : I
      * @param id The identifier of the item to remove.
      * @return A PersistenceResult indicating success or failure of the operation.
      */
-    suspend fun removeItem(id: Id): PersistenceResult<Unit> = mutex.withLock {
+    override suspend fun removeItem(id: Id): PersistenceResult<Unit> = mutex.withLock {
         itemMemoryCache.remove(id)
         itemPersistence.removeItem(id)
     }
@@ -99,7 +81,7 @@ internal class ConcurrentItemStore<Id : Identifier<Id>, K : Comparable<K>, V : I
      *
      * @return A PersistenceResult indicating success or failure of the operation.
      */
-    suspend fun clearAllItems(): PersistenceResult<Unit> = mutex.withLock {
+    override suspend fun clearAllItems(): PersistenceResult<Unit> = mutex.withLock {
         itemMemoryCache.clear()
         itemPersistence.clearAllItems()
     }
@@ -112,18 +94,20 @@ internal class ConcurrentItemStore<Id : Identifier<Id>, K : Comparable<K>, V : I
      * @param predicate A function that determines whether an item should be included in the result.
      * @return A PersistenceResult containing a list of items that match the predicate.
      */
-    suspend fun queryItems(predicate: (V) -> Boolean): PersistenceResult<List<V>> = mutex.withLock {
-        val memoryItems = itemMemoryCache.values.filter(predicate)
-        when (val persistenceResult = itemPersistence.queryItems(predicate)) {
-            is PersistenceResult.Success -> {
-                val persistenceItems = persistenceResult.data
-                val combinedItems = (memoryItems + persistenceItems).distinctBy { getItemId(it) }
-                PersistenceResult.Success(combinedItems)
-            }
+    override suspend fun queryItems(predicate: (V) -> Boolean): PersistenceResult<List<V>> =
+        mutex.withLock {
+            val memoryItems = itemMemoryCache.values.filter(predicate)
+            when (val persistenceResult = itemPersistence.queryItems(predicate)) {
+                is PersistenceResult.Success -> {
+                    val persistenceItems = persistenceResult.data
+                    val combinedItems =
+                        (memoryItems + persistenceItems).distinctBy { it.id }
+                    PersistenceResult.Success(combinedItems)
+                }
 
-            is PersistenceResult.Error -> persistenceResult
+                is PersistenceResult.Error -> persistenceResult
+            }
         }
-    }
 
     /**
      * Provides a flow of updates for a specific item.
@@ -133,23 +117,11 @@ internal class ConcurrentItemStore<Id : Identifier<Id>, K : Comparable<K>, V : I
      * @param id The identifier of the item to observe.
      * @return A Flow emitting the latest state of the item, or null if the item is deleted.
      */
-    fun observeItem(id: Id): Flow<V?> {
+    override fun observeItem(id: Id): Flow<V?> {
         return itemPersistence.observeItem(id).map { persistentItem ->
             mutex.withLock {
                 itemMemoryCache[id] ?: persistentItem?.also { itemMemoryCache[id] = it }
             }
         }
-    }
-
-    /**
-     * Helper function to get the ID of an item.
-     * This assumes that V has some way to get its ID. You might need to adjust this
-     * based on your actual item structure.
-     */
-    private fun getItemId(item: V): Id {
-        // This is a placeholder. Replace with actual logic to get the ID from your item type.
-        @Suppress("UNCHECKED_CAST")
-        return (item as? Identifiable<Id>)?.id as? Id
-            ?: throw IllegalArgumentException("Item does not have a valid ID")
     }
 }

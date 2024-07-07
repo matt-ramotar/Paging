@@ -7,6 +7,7 @@ import org.mobilenativefoundation.storex.paging.runtime.Identifiable
 import org.mobilenativefoundation.storex.paging.runtime.Identifier
 import org.mobilenativefoundation.storex.paging.runtime.ItemSnapshotList
 import org.mobilenativefoundation.storex.paging.runtime.Operation
+import org.mobilenativefoundation.storex.paging.runtime.OperationManager
 import org.mobilenativefoundation.storex.paging.runtime.PagingState
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.OperationApplier
 
@@ -20,13 +21,12 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.Opera
  * @param K The type of the paging key.
  * @param V The type of the item value.
  */
-class ConcurrentOperationApplier<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> : OperationApplier<Id, K, V> {
+class ConcurrentOperationApplier<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>>(
+    private val operationManager: OperationManager<Id, K, V>
+) : OperationApplier<Id, K, V> {
 
     // Mutex for ensuring thread-safe access to shared resources
     private val mutex = Mutex()
-
-    // List of operations to be applied
-    private val operations = mutableListOf<Operation<Id, K, V>>()
 
     // Cache for operation results to improve performance
     private val operationCache = mutableMapOf<CacheKey<Id, K, V>, ItemSnapshotList<Id, V>>()
@@ -49,7 +49,7 @@ class ConcurrentOperationApplier<Id : Identifier<Id>, K : Comparable<K>, V : Ide
         pagingState: PagingState<Id>,
         fetchingState: FetchingState<Id, K>
     ): ItemSnapshotList<Id, V> = mutex.withLock {
-        operations.fold(snapshot) { acc, operation ->
+        operationManager.get().fold(snapshot) { acc, operation ->
             if (operation.shouldApply(key, pagingState, fetchingState)) {
                 val cacheKey = CacheKey(operation, acc, key, pagingState, fetchingState)
                 operationCache.getOrPut(cacheKey) {
@@ -59,36 +59,6 @@ class ConcurrentOperationApplier<Id : Identifier<Id>, K : Comparable<K>, V : Ide
                 acc
             }
         }
-    }
-
-    /**
-     * Adds a new operation to be applied.
-     *
-     * @param operation The operation to add.
-     */
-    suspend fun addOperation(operation: Operation<Id, K, V>) = mutex.withLock {
-        operations.add(operation)
-        // Clear the cache when a new operation is added
-        operationCache.clear()
-    }
-
-    /**
-     * Removes an operation.
-     *
-     * @param operation The operation to remove.
-     */
-    suspend fun removeOperation(operation: Operation<Id, K, V>) = mutex.withLock {
-        operations.remove(operation)
-        // Clear the cache when an operation is removed
-        operationCache.clear()
-    }
-
-    /**
-     * Clears all registered operations.
-     */
-    suspend fun clearOperations() = mutex.withLock {
-        operations.clear()
-        operationCache.clear()
     }
 
     /**

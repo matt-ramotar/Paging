@@ -1,7 +1,5 @@
 package org.mobilenativefoundation.storex.paging.runtime
 
-import kotlinx.serialization.json.JsonObject
-
 sealed class SingleLoadState {
 
     data object Initial : SingleLoadState()
@@ -12,20 +10,24 @@ sealed class SingleLoadState {
 
     data object Loaded : SingleLoadState()
 
-    sealed class Error<out E : Any> : SingleLoadState() {
+    sealed class Error : SingleLoadState() {
 
-        abstract val error: E
-        abstract val extras: JsonObject?
+        enum class Context {
+            InitialLoad,
+            Refresh
+        }
 
-        data class InitialLoad<E : Any>(
-            override val error: E,
-            override val extras: JsonObject? = null
-        ) : Error<E>()
+        abstract val context: Context
 
-        data class Refreshing<E : Any>(
-            override val error: E,
-            override val extras: JsonObject? = null
-        ) : Error<E>()
+        data class Message(
+            val error: String,
+            override val context: Context
+        ) : Error()
+
+        data class Exception(
+            val error: Throwable,
+            override val context: Context
+        ) : Error()
     }
 
     data object Cleared : SingleLoadState()

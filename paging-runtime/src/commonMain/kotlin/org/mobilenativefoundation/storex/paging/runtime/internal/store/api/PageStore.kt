@@ -1,6 +1,7 @@
 package org.mobilenativefoundation.storex.paging.runtime.internal.store.api
 
 import kotlinx.coroutines.flow.Flow
+import org.mobilenativefoundation.storex.paging.persistence.PersistenceResult
 import org.mobilenativefoundation.storex.paging.runtime.Identifiable
 import org.mobilenativefoundation.storex.paging.runtime.Identifier
 import org.mobilenativefoundation.storex.paging.runtime.PagingSource
@@ -29,4 +30,10 @@ internal interface PageStore<Id : Identifier<Id>, K : Any, V : Identifiable<Id>>
      */
     suspend fun clearPage(key: K)
 
+    /**
+     * Clears all pages from the memory cache and the persistent storage.
+     *
+     * @return A PersistenceResult indicating success or failure of the operation.
+     */
+    suspend fun clearAllPages(): PersistenceResult<Unit>
 }

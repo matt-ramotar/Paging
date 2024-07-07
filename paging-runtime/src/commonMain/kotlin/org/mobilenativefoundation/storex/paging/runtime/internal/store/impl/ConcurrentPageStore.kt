@@ -38,7 +38,8 @@ internal class ConcurrentPageStore<Id : Identifier<Id>, K : Comparable<K>, V : I
     private val pagePersistence: PagePersistence<Id, K, V>,
     private val fetchingStateHolder: FetchingStateHolder<Id, K>,
     private val pagingConfig: PagingConfig<Id, K>,
-    private val sideEffects: List<SideEffect<Id, V>>
+    private val sideEffects: List<SideEffect<Id, V>>,
+
 ) : PageStore<Id, K, V> {
 
     // Mutex for ensuring thread-safe access to shared resources
@@ -135,7 +136,7 @@ internal class ConcurrentPageStore<Id : Identifier<Id>, K : Comparable<K>, V : I
      *
      * @return A PersistenceResult indicating success or failure of the operation.
      */
-    suspend fun clearAllPages(): PersistenceResult<Unit> = mutex.withLock {
+    override suspend fun clearAllPages(): PersistenceResult<Unit> = mutex.withLock {
         pageMemoryCache.clear()
         pagePersistence.clearAllPages()
     }
@@ -159,6 +160,8 @@ internal class ConcurrentPageStore<Id : Identifier<Id>, K : Comparable<K>, V : I
         // Implementation of placeholder addition is omitted for brevity
         // This would typically involve creating a page of placeholder items
         // and adding it to the pageMemoryCache
+
+        TODO()
     }
 
     /**

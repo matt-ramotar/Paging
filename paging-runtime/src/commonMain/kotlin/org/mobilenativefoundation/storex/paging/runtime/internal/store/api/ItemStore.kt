@@ -1,5 +1,8 @@
 package org.mobilenativefoundation.storex.paging.runtime.internal.store.api
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.withLock
+import org.mobilenativefoundation.storex.paging.persistence.PersistenceResult
 import org.mobilenativefoundation.storex.paging.runtime.Identifiable
 import org.mobilenativefoundation.storex.paging.runtime.Identifier
 import org.mobilenativefoundation.storex.paging.runtime.UpdatingItem
@@ -20,10 +23,47 @@ internal interface ItemStore<Id : Identifier<Id>, V : Identifiable<Id>> {
     suspend fun getItem(id: Id): V?
 
     /**
-     * Retrieves a self-updating item for the given identifier.
+     * Saves an item to both the memory cache and the persistent storage.
      *
-     * @param id The identifier of the item.
-     * @return A UpdatingItem for the given identifier.
+     * @param item The item to save.
+     * @return A PersistenceResult indicating success or failure of the operation.
      */
-    fun getUpdatingItem(id: Id): UpdatingItem<Id, V>
+    suspend fun saveItem(item: V): PersistenceResult<Unit>
+
+
+    /**
+     * Removes an item from both the memory cache and the persistent storage.
+     *
+     * @param id The identifier of the item to remove.
+     * @return A PersistenceResult indicating success or failure of the operation.
+     */
+    suspend fun removeItem(id: Id): PersistenceResult<Unit>
+
+    /**
+     * Clears all items from the memory cache and the persistent storage.
+     *
+     * @return A PersistenceResult indicating success or failure of the operation.
+     */
+    suspend fun clearAllItems(): PersistenceResult<Unit>
+
+    /**
+     * Queries items based on a predicate.
+     *
+     * This method combines results from both the memory cache and persistent storage.
+     *
+     * @param predicate A function that determines whether an item should be included in the result.
+     * @return A PersistenceResult containing a list of items that match the predicate.
+     */
+    suspend fun queryItems(predicate: (V) -> Boolean): PersistenceResult<List<V>>
+
+    /**
+     * Provides a flow of updates for a specific item.
+     *
+     * This method combines updates from both the memory cache and persistent storage.
+     *
+     * @param id The identifier of the item to observe.
+     * @return A Flow emitting the latest state of the item, or null if the item is deleted.
+     */
+    fun observeItem(id: Id): Flow<V?>
+
 }

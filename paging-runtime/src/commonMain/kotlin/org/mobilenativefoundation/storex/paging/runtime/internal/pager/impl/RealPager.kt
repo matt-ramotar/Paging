@@ -22,7 +22,7 @@ import org.mobilenativefoundation.storex.paging.runtime.Identifier
 import org.mobilenativefoundation.storex.paging.runtime.LoadDirection
 import org.mobilenativefoundation.storex.paging.runtime.Pager
 import org.mobilenativefoundation.storex.paging.runtime.PagingConfig
-import org.mobilenativefoundation.storex.paging.runtime.PagingLogger
+import org.mobilenativefoundation.storex.paging.runtime.internal.logger.api.PagingLogger
 import org.mobilenativefoundation.storex.paging.runtime.PagingSource
 import org.mobilenativefoundation.storex.paging.runtime.PagingState
 import org.mobilenativefoundation.storex.paging.runtime.RecompositionMode
@@ -37,50 +37,22 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.Norma
 
 /**
  * Implementation of [Pager] that coordinates paging operations.
- *
- * @param Id The type of the item identifier.
- * @param K The type of the paging key, which must be Comparable.
- * @param V The type of the item value, which must be Identifiable.
- * @property coroutineDispatcher The dispatcher to use for coroutine operations.
- * @property fetchingStateHolder Holds the current fetching state.
- * @property launchEffects List of effects to launch on initialization.
- * @property errorHandlingStrategy Strategy for handling errors during paging.
- * @property middleware List of middleware to apply to load parameters.
- * @property fetchingStrategy Strategy for determining when to fetch more data.
- * @property initialLoadParams Initial load parameters for the first fetch.
- * @property store Store for normalized data.
- * @property actions Flow of paging actions.
- * @property recompositionMode Mode for recomposition in Molecule.
- * @property config Configuration for the pager.
- * @param initialState Initial paging state.
+
  */
 internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>>(
-    private val coroutineDispatcher: CoroutineDispatcher,
+    recompositionMode: RecompositionMode,
     private val fetchingStateHolder: FetchingStateHolder<Id, K>,
     private val launchEffects: List<LaunchEffect>,
-    private val errorHandlingStrategy: ErrorHandlingStrategy,
-    private val middleware: List<Middleware<K>>,
     private val fetchingStrategy: FetchingStrategy<Id, K>,
     private val initialLoadParams: PagingSource.LoadParams<K>,
     private val store: NormalizedStore<Id, K, V>,
     private val actions: Flow<Action<K>>,
-    private val recompositionMode: RecompositionMode,
     private val config: PagingConfig<Id, K>,
     private val logger: PagingLogger,
-    initialState: PagingState<Id> = PagingState.initial(),
-    private val pagingStateManager: PagingStateManager<Id> = RealPagingStateManager(initialState),
-    private val queueManager: QueueManager<K> = RealQueueManager(),
-    private val operationApplier: OperationApplier<Id, K, V> = ConcurrentOperationApplier(),
-    private val loadingHandler: LoadingHandler<Id, K, V> = RealLoadingHandler(
-        store = store,
-        pagingStateManager = pagingStateManager,
-        queueManager = queueManager,
-        fetchingStateHolder = fetchingStateHolder,
-        errorHandlingStrategy = errorHandlingStrategy,
-        middleware = middleware,
-        operationApplier = operationApplier
-    ),
-    private val coroutineScope: CoroutineScope = CoroutineScope(coroutineDispatcher)
+    private val pagingStateManager: PagingStateManager<Id>,
+    private val queueManager: QueueManager<K>,
+    private val loadingHandler: LoadingHandler<Id, K, V>,
+    private val coroutineScope: CoroutineScope,
 ) : Pager<Id> {
 
     init {

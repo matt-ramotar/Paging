@@ -5,7 +5,6 @@ import org.mobilenativefoundation.storex.paging.persistence.PersistenceResult
 import org.mobilenativefoundation.storex.paging.runtime.Identifiable
 import org.mobilenativefoundation.storex.paging.runtime.Identifier
 import org.mobilenativefoundation.storex.paging.runtime.PagingSource
-import org.mobilenativefoundation.storex.paging.runtime.UpdatingItem
 import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.ItemStore
 import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.NormalizedStore
 import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.PageLoadState
@@ -21,8 +20,16 @@ internal class RealNormalizedStore<Id : Identifier<Id>, K : Comparable<K>, V : I
         return itemStore.getItem(id)
     }
 
-    override fun getUpdatingItem(id: Id): UpdatingItem<Id, V> {
-        return itemStore.getUpdatingItem(id)
+    override suspend fun saveItem(item: V): PersistenceResult<Unit> {
+        return itemStore.saveItem(item)
+    }
+
+    override suspend fun removeItem(id: Id): PersistenceResult<Unit> {
+        return itemStore.removeItem(id)
+    }
+
+    override suspend fun clearAllItems(): PersistenceResult<Unit> {
+        return itemStore.clearAllItems()
     }
 
     override suspend fun loadPage(params: PagingSource.LoadParams<K>): Flow<PageLoadState<Id, K, V>> {
@@ -31,6 +38,18 @@ internal class RealNormalizedStore<Id : Identifier<Id>, K : Comparable<K>, V : I
 
     override suspend fun clearPage(key: K) {
         return pageStore.clearPage(key)
+    }
+
+    override suspend fun clearAllPages(): PersistenceResult<Unit> {
+        return pageStore.clearAllPages()
+    }
+
+    override fun observeItem(id: Id): Flow<V?> {
+        return itemStore.observeItem(id)
+    }
+
+    override suspend fun queryItems(predicate: (V) -> Boolean): PersistenceResult<List<V>> {
+        return itemStore.queryItems(predicate)
     }
 
     override suspend fun invalidateAll(): PersistenceResult<Unit> {
