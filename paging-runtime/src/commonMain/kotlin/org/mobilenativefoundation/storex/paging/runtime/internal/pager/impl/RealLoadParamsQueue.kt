@@ -1,5 +1,9 @@
 package org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl
 
+import kotlinx.atomicfu.AtomicInt
+import kotlinx.atomicfu.atomic
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.LoadParamsQueue
 
 
@@ -10,48 +14,101 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.LoadP
  */
 internal class RealLoadParamsQueue<K : Comparable<K>> : LoadParamsQueue<K> {
 
-    // Queue is ordered from lowest key (first) to highest key (last)
+    // Queue is ordered from the lowest key (first) to the highest key (last)
     private val queue: ArrayDeque<LoadParamsQueue.Element<K>> = ArrayDeque()
 
     // Set to keep track of processed elements to avoid duplicates
     private val processed = linkedSetOf<LoadParamsQueue.Element<K>>()
 
-    override fun addLast(element: LoadParamsQueue.Element<K>) {
-        if (processed.contains(element)) return
-        queue.addLast(element)
-        processed.add(element)
+    private val size = atomic(0)
+    private val mutex = Mutex()
+
+    override suspend fun addLast(element: LoadParamsQueue.Element<K>) = mutex.withLock {
+        if (element !in processed) {
+            queue.addFirst(element)
+            processed.add(element)
+            size.incrementAndGet()
+        }
     }
 
-    override fun addFirst(element: LoadParamsQueue.Element<K>) {
+    override suspend fun addFirst(element: LoadParamsQueue.Element<K>) {
         if (processed.contains(element)) return
         queue.addFirst(element)
         processed.add(element)
     }
 
-    override fun first(): LoadParamsQueue.Element<K> = queue.first()
+    override suspend fun first(): LoadParamsQueue.Element<K> = mutex.withLock {
+        queue.firstOrNull() ?: throw NoSuchElementException("Queue is empty")
+    }
 
-    override fun removeFirst(): LoadParamsQueue.Element<K> = queue.removeFirst()
+    override suspend fun removeFirst(): LoadParamsQueue.Element<K> = mutex.withLock {
+        size.decrementAndGet()
+        queue.removeFirst()
+    }
 
-    override fun last(): LoadParamsQueue.Element<K> = queue.last()
+    override suspend fun removeLast(predicate: (element: LoadParamsQueue.Element<K>) -> Boolean): LoadParamsQueue.Element<K> = mutex.withLock{
+        val index = queue.indexOfLast(predicate)
+        return queue.removeAt(index)
+    }
 
-    override fun removeLast(): LoadParamsQueue.Element<K> = queue.removeLast()
+    override suspend fun removeFirst(predicate: (element: LoadParamsQueue.Element<K>) -> Boolean): LoadParamsQueue.Element<K> {
+        val index = queue.indexOfFirst(predicate)
+        return queue.removeAt(index)
+    }
 
-    override fun jump(element: LoadParamsQueue.Element<K>) {
-        // Remove all elements with keys less than or equal to the jump element
-        queue.removeAll {
-            // We use <= to ensure we also remove any existing element with the same key
-            // This also allows us to update the mechanism if needed
-            it.params.key <= element.params.key
+    override suspend fun last(): LoadParamsQueue.Element<K> = mutex.withLock {
+        queue.lastOrNull() ?: throw NoSuchElementException("Queue is empty")
+    }
+
+    override suspend fun removeLast(): LoadParamsQueue.Element<K> = mutex.withLock {
+        size.decrementAndGet()
+        queue.removeLast()
+    }
+
+    override suspend fun jump(element: LoadParamsQueue.Element<K>) {
+        mutex.withLock {
+            // Remove all elements with keys less than or equal to the jump element
+
+            val elementsToRemove = queue.filter {
+                // We use <= to ensure we also remove any existing element with the same key
+                // This also allows us to update the mechanism if needed
+                it.params.key <= element.params.key
+            }
+
+            // Remove these elements from the queue
+            // We do not need to also update the set of processed elements
+            // If we are skipping load parameters in the queue, they shouldn't be considered processed
+            queue.removeAll(elementsToRemove)
+
+            // Update the size of the queue
+            size.addAndGet(-elementsToRemove.size)
+
+
+            if (element !in processed) {
+                queue.addFirst(element)
+                processed.add(element)
+
+            }
+
+            // Add the jump element to the front of the queue
+            addFirst(element)
+            // And update the size of the queue
+            size.incrementAndGet()
         }
-
-        // Add the jump element to the front of the queue
-        addFirst(element)
     }
 
-    override fun clear() {
-        queue.clear()
-        processed.clear()
+    override suspend fun clear() {
+        mutex.withLock {
+            queue.clear()
+            processed.clear()
+            size.getAndSet(0)
+        }
     }
 
-    override fun isNotEmpty(): Boolean = queue.isNotEmpty()
+    override suspend fun isNotEmpty(): Boolean = mutex.withLock {
+        size.value > 0
+    }
+    override suspend fun size(): Int = mutex.withLock {
+        size.value
+    }
 }

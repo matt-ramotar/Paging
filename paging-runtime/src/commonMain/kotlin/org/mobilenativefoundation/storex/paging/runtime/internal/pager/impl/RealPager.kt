@@ -8,6 +8,7 @@ import app.cash.molecule.launchMolecule
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import org.mobilenativefoundation.storex.paging.custom.FetchingStrategy
@@ -18,7 +19,6 @@ import org.mobilenativefoundation.storex.paging.runtime.Identifiable
 import org.mobilenativefoundation.storex.paging.runtime.Identifier
 import org.mobilenativefoundation.storex.paging.runtime.LoadDirection
 import org.mobilenativefoundation.storex.paging.runtime.Pager
-import org.mobilenativefoundation.storex.paging.runtime.PagingConfig
 import org.mobilenativefoundation.storex.paging.runtime.PagingSource
 import org.mobilenativefoundation.storex.paging.runtime.PagingState
 import org.mobilenativefoundation.storex.paging.runtime.RecompositionMode
@@ -58,7 +58,7 @@ internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
         handleEagerLoading()
     }
 
-    override val flow: Flow<PagingState<Id>> =
+    override val state: StateFlow<PagingState<Id>> =
         coroutineScope.launchMolecule(recompositionMode.toCash()) {
             pagingState(actions)
         }

@@ -35,4 +35,10 @@ internal interface PendingJobManager<K : Any> {
      * Clears all pending jobs.
      */
     suspend fun clearPendingJobs()
+
+    /**
+     * Returns the count of pending jobs.
+     * @return The number of pending jobs.
+     */
+    suspend fun count(): Int
 }

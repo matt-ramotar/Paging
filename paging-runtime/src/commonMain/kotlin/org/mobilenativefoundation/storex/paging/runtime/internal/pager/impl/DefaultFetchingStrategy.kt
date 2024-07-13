@@ -4,9 +4,9 @@ import org.mobilenativefoundation.storex.paging.custom.FetchingStrategy
 import org.mobilenativefoundation.storex.paging.runtime.FetchingState
 import org.mobilenativefoundation.storex.paging.runtime.Identifier
 import org.mobilenativefoundation.storex.paging.runtime.PagingConfig
-import org.mobilenativefoundation.storex.paging.runtime.internal.logger.api.PagingLogger
 import org.mobilenativefoundation.storex.paging.runtime.PagingSource
 import org.mobilenativefoundation.storex.paging.runtime.PagingState
+import org.mobilenativefoundation.storex.paging.runtime.internal.logger.api.PagingLogger
 import kotlin.math.abs
 
 class DefaultFetchingStrategy<Id : Identifier<Id>, K : Any>(
@@ -35,7 +35,7 @@ class DefaultFetchingStrategy<Id : Identifier<Id>, K : Any>(
         fetchingState: FetchingState<Id, K>,
         fetchDirection: FetchDirection
     ): Boolean {
-        logger.debug("Deciding whether to fetch")
+        logger.verbose("Deciding whether to fetch")
         logger.debug("Current paging state: $pagingState")
         logger.debug("Current fetching state: $fetchingState")
         logger.debug("Fetch direction: $fetchDirection")

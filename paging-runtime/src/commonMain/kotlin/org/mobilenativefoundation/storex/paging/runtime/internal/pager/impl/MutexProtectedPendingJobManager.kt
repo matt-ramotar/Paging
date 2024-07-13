@@ -29,4 +29,8 @@ class MutexProtectedPendingJobManager<K : Any> : PendingJobManager<K> {
     override suspend fun hasPendingJobs(): Boolean = mutex.withLock { pendingJobs.isNotEmpty() }
 
     override suspend fun clearPendingJobs() = mutex.withLock { pendingJobs.clear() }
+
+    override suspend fun count() = mutex.withLock {
+        pendingJobs.size
+    }
 }

@@ -8,7 +8,7 @@ data class PagingConfig<Id : Identifier<*>, K : Any>(
     val maxSize: Int = MAX_SIZE_UNBOUNDED,
     val jumpThreshold: Int = COUNT_UNDEFINED,
     val errorHandlingStrategy: ErrorHandlingStrategy = ErrorHandlingStrategy.RetryLast(),
-    val debug: Boolean = false,
+    val logging: Severity = Severity.None,
 ) {
     companion object {
         const val MAX_SIZE_UNBOUNDED: Int = Int.MAX_VALUE
