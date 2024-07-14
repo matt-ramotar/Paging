@@ -29,6 +29,7 @@ import org.mobilenativefoundation.storex.paging.runtime.RecompositionMode
 import org.mobilenativefoundation.storex.paging.runtime.internal.logger.impl.RealPagingLogger
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.FetchingStateHolder
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.LinkedHashMapManager
+import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.ListSortAnalyzer
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.LoadingHandler
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.OperationApplier
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.PagingStateManager
@@ -37,6 +38,7 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl.Conc
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl.ConcurrentOperationApplier
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl.ConcurrentOperationManager
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl.DefaultFetchingStrategy
+import org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl.DefaultListSortAnalyzer
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl.RealLinkedHashMapManager
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl.RealLoadingHandler
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl.RealPager
@@ -72,8 +74,9 @@ class PagingScopeBuilder<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
     private val sideEffects = mutableListOf<SideEffect<Id, V>>()
     private val middleware = mutableListOf<Middleware<K>>()
     private var initialFetchingState = FetchingState<Id, K>()
+    private var listSortAnalyzer: ListSortAnalyzer<Id> = DefaultListSortAnalyzer()
     private var fetchingStrategy: FetchingStrategy<Id, K> =
-        DefaultFetchingStrategy(pagingConfig, logger)
+        DefaultFetchingStrategy(pagingConfig, logger, listSortAnalyzer)
     private var errorHandlingStrategy: ErrorHandlingStrategy = ErrorHandlingStrategy.RetryLast()
 
     private lateinit var itemMemoryCache: MutableMap<Id, V>
