@@ -1,4 +1,4 @@
-# StoreX Paging
+# 📄 StoreX Paging
 
 [![codecov](https://codecov.io/gh/matt-ramotar/Paging/graph/badge.svg?token=62YL5HZR9Q)](https://codecov.io/gh/matt-ramotar/Paging)
 
