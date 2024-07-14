@@ -47,7 +47,7 @@ internal class RealLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V : Id
     }
 
 
-    override suspend fun handlePrependLoading(loadParams: PagingSource.LoadParams<K>) {
+    override suspend fun handlePrependLoading(loadParams: PagingSource.LoadParams<K>, addNextToQueue: Boolean) {
         val modifiedParams = applyMiddleware(loadParams)
 
         pagingStateManager.updateWithPrependLoading()

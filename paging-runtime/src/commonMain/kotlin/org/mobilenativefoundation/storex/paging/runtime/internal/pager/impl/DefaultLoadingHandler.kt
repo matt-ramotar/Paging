@@ -46,18 +46,18 @@ internal class DefaultLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V :
     private val middlewareCache = mutableMapOf<PagingSource.LoadParams<K>, PagingSource.LoadParams<K>>()
 
     override suspend fun handleAppendLoading(loadParams: PagingSource.LoadParams<K>, addNextToQueue: Boolean) =
-        handleLoading(loadParams, LoadDirection.Append, addNextToQueue)
+        handleLoading(loadParams, addNextToQueue)
 
-    override suspend fun handlePrependLoading(loadParams: PagingSource.LoadParams<K>) =
-        handleLoading(loadParams, LoadDirection.Prepend)
+    override suspend fun handlePrependLoading(loadParams: PagingSource.LoadParams<K>, addNextToQueue: Boolean) =
+        handleLoading(loadParams, addNextToQueue)
 
-    private suspend fun handleLoading(loadParams: PagingSource.LoadParams<K>, direction: LoadDirection, addNextToQueue: Boolean = true) {
+    private suspend fun handleLoading(loadParams: PagingSource.LoadParams<K>, addNextToQueue: Boolean) {
 
         logger.debug(
             """
             Trying to load
                 Load params: $loadParams
-                Direction: $direction
+                Direction: ${loadParams.direction}
         """.trimIndent()
         )
 
@@ -73,7 +73,7 @@ internal class DefaultLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V :
                 """.trimIndent()
                 )
 
-                updateLoadingState(direction)
+                updateLoadingState(loadParams.direction)
 
                 try {
 
@@ -83,17 +83,17 @@ internal class DefaultLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V :
                     fetchingStateHolder.updateMaxRequestSoFar(modifiedParams.key)
                     fetchingStateHolder.updateMinRequestSoFar(modifiedParams.key)
 
-                    loadPage(modifiedParams, direction, addNextToQueue)
+                    loadPage(modifiedParams, loadParams.direction, addNextToQueue)
                 } catch (pagingError: Throwable) {
                     logger.error(
                         """
                         Caught error
                             Load params: $loadParams
-                            Direction: $direction
+                            Direction: ${loadParams.direction}
                     """.trimIndent(),
                         pagingError
                     )
-                    handleError(pagingError, modifiedParams, direction)
+                    handleError(pagingError, modifiedParams, loadParams.direction)
                 }
             }
         }

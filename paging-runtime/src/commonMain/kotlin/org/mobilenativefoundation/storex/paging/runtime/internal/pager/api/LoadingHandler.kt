@@ -13,5 +13,5 @@ internal interface LoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V : Id
         addNextToQueue: Boolean = true
     )
 
-    suspend fun handlePrependLoading(loadParams: PagingSource.LoadParams<K>)
+    suspend fun handlePrependLoading(loadParams: PagingSource.LoadParams<K>, addNextToQueue: Boolean = true)
 }
