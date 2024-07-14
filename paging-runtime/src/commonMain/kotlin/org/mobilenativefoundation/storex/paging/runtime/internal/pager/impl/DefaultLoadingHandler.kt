@@ -173,19 +173,19 @@ internal class DefaultLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V :
 
     private suspend fun passThroughError(error: Throwable, loadParams: PagingSource.LoadParams<K>, direction: LoadDirection) {
 
-        // Design decision to remove placeholders when passing an error through
-        // Page refreshes are not currently supported
-        // So the page must currently contain placeholders
-        store.clearPage(loadParams.key)
-
         // Passing the error through
         updateErrorState(error, direction)
 
         // Complete the job
-        completeLoadJob(loadParams, direction)
+        completeLoadJobAfterError(loadParams, direction)
     }
 
-    private suspend fun completeLoadJob(loadParams: PagingSource.LoadParams<K>, direction: LoadDirection) {
+    private suspend fun completeLoadJobAfterError(loadParams: PagingSource.LoadParams<K>, direction: LoadDirection) {
+        // Design decision to remove placeholders when not retrying after an error
+        // Page refreshes are not currently supported
+        // So the page must currently contain placeholders
+        store.clearPage(loadParams.key)
+
         // Marking the pending job as completed
         queueManager.updateExistingPendingJob(loadParams.key, inFlight = false, completed = true)
 
@@ -218,7 +218,7 @@ internal class DefaultLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V :
                 )
 
                 // Complete the job, do nothing else
-                completeLoadJob(loadParams, direction)
+                completeLoadJobAfterError(loadParams, direction)
             }
 
             ErrorHandlingStrategy.PassThrough -> {

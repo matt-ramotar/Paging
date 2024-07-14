@@ -271,4 +271,92 @@ class DefaultLoadingHandlerTest {
         verifySuspend(exactly(1)) { pagingStateManager.updateWithPrependError(any()) }
         verifySuspend(exactly(1)) { queueManager.updateExistingPendingJob(eq(loadParams.key), eq(false), eq(true)) }
     }
+
+    @Test
+    fun handleAppendLoading_givenIgnoreErrorStrategy_whenError_thenShouldNotUpdatePagingState() = runTest {
+        // Given
+        val cursor = "1"
+        val size = 20
+        val key = TimelineRequest(cursor, size)
+        val strategy = LoadStrategy.SkipCache
+        val direction = LoadDirection.Append
+        val loadParams = PagingSource.LoadParams(key, strategy, direction)
+        val expectedPosts = List(size) { createFakePost(it + 1) }
+        val errorHandlingStrategy = ErrorHandlingStrategy.Ignore
+
+        loadingHandler = DefaultLoadingHandler(
+            store,
+            pagingStateManager,
+            queueManager,
+            fetchingStateHolder,
+            errorHandlingStrategy,
+            middleware,
+            operationApplier,
+            retryBookkeeper,
+            logger,
+            exponentialBackoff
+        )
+
+        val expectedStoreFlow = flowOf(
+            PageLoadState.Error.Message<CursorIdentifier, TimelineRequest, Post>("", true)
+        )
+
+        everySuspend { store.loadPage(eq(loadParams)) }.returns(expectedStoreFlow)
+        everySuspend { operationApplier.applyOperations(any(), any(), any(), any()) } returns ItemSnapshotList(expectedPosts)
+
+        // When
+        loadingHandler.handleAppendLoading(loadParams)
+
+        // Then
+        verifySuspend(exactly(1)) { store.loadPage(eq(loadParams)) }
+        verifySuspend(exactly(1)) { fetchingStateHolder.updateMaxRequestSoFar(eq(key)) }
+        verifySuspend(exactly(1)) { fetchingStateHolder.updateMinRequestSoFar(eq(key)) }
+        verifySuspend(exactly(1)) { store.clearPage(eq(loadParams.key)) }
+        verifySuspend(exactly(0)) { pagingStateManager.updateWithAppendError(any()) }
+        verifySuspend(exactly(1)) { queueManager.updateExistingPendingJob(eq(loadParams.key), eq(false), eq(true)) }
+    }
+
+    @Test
+    fun handlePrependLoading_givenIgnoreErrorStrategy_whenError_thenShouldNotUpdatePagingState() = runTest {
+        // Given
+        val cursor = "21"
+        val size = 20
+        val key = TimelineRequest(cursor, size)
+        val strategy = LoadStrategy.SkipCache
+        val direction = LoadDirection.Prepend
+        val loadParams = PagingSource.LoadParams(key, strategy, direction)
+        val expectedPosts = List(size) { createFakePost(it + 21) }
+        val errorHandlingStrategy = ErrorHandlingStrategy.Ignore
+
+        loadingHandler = DefaultLoadingHandler(
+            store,
+            pagingStateManager,
+            queueManager,
+            fetchingStateHolder,
+            errorHandlingStrategy,
+            middleware,
+            operationApplier,
+            retryBookkeeper,
+            logger,
+            exponentialBackoff
+        )
+
+        val expectedStoreFlow = flowOf(
+            PageLoadState.Error.Message<CursorIdentifier, TimelineRequest, Post>("", true)
+        )
+
+        everySuspend { store.loadPage(eq(loadParams)) }.returns(expectedStoreFlow)
+        everySuspend { operationApplier.applyOperations(any(), any(), any(), any()) } returns ItemSnapshotList(expectedPosts)
+
+        // When
+        loadingHandler.handlePrependLoading(loadParams)
+
+        // Then
+        verifySuspend(exactly(1)) { store.loadPage(eq(loadParams)) }
+        verifySuspend(exactly(1)) { fetchingStateHolder.updateMaxRequestSoFar(eq(key)) }
+        verifySuspend(exactly(1)) { fetchingStateHolder.updateMinRequestSoFar(eq(key)) }
+        verifySuspend(exactly(1)) { store.clearPage(eq(loadParams.key)) }
+        verifySuspend(exactly(0)) { pagingStateManager.updateWithPrependError(any()) }
+        verifySuspend(exactly(1)) { queueManager.updateExistingPendingJob(eq(loadParams.key), eq(false), eq(true)) }
+    }
 }
