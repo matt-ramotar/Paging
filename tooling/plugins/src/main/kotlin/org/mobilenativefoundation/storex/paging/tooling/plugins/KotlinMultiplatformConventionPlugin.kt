@@ -2,6 +2,8 @@ package org.mobilenativefoundation.storex.paging.tooling.plugins
 
 import com.android.build.api.dsl.CommonExtension
 import com.android.build.api.dsl.LibraryExtension
+import dev.mokkery.MockMode
+import dev.mokkery.gradle.MokkeryGradleExtension
 import org.gradle.api.JavaVersion
 import org.gradle.api.Plugin
 import org.gradle.api.Project
@@ -24,8 +26,10 @@ class KotlinMultiplatformConventionPlugin : Plugin<Project> {
 
         with(pluginManager) {
             apply("org.jetbrains.kotlin.multiplatform")
+            apply("org.jetbrains.kotlin.plugin.allopen")
+            apply("com.google.devtools.ksp")
+            apply("dev.mokkery")
         }
-
 
         extensions.configure<KotlinMultiplatformExtension> {
 
@@ -93,8 +97,7 @@ class KotlinMultiplatformConventionPlugin : Plugin<Project> {
         }
 
         configureKotlin()
-
-
+        configureMokkery()
     }
 }
 
@@ -129,7 +132,6 @@ class KotlinAndroidLibraryConventionPlugin : Plugin<Project> {
         }
     }
 }
-
 
 
 object Versions {
@@ -183,3 +185,9 @@ fun KotlinMultiplatformExtension.kotlinOptions(block: KotlinJvmOptions.() -> Uni
 
 internal val Project.libs: VersionCatalog
     get() = extensions.getByType<VersionCatalogsExtension>().named("libs")
+
+internal fun Project.configureMokkery() {
+    extensions.configure<MokkeryGradleExtension> {
+        defaultMockMode.set(MockMode.autoUnit)
+    }
+}

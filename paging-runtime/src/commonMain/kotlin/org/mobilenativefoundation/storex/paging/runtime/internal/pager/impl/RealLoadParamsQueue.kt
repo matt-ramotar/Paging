@@ -1,6 +1,5 @@
 package org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl
 
-import kotlinx.atomicfu.AtomicInt
 import kotlinx.atomicfu.atomic
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -46,14 +45,18 @@ internal class RealLoadParamsQueue<K : Comparable<K>> : LoadParamsQueue<K> {
         queue.removeFirst()
     }
 
-    override suspend fun removeLast(predicate: (element: LoadParamsQueue.Element<K>) -> Boolean): LoadParamsQueue.Element<K> = mutex.withLock{
-        val index = queue.indexOfLast(predicate)
-        return queue.removeAt(index)
+    override suspend fun removeLast(predicate: (element: LoadParamsQueue.Element<K>) -> Boolean) {
+        mutex.withLock {
+            val index = queue.indexOfLast(predicate)
+            queue.removeAt(index)
+        }
     }
 
-    override suspend fun removeFirst(predicate: (element: LoadParamsQueue.Element<K>) -> Boolean): LoadParamsQueue.Element<K> {
-        val index = queue.indexOfFirst(predicate)
-        return queue.removeAt(index)
+    override suspend fun removeFirst(predicate: (element: LoadParamsQueue.Element<K>) -> Boolean) {
+        mutex.withLock {
+            val index = queue.indexOfFirst(predicate)
+            queue.removeAt(index)
+        }
     }
 
     override suspend fun last(): LoadParamsQueue.Element<K> = mutex.withLock {
@@ -108,6 +111,7 @@ internal class RealLoadParamsQueue<K : Comparable<K>> : LoadParamsQueue<K> {
     override suspend fun isNotEmpty(): Boolean = mutex.withLock {
         size.value > 0
     }
+
     override suspend fun size(): Int = mutex.withLock {
         size.value
     }

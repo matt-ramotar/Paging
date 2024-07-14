@@ -1,3 +1,5 @@
+import dev.mokkery.MockMode
+
 plugins {
     id("storex.android.library")
     id("storex.multiplatform")
@@ -21,20 +23,17 @@ kotlin {
             }
         }
 
-        commonTest {
+        val commonTest by getting {
             dependencies {
-                implementation(libs.kotlin.test)
-                implementation(libs.kotlin.test.common)
-                implementation(libs.kotlin.test.annotations.common)
-                implementation(libs.turbine)
-                implementation(libs.kotlinx.coroutines.test)
+                implementation(libs.bundles.testing)
+                implementation(libs.kotlinx.datetime)
             }
         }
     }
 }
 
 android {
-    namespace = "org.mobilenativefoundation.paging.core"
+    namespace = "org.mobilenativefoundation.paging.runtime"
 
     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
 

@@ -56,7 +56,7 @@ class PagingScopeBuilder<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
     private val pagingConfig: PagingConfig<Id, K>
 ) : PagingScope.Builder<Id, K, V> {
 
-    private val logger = RealPagingLogger(pagingConfig)
+    private val logger = RealPagingLogger(pagingConfig.logging)
     private val actionsFlow = MutableSharedFlow<Action<K>>(replay = 20)
 
     private var initialState: PagingState<Id> = PagingState.initial()
@@ -143,8 +143,8 @@ class PagingScopeBuilder<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
         val dispatcher = RealDispatcher(actionsFlow)
         val recompositionMode = RecompositionMode.ContextClock
 
-        val pagingStateManager = RealPagingStateManager(initialState)
-        val queueManager = RealQueueManager<K>()
+        val pagingStateManager = RealPagingStateManager(initialState, logger)
+        val queueManager = RealQueueManager<K>(logger)
         val operationApplier = ConcurrentOperationApplier(operationManager)
         val loadingHandler = createLoadingHandler(
             store = store,

@@ -6,6 +6,8 @@ plugins {
     alias(libs.plugins.kotlinx.benchmark) apply false
     alias(libs.plugins.allopen) apply false
     alias(libs.plugins.kotlin.plugin.parcelize) apply false
+    id("com.google.devtools.ksp") version "2.0.0-1.0.22" apply false
+    id("dev.mokkery") version "2.1.1" apply false
 }
 
 buildscript {

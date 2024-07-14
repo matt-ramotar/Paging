@@ -60,13 +60,13 @@ internal interface LoadParamsQueue<K : Comparable<K>> {
      * Removes the first matching element in the queue.
      * @return The first matching element in the queue.
      */
-    suspend fun removeFirst(predicate: (element: Element<K>) -> Boolean): Element<K>
+    suspend fun removeFirst(predicate: (element: Element<K>) -> Boolean)
 
     /**
      * Removes the last matching element in the queue.
      * @return The last matching element in the queue.
      */
-    suspend fun removeLast(predicate: (element: Element<K>) -> Boolean): Element<K>
+    suspend fun removeLast(predicate: (element: Element<K>) -> Boolean)
 
     /**
      * Returns the last element in the queue without removing it.

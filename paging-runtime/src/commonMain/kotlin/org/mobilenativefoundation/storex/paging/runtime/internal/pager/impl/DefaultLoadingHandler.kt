@@ -284,7 +284,9 @@ internal class DefaultLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V :
     }
 
     private suspend fun enqueueNext(key: K, direction: LoadDirection) {
+        // Skip cache because these params come from a network response
         val action = Action.Enqueue(key, direction, LoadStrategy.SkipCache, jump = false)
+        logger.debug("Enqueuing next action: $action")
         when (direction) {
             LoadDirection.Append -> queueManager.enqueueAppend(action)
             LoadDirection.Prepend -> queueManager.enqueuePrepend(action)
