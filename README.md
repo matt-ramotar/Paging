@@ -1,296 +1,274 @@
-# Paging
+# StoreX Paging
 
 [![codecov](https://codecov.io/gh/matt-ramotar/Paging/graph/badge.svg?token=62YL5HZR9Q)](https://codecov.io/gh/matt-ramotar/Paging)
 
-A solution for efficient paging in Kotlin Multiplatform projects.
+A paging library for large-scale Kotlin applications. Powered by [Store](https://github.com/MobileNativeFoundation/Store), [Molecule](https://github.com/cashapp/molecule), and Compose Runtime.
 
-## Features
+- **Performance**: This has been our highest priority. Preliminary performance comparisons are showing roughly the same load time and memory utilization as AndroidX Paging, but fewer recompositions and janky frame delays.
+- **UDF-first design**: This core architecture makes state management clean and predictable. Related AndroidX Pager issue: https://issuetracker.google.com/issues/183495984.
+- **“Updating item” concept**: Each item in a list can update independently. Related AndroidX Pager issue: https://issuetracker.google.com/issues/160232968.
+- **Operation pipelines**: These operations are applied to ItemSnapshotList instances. This opens up on-the-fly data transformations, such as filtering, grouping, deduplicating, validating, or enrichment. Related AndroidX Pager issue: https://issuetracker.google.com/issues/175430431.
+- **Local and remote mutations**: StoreX Paging handles both local and remote data changes.
+- **Customization options**: Many customization points including launch effects, middleware, side effects, eager loading strategies, fetching strategies, and error handling strategies.
+- **AndroidX Paging compatibility**: StoreX Paging is designed to be compatible with AndroidX Paging, facilitating easier migration or integration.
+- **Kotlin Multiplatform support**: Targeting all major Kotlin platforms.
 
-- Prioritizes extensibility with support for custom middleware, reducers, post-reducer effects, paging strategies, and data sources
-- Supports delegating to [Store](https://github.com/MobileNativeFoundation/Store) for optimized data loading and caching
-- Opens up mutations and streaming of child items within the list of paging items
-- Includes built-in hooks for logging and error handling
-- Uses a modular architecture with unidirectional data flow to make it easier to reason about and maintain
+## [Circuit](https://github.com/slackhq/circuit) Sample
 
-## Getting Started
+### Getting Set Up
 
-### 1. Installation
-
-Add the following dependency to your project:
+1. Define your identifier (`Id`), key (`K`), and value (`V`) types:
 
 ```kotlin
-dependencies {
-    implementation("org.mobilenativefoundation.storex:storex-paging-core:1.0.0")
+data class CursorIdentifier(val cursor: String) : Identifier<CursorIdentifier> {
+    // Splitting the cursor into two components for efficient comparison
+    private val timestamp: Long
+    private val uniqueId: String
+
+    init {
+        // Parsing the cursor string into its components
+        val parts = cursor.split('-')
+        require(parts.size == 2) { "Invalid cursor format. Expected 'timestamp-uniqueId'" }
+
+        // Converting the timestamp string to a Long for numerical comparison
+        timestamp = parts[0].toLongOrNull() ?: throw IllegalArgumentException("Invalid timestamp in cursor")
+        uniqueId = parts[1]
+    }
+
+    override fun minus(other: CursorIdentifier): Int {
+        // Compare timestamps
+        val timeDiff = this.timestamp - other.timestamp
+
+        return when {
+            // If timestamps are different, use their difference
+            // Coercing to Int range to avoid overflow issues
+            timeDiff != 0L -> timeDiff.coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt()
+
+            // If timestamps are the same, compare the unique parts lexicographically
+            // This ensures a consistent, deterministic ordering
+            else -> this.uniqueId.compareTo(other.uniqueId)
+        }
+    }
 }
 ```
 
-### 2. Create a `PagingConfig` to configure the paging behavior:
-
 ```kotlin
-val pagingConfig = PagingConfig(
-    pageSize = 20,
-    prefetchDistance = 10,
-    insertionStrategy = InsertionStrategy.APPEND
-)
-```
-
-### 3. Implement a `PagingSource` to provide data for pagination:
-
-```kotlin
-val pagingSource = DefaultPagingSource(
-    streamProvider = store.pagingSourceStreamProvider(keyFactory)
-)
-```
-
-### 4. Configure the `Pager` using `PagerBuilder`:
-
-```kotlin
-val pager = PagerBuilder<MyId, MyKey, MyParams, MyData, MyCustomError, MyCustomAction>(
-    initialKey = PagingKey(key = 1, params = MyParams()),
-    anchorPosition = anchorPositionFlow,
-)
-    .pagingConfig(pagingConfig)
-
-    .pagerBufferMaxSize(100)
-
-    // Provide a custom paging source
-    .pagingSource(MyCustomPagingSource())
-
-    // Or, use the default paging source
-    .defaultPagingSource(MyPagingSourceStreamProvider())
-
-    // Or, use Store as your paging source
-    .mutableStorePagingSource(mutableStore)
-
-    // Use the default reducer
-    .defaultReducer {
-        errorHandlingStrategy(ErrorHandlingStrategy.RetryLast(3))
-        customActionReducer(MyCustomActionReducer())
+data class TimelineRequest(
+    val cursor: String?,
+    val size: Int,
+    val headers: Map<String, String>
+) : Comparable<TimelineRequest> {
+    override fun compareTo(other: TimelineRequest): Int {
+        return if (cursor != null && other.cursor != null) {
+            cursor.compareTo(other.cursor)
+        } else if (cursor != null) {
+            1
+        } else if (other.cursor != null) {
+            -1
+        } else {
+            0
+        }
     }
+}
+```
 
-    // Or, provide a custom reducer
-    .reducer(MyCustomReducer())
+```kotlin
+data class Post(
+    override val id: CursorIdentifier,
+    val title: String,
+    val body: String,
+    val authorId: String,
+    val createdAt: LocalDateTime,
+    val retweetCount: Int,
+    val favoriteCount: Int,
+    val commentCount: Int,
+    val relevanceScore: Float,
+    val trendingScore: Float,
+    val isLikedByUser: Boolean
+) : Identifiable<CursorIdentifier>
+```
 
-    // Add custom middleware
-    .middleware(MyCustomMiddleware1())
-    .middleware(MyCustomMiddleware2())
+2. Implement a `PagingSource`:
 
-    // Add custom post-reducer effects
-    .effect<SomePagingAction, SomePagingState>(
-        action = SomePagingAction::class,
-        state = SomePagingState::class,
-        effect = MyCustomEffect1()
-    )
+```kotlin
+class TimelinePagingSource : PagingSource<CursorIdentifier, TimelineRequest, Post> {
+    override suspend fun load(params: PagingSource.LoadParams<TimelineRequest>):
+        PagingSource.LoadResult<CursorIdentifier, TimelineRequest, Post> {
+        TODO("Fetch posts from network")
+    }
+}
+```
 
-    .effect<SomePagingAction, SomePagingState>(
-        action = SomePagingAction::class,
-        state = SomePagingState::class,
-        effect = MyCustomEffect2()
-    )
+3. Build a `PagingScope`:
 
-    // Use the default logger
-    .defaultLogger()
-
+```kotlin
+PagingScope
+    .builder<CursorIdentifier, TimelineRequest, Post>(pagingConfig)
+    .setPagingSource(TimelinePagingSource())
+    .addLaunchEffects(launchEffect1, launchEffectN)
+    .addSideEffects(sideEffect1, sideEffectN)
+    .addMiddleware(middleware1, middlewareN)
+    .addFetchingStrategy(customFetchingStrategy)
+    .addErrorHandlingStrategy(customErrorHandlingStrategy)
     .build()
 ```
 
-### 5. Observe the paging state and dispatch actions:
+4. Provide the `PagingScope` to the compose environment at the appropriate level in the composition hierarchy:
 
 ```kotlin
-pager.state.collect { state ->
-    when (state) {
-        is PagingState.Loading -> {
-            // Show loading indicator
-            InitialLoadingView()
-        }
-
-        is PagingState.Data.Idle -> {
-            // Update UI with loaded data
-            DataView(pagingItems = state.data) { action ->
-                pager.dispatch(action)
-            }
-        }
-
-        is PagingState.Error -> {
-            // Handle error state
-            ErrorViewCoordinator(errorState = state) { action ->
-                pager.dispatch(action)
+class TimelineScreenUi(private val pagingScope: PagingScope) : Ui<TimelineScreen.State> {
+    @Composable
+    override fun Content(state: TimelineScreen.State, modifier: Modifier) {
+        PagingScope(pagingScope) {
+            LazyUpdatingItems(state.ids, modifier) { model: UpdatingItem<CursorIdentifier, Post> ->
+                TimelinePostUi(model)
             }
         }
     }
 }
 ```
 
-## Advanced Usage
+5. Provide `PagingState` to the appropriate composable UI:
 
 ```kotlin
-typealias Id = MyId
-typealias K = MyKey
-typealias P = MyParams
-typealias D = MyData
-typealias E = MyCustomError
-typealias A = MyCustomAction
-```
-
-### Handling Errors
-
-#### 1. **Built-In Error Handling**: You can configure error handling strategy using the `errorHandlingStrategy` function when building the pager.
-
-```kotlin
-val pager = PagerBuilder<Id, K, P, D, E, A>(
-    scope,
-    initialKey,
-    initialState,
-    anchorPosition
-)
-    .defaultReducer {
-        // Retry without emitting the error
-        errorHandlingStrategy(ErrorHandlingStrategy.RetryLast(3))
-
-        // Emit the error
-        errorHandlingStrategy(ErrorHandlingStrategy.PassThrough)
-
-        // Ignore the error
-        errorHandlingStrategy(ErrorHandlingStrategy.Ignore)
-    }
-```
-
-#### 2. **Custom Middleware**: You can add custom middleware for handling errors.
-
-```kotlin
-sealed class CustomError {
-    data class Enriched(
-        val throwable: Throwable,
-        val context: CustomContext
-    ) : CustomError()
-}
-
-class ErrorEnrichingMiddleware(
-    private val contextProvider: CustomContextProvider
-) : Middleware<Id, K, P, D, E, A> {
-    override suspend fun apply(
-        action: PagingAction<Id, K, P, D, E, A>,
-        next: suspend (PagingAction<Id, K, P, D, E, A>) -> Unit
-    ) {
-        if (action is PagingAction.UpdateError) {
-            val modifiedError = CustomError.Enriched(action.error, contextProvider.requireContext())
-            next(action.copy(error = modifiedError))
-        } else {
-            next(action)
-        }
-    }
-}
-
-val pager = PagerBuilder<Id, K, P, D, E, A>(
-    scope,
-    initialKey,
-    initialState,
-    anchorPosition
-)
-    .middleware(ErrorEnrichingMiddleware(contextProvider))
-```
-
-#### 3. **Custom Effects**: You can add custom post-reducer effects for handling errors.
-
-```kotlin
-class ErrorLoggingEffect(private val logger: Logger) :
-    Effect<Id, K, P, D, E, A, PagingAction.UpdateError<Id, K, P, D, E, A>, PagingState.Error.Exception<Id, K, P, D, E>> {
-    override fun invoke(
-        action: PagingAction.UpdateError<Id, K, P, D, E, A>,
-        state: PagingState.Error.Exception<Id, K, P, D, E>,
-        dispatch: (PagingAction<Id, K, P, D, E, A>) -> Unit
-    ) {
-        when (val error = action.error) {
-            is PagingSource.LoadResult.Error.Custom -> {}
-            is PagingSource.LoadResult.Error.Exception -> {
-                logger.log(error)
-            }
-        }
-    }
-}
-
-val pager = PagerBuilder<Id, K, P, D, E, A>(
-    scope,
-    initialKey,
-    initialState,
-    anchorPosition
-)
-    .effect(PagingAction.UpdateError::class, PagingState.Error.Exception::class, errorLoggingEffect)
-```
-
-### Reducing Custom Actions
-
-```kotlin
-sealed interface MyCustomAction {
-    data object ClearData : TimelineAction
-}
-
-class MyCustomActionReducer : UserCustomActionReducer<Id, K, P, D, E, A> {
-    override fun reduce(action: PagingAction.User.Custom<Id, K, P, D, E, A>, state: PagingState<Id, K, P, D, E>): PagingState<Id, K, P, D, E> {
-        return when (action.action) {
-            MyCustomAction.ClearData -> {
-                when (state) {
-                    is PagingState.Data.ErrorLoadingMore<Id, K, P, D, E, *> -> state.copy(data = emptyList())
-                    is PagingState.Data.Idle -> state.copy(data = emptyList())
-                    is PagingState.Data.LoadingMore -> state.copy(data = emptyList())
-                    is PagingState.Error.Custom,
-                    is PagingState.Error.Exception,
-                    is PagingState.Initial,
-                    is PagingState.Loading -> state
+class TimelineScreenPresenter(
+    private val pager: Pager<CursorIdentifier>,
+    private val dispatcher: Dispatcher<GetFeedRequest>
+) : Presenter<TimelineScreen.State> {
+    @Composable
+    override fun present(): TimelineScreen.State {
+        val pagingState = pager.flow.collectAsState()
+        return TimelineScreen.State(
+            ids = pagingState.ids,
+            eventSink = { event ->
+                when (event) {
+                    TimelineScreen.Event.Refresh -> dispatcher.dispatch(Action.refresh())
                 }
             }
-        }
+        )
     }
 }
-
-val pager = PagerBuilder<Id, K, P, D, E, A>(
-    scope,
-    initialKey,
-    initialState,
-    anchorPosition
-)
-    .defaultReducer {
-        customActionReducer(MyCustomActionReducer())
-    }
 ```
 
-### Intercepting and Modifying Actions
+### Adding Sorting and Filtering
+
+1. Implement the `Operation` interface for customized sorting and filtering:
 
 ```kotlin
-class AuthMiddleware(private val authTokenProvider: () -> String) : Middleware<Id, K, P, D, E, A> {
-    private fun setAuthToken(headers: MutableMap<String, String>) = headers.apply {
-        this["auth"] = authTokenProvider()
+class SortForTimeRange(private val timeRange: TimeRange) :
+    Operation<CursorIdentifier, TimelineRequest, Post> {
+    override fun shouldApply(
+        key: TimelineRequest?,
+        pagingState: PagingState<CursorIdentifier>,
+        fetchingState: FetchingState<CursorIdentifier, TimelineRequest>
+    ): Boolean {
+        // Always apply
+        return true
     }
 
-    override suspend fun apply(action: PagingAction<Id, K, P, D, E, A>, next: suspend (PagingAction<Id, K, P, D, E, A>) -> Unit) {
-        when (action) {
-            is PagingAction.User.Load -> {
-                setAuthToken(action.key.params.headers)
-                next(action)
-            }
+    override fun apply(
+        snapshot: ItemSnapshotList<CursorIdentifier, Post>,
+        key: TimelineRequest?,
+        pagingState: PagingState<CursorIdentifier>,
+        fetchingState: FetchingState<CursorIdentifier, TimelineRequest>
+    ): ItemSnapshotList<CursorIdentifier, Post> {
+        val now = Clock.System.now().toLocalDateTime(TimeZone.UTC)
 
-            is PagingAction.Load -> {
-                setAuthToken(action.key.params.headers)
-                next(action)
-            }
+        // Separate loaded items and placeholders
+        val (loadedItems, placeholders) = snapshot.partition { it != null }
 
-            else -> next(action)
+        // Sort and filter loaded items
+        val sortedItems = loadedItems.filterNotNull()
+            .filter { post -> isWithinRange(post.createdAt, timeRange, now) }
+            .sortedWith(
+                compareByDescending<Post> { it.favoriteCount }.thenByDescending { it.createdAt }
+            )
+
+        // Combine sorted items with placeholders at the end
+        val result = sortedItems + placeholders
+        return ItemSnapshotList(result)
+    }
+
+    private fun isWithinRange(
+        createdAt: LocalDateTime,
+        timeRange: TimeRange,
+        now: LocalDateTime
+    ): Boolean {
+        val durationSinceCreation = now.toInstant(TimeZone.UTC) - createdAt.toInstant(TimeZone.UTC)
+        return durationSinceCreation < timeRange.duration
+    }
+}
+```
+
+2. Update the `OperationPipeline` based on user configuration
+
+```kotlin
+class TimelineScreenPresenter(...) : Presenter<TimelineScreen.State> {
+    @Composable
+    override fun present(): TimelineScreen.State {
+        val pagingState = pager.flow.collectAsState()
+        var sortingMethod by remember { mutableStateOf<SortingMethod>(SortingMethod.New) }
+
+        LaunchedEffect(sortingMethod) {
+            val operation = when (sortingMethod) {
+                is Top -> SortForTimeRange(operation.timeRange)
+            }
+            operationPipeline.clear().add(operation)
         }
+
+        return TimelineScreen.State(
+            ids = pagingState.ids,
+            eventSink = { event ->
+                when (event) {
+                    TimelineScreen.Event.Refresh -> dispatcher.dispatch(Action.refresh())
+                    TimelineEvent.UpdateSort -> sortingMethod = event.sortingMethod
+                }
+            }
+        )
+    }
+}
+```
+
+### Adding Mutations
+
+```kotlin
+@Composable
+fun TimelinePostUi(model: UpdatingItem<CursorIdentifier, Post>) {
+    val coroutineScope = rememberCoroutineScope()
+    val state = model.collectAsState(coroutineScope)
+    val post = state.value.item
+
+    if (post == null) {
+        TimelinePostPlaceholderUi()
+    } else {
+        TimelinePostLoadedUi(
+            post = post,
+            updatePost = { updatedPost -> model.emit(UpdatingItem.Event.Update(updatedPost)) }
+        )
     }
 }
 
-val pager = PagerBuilder<Id, K, P, D, E, A>(
-    scope,
-    initialKey,
-    initialState,
-    anchorPosition
-)
-    .middleware(AuthMiddleware(authTokenProvider))
+@Composable
+fun TimelinePostLoadedUi(
+    post: Post,
+    updatePost: (next: Post) -> Unit
+) {
+    val isLikedByUser by remember { derivedStateOf { post.isLikedByUser } }
+
+    Column {
+        // ...
+
+        LikeAction(
+            isLikedByUser = isLikedByUser,
+            onClick = { updatePost(post.copy(isLikedByUser = !isLikedByUser)) }
+        )
+    }
+}
 ```
 
-### Performing Side Effects After State Has Been Reduced
+## Contributing
 
-See the [Custom Effects](#3-custom-effects-you-can-add-custom-post-reducer-effects-for-handling-errors) section under [Handling Errors](#handling-errors).
+Reach out at https://kotlinlang.slack.com/archives/C06007Z01HU
 
 ## License
 
