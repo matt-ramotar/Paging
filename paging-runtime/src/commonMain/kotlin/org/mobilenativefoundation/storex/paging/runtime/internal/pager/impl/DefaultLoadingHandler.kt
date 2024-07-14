@@ -75,38 +75,44 @@ internal class DefaultLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V :
 
                 updateLoadingState(loadParams.direction)
 
-                try {
+                // Update max and min request so far for both append and prepend
+                // This ensures we're tracking the full range of requests regardless of sort order
+                // These methods don't necessarily update the fetching state, but simply recompute the max and min
+                fetchingStateHolder.updateMaxRequestSoFar(loadParams.key)
+                fetchingStateHolder.updateMinRequestSoFar(loadParams.key)
 
-                    // Update max and min request so far for both append and prepend
-                    // This ensures we're tracking the full range of requests regardless of sort order
-                    // These methods don't necessarily update the fetching state, but simply recompute the max and min
-                    fetchingStateHolder.updateMaxRequestSoFar(modifiedParams.key)
-                    fetchingStateHolder.updateMinRequestSoFar(modifiedParams.key)
-
-                    loadPage(modifiedParams, loadParams.direction, addNextToQueue)
-                } catch (pagingError: Throwable) {
-                    logger.error(
-                        """
-                        Caught error
-                            Load params: $loadParams
-                            Direction: ${loadParams.direction}
-                    """.trimIndent(),
-                        pagingError
-                    )
-                    handleError(pagingError, modifiedParams, loadParams.direction)
-                }
+                tryLoad(loadParams, addNextToQueue)
             }
         }
     }
 
-    private suspend fun loadPage(loadParams: PagingSource.LoadParams<K>, direction: LoadDirection, addNextToQueue: Boolean) {
+    // This is extracted from handleLoading because we might need to retry the load
+    // We can't simply re invoke handleLoading is because it will cause a deadlock
+    private suspend fun tryLoad(loadParams: PagingSource.LoadParams<K>, addNextToQueue: Boolean) {
+        try {
+
+            loadPage(loadParams, addNextToQueue)
+        } catch (pagingError: Throwable) {
+            logger.error(
+                """
+                        Caught error
+                            Load params: $loadParams
+                            Direction: ${loadParams.direction}
+                    """.trimIndent(),
+                pagingError
+            )
+            handleError(pagingError, loadParams, addNextToQueue)
+        }
+    }
+
+    private suspend fun loadPage(loadParams: PagingSource.LoadParams<K>, addNextToQueue: Boolean) {
         val pageLoadFlow = store.loadPage(loadParams)
 
         // Design decision to use only the latest data for any given params
         // Not OK to skip params, but OK to skip stale data
         pageLoadFlow.collectLatest { pageLoadState ->
             when (pageLoadState) {
-                is PageLoadState.Success -> handleSuccess(pageLoadState, loadParams.key, direction, addNextToQueue)
+                is PageLoadState.Success -> handleSuccess(pageLoadState, loadParams.key, loadParams.direction, addNextToQueue)
                 is PageLoadState.Error -> throw pageLoadState.toThrowable()
                 else -> { /* Do nothing for other states */
                 }
@@ -171,16 +177,16 @@ internal class DefaultLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V :
         queueManager.updateExistingPendingJob(key, inFlight = false, completed = true)
     }
 
-    private suspend fun passThroughError(error: Throwable, loadParams: PagingSource.LoadParams<K>, direction: LoadDirection) {
+    private suspend fun passThroughError(error: Throwable, loadParams: PagingSource.LoadParams<K>) {
 
         // Passing the error through
-        updateErrorState(error, direction)
+        updateErrorState(error, loadParams.direction)
 
         // Complete the job
-        completeLoadJobAfterError(loadParams, direction)
+        completeLoadJobAfterError(loadParams)
     }
 
-    private suspend fun completeLoadJobAfterError(loadParams: PagingSource.LoadParams<K>, direction: LoadDirection) {
+    private suspend fun completeLoadJobAfterError(loadParams: PagingSource.LoadParams<K>) {
         // Design decision to remove placeholders when not retrying after an error
         // Page refreshes are not currently supported
         // So the page must currently contain placeholders
@@ -189,7 +195,7 @@ internal class DefaultLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V :
         // Marking the pending job as completed
         queueManager.updateExistingPendingJob(loadParams.key, inFlight = false, completed = true)
 
-        when (direction) {
+        when (loadParams.direction) {
             LoadDirection.Prepend -> {
                 // Removing the params from the prepend queue
                 queueManager.prependQueue.removeFirst { it.params == loadParams }
@@ -205,20 +211,20 @@ internal class DefaultLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V :
         retryBookkeeper.resetCount(loadParams)
     }
 
-    private suspend fun handleError(error: Throwable, loadParams: PagingSource.LoadParams<K>, direction: LoadDirection) {
+    private suspend fun handleError(error: Throwable, loadParams: PagingSource.LoadParams<K>, addNextToQueue: Boolean) {
         when (errorHandlingStrategy) {
             ErrorHandlingStrategy.Ignore -> {
                 logger.error(
                     """
                     Ignoring the error
                         Load params: $loadParams
-                        Direction: $direction
+                        Direction: ${loadParams.direction}
                 """.trimIndent(),
                     error
                 )
 
                 // Complete the job, do nothing else
-                completeLoadJobAfterError(loadParams, direction)
+                completeLoadJobAfterError(loadParams)
             }
 
             ErrorHandlingStrategy.PassThrough -> {
@@ -226,11 +232,11 @@ internal class DefaultLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V :
                     """
                     Passing the error through
                         Load params: $loadParams
-                        Direction: $direction
+                        Direction: $loadParams.direction
                 """.trimIndent(),
                     error
                 )
-                passThroughError(error, loadParams, direction)
+                passThroughError(error, loadParams)
             }
 
             is ErrorHandlingStrategy.RetryLast -> {
@@ -241,7 +247,7 @@ internal class DefaultLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V :
                     """
                         Determining whether to retry
                             Load params: $loadParams
-                            Direction: $direction
+                            Direction: ${loadParams.direction}
                             Retry count: $retryCount
                             Max retries: ${errorHandlingStrategy.maxRetries}
                     """.trimIndent()
@@ -254,22 +260,22 @@ internal class DefaultLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V :
 
                     // Retrying with backoff
                     exponentialBackoff.execute(retryCount) {
-                        when (direction) {
+                        when (loadParams.direction) {
                             LoadDirection.Prepend -> {
                                 logger.verbose("Retrying prepend load for: $loadParams")
-                                handlePrependLoading(loadParams)
+                                tryLoad(loadParams, addNextToQueue)
                             }
 
                             LoadDirection.Append -> {
                                 logger.verbose("Retrying append load for: $loadParams")
-                                handleAppendLoading(loadParams)
+                                tryLoad(loadParams, addNextToQueue)
                             }
                         }
                     }
 
                 } else {
                     logger.verbose("At maximum retries, passing the error through")
-                    passThroughError(error, loadParams, direction)
+                    passThroughError(error, loadParams)
                 }
             }
         }
