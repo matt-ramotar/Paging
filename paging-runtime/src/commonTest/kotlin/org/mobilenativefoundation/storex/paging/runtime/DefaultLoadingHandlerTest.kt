@@ -40,10 +40,10 @@ class DefaultLoadingHandlerTest {
     private val appendQueue = mock<LoadParamsQueue<TimelineRequest>>()
     private val prependQueue = mock<LoadParamsQueue<TimelineRequest>>()
 
-    private val pagingState = MutableStateFlow(PagingState.initial<Cursor>())
+    private val pagingState = MutableStateFlow(PagingState.initial<Cursor, TimelineRequest, Post>())
     private val fetchingState = MutableStateFlow(FetchingState<Cursor, TimelineRequest>())
 
-    private val pagingStateManager = mock<PagingStateManager<Cursor>> {
+    private val pagingStateManager = mock<PagingStateManager<Cursor, TimelineRequest, Post>> {
         every { pagingState } returns this@DefaultLoadingHandlerTest.pagingState
     }
     private val store = mock<NormalizedStore<Cursor, TimelineRequest, Post>>()

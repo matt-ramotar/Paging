@@ -21,12 +21,12 @@ import kotlin.math.abs
  * @param ItemId The type of the item identifier.
  * @param PageRequestKey The type of the key used for loading pages.
  */
-class DefaultFetchingStrategy<ItemId : Any, PageRequestKey : Any>(
+class DefaultFetchingStrategy<ItemId : Any, PageRequestKey : Any, ItemValue: Any>(
     private val pagingConfig: PagingConfig<ItemId, PageRequestKey>,
     private val logger: PagingLogger,
     private val listSortAnalyzer: ListSortAnalyzer<ItemId>,
     private val itemIdComparator: Comparator<ItemId>
-) : FetchingStrategy<ItemId, PageRequestKey> {
+) : FetchingStrategy<ItemId, PageRequestKey, ItemValue> {
 
     // Thread-safe caching of the last analyzed list and its sort order
     private data class CachedOrder<Id>(val ids: List<Id?>, val order: Order)
@@ -38,7 +38,7 @@ class DefaultFetchingStrategy<ItemId : Any, PageRequestKey : Any>(
      */
     override fun shouldFetchForward(
         params: PagingSource.LoadParams<PageRequestKey>,
-        pagingState: PagingState<ItemId>,
+        pagingState: PagingState<ItemId, PageRequestKey, ItemValue>,
         fetchingState: FetchingState<ItemId, PageRequestKey>
     ): Boolean {
         return shouldFetch(pagingState, fetchingState, FetchDirection.FORWARD)
@@ -49,7 +49,7 @@ class DefaultFetchingStrategy<ItemId : Any, PageRequestKey : Any>(
      */
     override fun shouldFetchBackward(
         params: PagingSource.LoadParams<PageRequestKey>,
-        pagingState: PagingState<ItemId>,
+        pagingState: PagingState<ItemId, PageRequestKey, ItemValue>,
         fetchingState: FetchingState<ItemId, PageRequestKey>
     ): Boolean {
         return shouldFetch(pagingState, fetchingState, FetchDirection.BACKWARD)
@@ -60,7 +60,7 @@ class DefaultFetchingStrategy<ItemId : Any, PageRequestKey : Any>(
      * This method is optimized for performance and thread safety.
      */
     private fun shouldFetch(
-        pagingState: PagingState<ItemId>,
+        pagingState: PagingState<ItemId, PageRequestKey, ItemValue>,
         fetchingState: FetchingState<ItemId, PageRequestKey>,
         fetchDirection: FetchDirection
     ): Boolean {
@@ -129,7 +129,7 @@ class DefaultFetchingStrategy<ItemId : Any, PageRequestKey : Any>(
      * Inlined for performance in high-frequency calls.
      */
     private inline fun checkFetchCondition(
-        pagingState: PagingState<ItemId>,
+        pagingState: PagingState<ItemId, PageRequestKey, ItemValue>,
         itemLoadedSoFar: ItemId?,
         itemAccessedSoFar: ItemId?,
         sortOrder: Order
@@ -150,11 +150,11 @@ class DefaultFetchingStrategy<ItemId : Any, PageRequestKey : Any>(
      * Calculates the distance between two items.
      * Uses Comparator's distance method if available, otherwise falls back to index-based calculation.
      */
-    private fun getDistance(itemLoaded: ItemId, itemAccessed: ItemId, pagingState: PagingState<ItemId>): Int {
+    private fun getDistance(itemLoaded: ItemId, itemAccessed: ItemId, pagingState: PagingState<ItemId, PageRequestKey, ItemValue>): Int {
         return itemIdComparator.distance(itemLoaded, itemAccessed) ?: calculateIndexDistance(itemLoaded, itemAccessed, pagingState)
     }
 
-    private fun calculateIndexDistance(itemLoaded: ItemId, itemAccessed: ItemId, pagingState: PagingState<ItemId>): Int {
+    private fun calculateIndexDistance(itemLoaded: ItemId, itemAccessed: ItemId, pagingState: PagingState<ItemId, PageRequestKey, ItemValue>): Int {
         var loadedIndex = -1
         var accessedIndex = -1
 
@@ -181,7 +181,7 @@ class DefaultFetchingStrategy<ItemId : Any, PageRequestKey : Any>(
      * Inlined for performance in high-frequency calls.
      */
     private inline fun isUnderPrefetchLimit(
-        pagingState: PagingState<ItemId>,
+        pagingState: PagingState<ItemId, PageRequestKey, ItemValue>,
         itemLoadedSoFar: ItemId,
         sortOrder: Order
     ): Boolean {

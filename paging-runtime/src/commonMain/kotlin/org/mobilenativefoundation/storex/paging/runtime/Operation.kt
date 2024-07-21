@@ -7,7 +7,7 @@ package org.mobilenativefoundation.storex.paging.runtime
  * @param PageRequestKey The type of the paging key.
  * @param ItemValue The type of the item value.
  */
-interface Operation<ItemId: Any, PageRequestKey: Any, ItemValue: Any> {
+abstract class Operation<ItemId: Any, PageRequestKey: Any, ItemValue: Any> {
     /**
      * Determines whether this operation should be applied based on the current state.
      *
@@ -16,7 +16,7 @@ interface Operation<ItemId: Any, PageRequestKey: Any, ItemValue: Any> {
      * @param fetchingState The current fetching state.
      * @return True if the operation should be applied, false otherwise.
      */
-    fun shouldApply(key: PageRequestKey?, pagingState: PagingState<ItemId>, fetchingState: FetchingState<ItemId, PageRequestKey>): Boolean
+    internal abstract fun shouldApply(key: PageRequestKey?, pagingState: PagingState<ItemId, PageRequestKey, ItemValue>, fetchingState: FetchingState<ItemId, PageRequestKey>): Boolean
 
     /**
      * Applies the operation to the given snapshot.
@@ -27,10 +27,10 @@ interface Operation<ItemId: Any, PageRequestKey: Any, ItemValue: Any> {
      * @param fetchingState The current fetching state.
      * @return The transformed snapshot after applying the operation.
      */
-    fun apply(
+    internal abstract fun apply(
         snapshot: ItemSnapshotList<ItemId, ItemValue>,
         key: PageRequestKey?,
-        pagingState: PagingState<ItemId>,
+        pagingState: PagingState<ItemId, PageRequestKey, ItemValue>,
         fetchingState: FetchingState<ItemId, PageRequestKey>
     ): ItemSnapshotList<ItemId, ItemValue>
 }

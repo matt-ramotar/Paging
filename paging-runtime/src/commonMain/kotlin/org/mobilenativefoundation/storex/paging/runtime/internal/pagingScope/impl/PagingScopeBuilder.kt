@@ -20,6 +20,7 @@ import org.mobilenativefoundation.storex.paging.runtime.FetchingState
 import org.mobilenativefoundation.storex.paging.runtime.IdExtractor
 import org.mobilenativefoundation.storex.paging.runtime.LoadDirection
 import org.mobilenativefoundation.storex.paging.runtime.LoadStrategy
+import org.mobilenativefoundation.storex.paging.runtime.Operation
 import org.mobilenativefoundation.storex.paging.runtime.PagingConfig
 import org.mobilenativefoundation.storex.paging.runtime.PagingScope
 import org.mobilenativefoundation.storex.paging.runtime.PagingSource
@@ -36,11 +37,11 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.Pagin
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.QueueManager
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl.ConcurrentFetchingStateHolder
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl.ConcurrentOperationApplier
-import org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl.ConcurrentOperationManager
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl.DefaultFetchingStrategy
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl.DefaultListSortAnalyzer
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl.RealLinkedHashMapManager
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl.RealLoadingHandler
+import org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl.RealMutableOperationPipeline
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl.RealPager
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl.RealPagingStateManager
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl.RealQueueManager
@@ -59,9 +60,9 @@ class PagingScopeBuilder<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
 ) : PagingScope.Builder<ItemId, PageRequestKey, ItemValue> {
 
     private val logger = RealPagingLogger(pagingConfig.logging)
-    private val actionsFlow = MutableSharedFlow<Action<PageRequestKey>>(replay = 20)
+    private val actionsFlow = MutableSharedFlow<Action<ItemId, PageRequestKey, ItemValue>>(replay = 20)
 
-    private var initialState: PagingState<ItemId> = PagingState.initial()
+    private var initialState: PagingState<ItemId, PageRequestKey, ItemValue> = PagingState.initial()
     private var initialLoadParams = PagingSource.LoadParams(
         pagingConfig.initialKey,
         LoadStrategy.SkipCache,
@@ -78,9 +79,10 @@ class PagingScopeBuilder<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
     private val middleware = mutableListOf<Middleware<PageRequestKey>>()
     private var initialFetchingState = FetchingState<ItemId, PageRequestKey>()
     private var listSortAnalyzer: ListSortAnalyzer<ItemId> = DefaultListSortAnalyzer(itemIdComparator)
-    private var fetchingStrategy: FetchingStrategy<ItemId, PageRequestKey> =
+    private var fetchingStrategy: FetchingStrategy<ItemId, PageRequestKey, ItemValue> =
         DefaultFetchingStrategy(pagingConfig, logger, listSortAnalyzer, itemIdComparator)
     private var errorHandlingStrategy: ErrorHandlingStrategy = ErrorHandlingStrategy.RetryLast()
+    private var initialOperations: MutableList<Operation<ItemId, PageRequestKey, ItemValue>> = mutableListOf()
 
     private lateinit var itemMemoryCache: MutableMap<ItemId, ItemValue>
     private lateinit var pageMemoryCache: MutableMap<PageRequestKey, PagingSource.LoadResult.Data<ItemId, PageRequestKey, ItemValue>>
@@ -89,7 +91,7 @@ class PagingScopeBuilder<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
     private lateinit var itemUpdater: Updater<ItemId, ItemValue, *>
     private lateinit var placeholderFactory: PlaceholderFactory<ItemId, PageRequestKey, ItemValue>
 
-    override fun setInitialState(state: PagingState<ItemId>) = apply { initialState = state }
+    override fun setInitialState(state: PagingState<ItemId, PageRequestKey, ItemValue>) = apply { initialState = state }
     override fun setInitialLoadParams(params: PagingSource.LoadParams<PageRequestKey>) =
         apply { initialLoadParams = params }
 
@@ -103,7 +105,7 @@ class PagingScopeBuilder<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
     override fun setInitialFetchingState(state: FetchingState<ItemId, PageRequestKey>) =
         apply { initialFetchingState = state }
 
-    override fun setFetchingStrategy(strategy: FetchingStrategy<ItemId, PageRequestKey>) =
+    override fun setFetchingStrategy(strategy: FetchingStrategy<ItemId, PageRequestKey, ItemValue>) =
         apply { fetchingStrategy = strategy }
 
     override fun setErrorHandlingStrategy(strategy: ErrorHandlingStrategy) =
@@ -126,8 +128,12 @@ class PagingScopeBuilder<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
 
     override fun setItemUpdater(updater: Updater<ItemId, ItemValue, *>) = apply { itemUpdater = updater }
 
+    override fun setInitialOperations(operations: List<Operation<ItemId, PageRequestKey, ItemValue>>): PagingScope.Builder<ItemId, PageRequestKey, ItemValue> =
+        apply {
+            this.initialOperations = operations.toMutableList()
+        }
+
     override fun build(): PagingScope<ItemId, PageRequestKey, ItemValue> {
-        val operationManager = ConcurrentOperationManager<ItemId, PageRequestKey, ItemValue>()
         val fetchingStateHolder = ConcurrentFetchingStateHolder(initialFetchingState, itemIdComparator, pageRequestKeyComparator)
 
         val dataPersistence = RealDataPersistence(itemPersistence, pagePersistence)
@@ -152,7 +158,8 @@ class PagingScopeBuilder<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
 
         val pagingStateManager = RealPagingStateManager(initialState, logger)
         val queueManager = RealQueueManager(logger, pageRequestKeyComparator)
-        val operationApplier = ConcurrentOperationApplier(operationManager)
+        val mutableOperationPipeline = RealMutableOperationPipeline(initialOperations)
+        val operationApplier = ConcurrentOperationApplier(mutableOperationPipeline)
         val loadingHandler = createLoadingHandler(
             store = store,
             pagingStateManager = pagingStateManager,
@@ -174,12 +181,12 @@ class PagingScopeBuilder<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
             pagingStateManager = pagingStateManager,
             queueManager = queueManager,
             loadingHandler = loadingHandler,
-            coroutineScope = coroutineScope
+            coroutineScope = coroutineScope,
+            mutableOperationPipeline = mutableOperationPipeline
         )
 
         return RealPagingScope(
             pager = pager,
-            operationManager = operationManager,
             dispatcher = dispatcher,
             updatingItemProvider = updatingItemProvider
         )
@@ -207,7 +214,7 @@ class PagingScopeBuilder<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
 
     private fun createLoadingHandler(
         store: NormalizedStore<ItemId, PageRequestKey, ItemValue>,
-        pagingStateManager: PagingStateManager<ItemId>,
+        pagingStateManager: PagingStateManager<ItemId, PageRequestKey, ItemValue>,
         queueManager: QueueManager<PageRequestKey>,
         fetchingStateHolder: FetchingStateHolder<ItemId, PageRequestKey>,
         operationApplier: OperationApplier<ItemId, PageRequestKey, ItemValue>

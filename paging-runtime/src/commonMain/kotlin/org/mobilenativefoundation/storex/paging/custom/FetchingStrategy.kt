@@ -17,7 +17,7 @@ import org.mobilenativefoundation.storex.paging.runtime.PagingState
  * @param ItemId The type of the item identifier.
  * @param PageRequestKey The type of the paging key.
  */
-interface FetchingStrategy<ItemId : Any, PageRequestKey : Any> {
+interface FetchingStrategy<ItemId : Any, PageRequestKey : Any, ItemValue : Any> {
 
     /**
      * Determines whether to fetch more data in the forward direction based on the current state of the pager.
@@ -29,7 +29,7 @@ interface FetchingStrategy<ItemId : Any, PageRequestKey : Any> {
      */
     fun shouldFetchForward(
         params: PagingSource.LoadParams<PageRequestKey>,
-        pagingState: PagingState<ItemId>,
+        pagingState: PagingState<ItemId, PageRequestKey, ItemValue>,
         fetchingState: FetchingState<ItemId, PageRequestKey>,
     ): Boolean
 
@@ -43,7 +43,7 @@ interface FetchingStrategy<ItemId : Any, PageRequestKey : Any> {
      */
     fun shouldFetchBackward(
         params: PagingSource.LoadParams<PageRequestKey>,
-        pagingState: PagingState<ItemId>,
+        pagingState: PagingState<ItemId, PageRequestKey, ItemValue>,
         fetchingState: FetchingState<ItemId, PageRequestKey>,
     ): Boolean
 }

@@ -1,25 +1,37 @@
 package org.mobilenativefoundation.storex.paging.runtime
 
-sealed class Action<out PageRequestKey : Any> {
+import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.MutableOperationPipeline
+
+sealed class Action<out ItemId: Any, out PageRequestKey : Any, out ItemValue: Any> {
 
     data class ProcessQueue internal constructor(
         val direction: LoadDirection
-    ) : Action<Nothing>()
+    ) : Action<Nothing, Nothing, Nothing>()
 
     data class SkipQueue<K : Any> internal constructor(
         val key: K,
         val direction: LoadDirection,
         val strategy: LoadStrategy,
-    ) : Action<K>()
+    ) : Action<Nothing, K, Nothing>()
 
     data class Enqueue<K : Any> internal constructor(
         val key: K,
         val direction: LoadDirection,
         val strategy: LoadStrategy,
         val jump: Boolean
-    ) : Action<K>()
+    ) : Action<Nothing, K, Nothing>()
 
-    data object Invalidate : Action<Nothing>()
+    data object Invalidate : Action<Nothing, Nothing, Nothing>()
+
+    data class AddOperation<ItemId: Any, PageRequestKey: Any, ItemValue: Any>(
+        val operation: Operation<ItemId, PageRequestKey, ItemValue>
+    ) : Action<ItemId, PageRequestKey, ItemValue>()
+
+    data class RemoveOperation<ItemId: Any, PageRequestKey: Any, ItemValue: Any>(
+        val operation: Operation<ItemId, PageRequestKey, ItemValue>
+    ) : Action<ItemId, PageRequestKey, ItemValue>()
+
+    data object ClearOperations : Action<Nothing, Nothing, Nothing>()
 
     companion object {
         fun <K : Any> skipQueue(

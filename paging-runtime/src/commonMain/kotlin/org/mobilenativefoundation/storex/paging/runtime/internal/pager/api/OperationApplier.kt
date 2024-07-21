@@ -11,7 +11,7 @@ internal interface OperationApplier<ItemId: Any, PageRequestKey: Any, ItemValue:
     suspend fun applyOperations(
         snapshot: ItemSnapshotList<ItemId, ItemValue>,
         key: PageRequestKey?,
-        pagingState: PagingState<ItemId>,
+        pagingState: PagingState<ItemId, PageRequestKey, ItemValue>,
         fetchingState: FetchingState<ItemId, PageRequestKey>
     ): ItemSnapshotList<ItemId, ItemValue>
 }
