@@ -120,12 +120,12 @@ class TimelineScreenPresenter(
 
 ### Adding Sorting and Filtering
 
-1. Implement the `Operation` interface for customized sorting and filtering:
+1. Implement the `Operation` abstract class for customized sorting and filtering:
 
 ```kotlin
 class SortForTimeRange(private val timeRange: TimeRange) :
-    Operation<Cursor, TimelineRequest, Post> {
-    override fun shouldApply(
+    Operation<Cursor, TimelineRequest, Post>() {
+    internal override fun shouldApply(
         key: TimelineRequest?,
         pagingState: PagingState<Cursor>,
         fetchingState: FetchingState<Cursor, TimelineRequest>
@@ -134,7 +134,7 @@ class SortForTimeRange(private val timeRange: TimeRange) :
         return true
     }
 
-    override fun apply(
+    internal override fun apply(
         snapshot: ItemSnapshotList<Cursor, Post>,
         key: TimelineRequest?,
         pagingState: PagingState<Cursor>,
@@ -181,7 +181,7 @@ class TimelineScreenPresenter(...) : Presenter<TimelineScreen.State> {
             val operation = when (sortingMethod) {
                 is Top -> SortForTimeRange(operation.timeRange)
             }
-            operationPipeline.clear().add(operation)
+            dispatcher.dispatch(Action.UpdateOperations(operation))
         }
 
         return TimelineScreen.State(
@@ -240,41 +240,41 @@ fun TimelinePostLoadedUi(
 
 object CursorComparator : Comparator<Cursor> {
 
-  override fun compare(a: Cursor, b: Cursor): Int {
-    val parsedCursorA = parseCursor(a)
-    val parsedCursorB = parseCursor(b)
-    return parsedCursorA.first.compareTo(parsedCursorB.first)
-  }
-
-  override fun distance(a: Cursor, b: Cursor): Int {
-    val parsedCursorA = parseCursor(a)
-    val parsedCursorB = parseCursor(b)
-
-    // Compare timestamps
-    val timeDiff = parsedCursorA.first - parsedCursorB.first
-
-    return when {
-      // If timestamps are different, use their difference
-      // Coercing to Int range to avoid overflow issues
-      timeDiff != 0L -> timeDiff.coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt()
-
-      // If timestamps are the same, compare the unique parts lexicographically
-      // This ensures a consistent, deterministic ordering
-      else -> parsedCursorA.second.compareTo(parsedCursorB.second)
+    override fun compare(a: Cursor, b: Cursor): Int {
+        val parsedCursorA = parseCursor(a)
+        val parsedCursorB = parseCursor(b)
+        return parsedCursorA.first.compareTo(parsedCursorB.first)
     }
-  }
 
-  private fun parseCursor(cursor: Cursor): Pair<Long, String> {
-    // Parsing the cursor string into its components
-    val parts = cursor.split('-')
-    require(parts.size == 2) { "Invalid cursor format. Expected 'timestamp-uniqueId'" }
+    override fun distance(a: Cursor, b: Cursor): Int {
+        val parsedCursorA = parseCursor(a)
+        val parsedCursorB = parseCursor(b)
 
-    // Converting the timestamp string to a Long for numerical comparison
-    val timestamp = parts[0].toLongOrNull() ?: throw IllegalArgumentException("Invalid timestamp in cursor")
-    val uniqueId = parts[1]
+        // Compare timestamps
+        val timeDiff = parsedCursorA.first - parsedCursorB.first
 
-    return timestamp to uniqueId
-  }
+        return when {
+            // If timestamps are different, use their difference
+            // Coercing to Int range to avoid overflow issues
+            timeDiff != 0L -> timeDiff.coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt()
+
+            // If timestamps are the same, compare the unique parts lexicographically
+            // This ensures a consistent, deterministic ordering
+            else -> parsedCursorA.second.compareTo(parsedCursorB.second)
+        }
+    }
+
+    private fun parseCursor(cursor: Cursor): Pair<Long, String> {
+        // Parsing the cursor string into its components
+        val parts = cursor.split('-')
+        require(parts.size == 2) { "Invalid cursor format. Expected 'timestamp-uniqueId'" }
+
+        // Converting the timestamp string to a Long for numerical comparison
+        val timestamp = parts[0].toLongOrNull() ?: throw IllegalArgumentException("Invalid timestamp in cursor")
+        val uniqueId = parts[1]
+
+        return timestamp to uniqueId
+    }
 }
 ```
 
