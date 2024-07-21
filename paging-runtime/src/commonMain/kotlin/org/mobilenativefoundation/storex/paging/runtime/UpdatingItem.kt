@@ -8,17 +8,17 @@ interface UpdatingItem<ItemId : Any, ItemValue : Any> {
     @Composable
     operator fun invoke(): ItemState<ItemValue>
 
-    suspend fun emit(event: Event<ItemId, ItemValue>)
+    suspend fun dispatch(action: Action<ItemId, ItemValue>)
 
     class State<ItemId : Any, ItemValue : Any>(
         val value: ItemValue?,
         val loadState: SingleLoadState
     )
 
-    sealed interface Event<ItemId : Any, ItemValue : Any> {
-        data object Init : Event<Nothing, Nothing>
-        data object Refresh : Event<Nothing, Nothing>
-        data object Clear : Event<Nothing, Nothing>
-        data class Update<ItemId : Any, ItemValue : Any>(val value: ItemValue) : Event<ItemId, ItemValue>
+    sealed interface Action<ItemId : Any, ItemValue : Any> {
+        data object Refresh : Action<Nothing, Nothing>
+        data object Clear : Action<Nothing, Nothing>
+        data class Update<ItemId : Any, ItemValue : Any>(val value: ItemValue) :
+            Action<ItemId, ItemValue>
     }
 }

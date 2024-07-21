@@ -13,7 +13,7 @@ import org.mobilenativefoundation.storex.paging.custom.SideEffect
 import org.mobilenativefoundation.storex.paging.persistence.api.ItemPersistence
 import org.mobilenativefoundation.storex.paging.persistence.api.PagePersistence
 import org.mobilenativefoundation.storex.paging.persistence.impl.RealDataPersistence
-import org.mobilenativefoundation.storex.paging.runtime.Action
+import org.mobilenativefoundation.storex.paging.runtime.PagingAction
 import org.mobilenativefoundation.storex.paging.runtime.Comparator
 import org.mobilenativefoundation.storex.paging.runtime.ErrorHandlingStrategy
 import org.mobilenativefoundation.storex.paging.runtime.FetchingState
@@ -60,7 +60,7 @@ class PagerBuilder<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
 ) : Pager.Builder<ItemId, PageRequestKey, ItemValue> {
 
     private val logger = RealPagingLogger(pagingConfig.logging)
-    private val actionsFlow = MutableSharedFlow<Action<ItemId, PageRequestKey, ItemValue>>(replay = 20)
+    private val actionsFlow = MutableSharedFlow<PagingAction<ItemId, PageRequestKey, ItemValue>>(replay = 20)
 
     private var initialState: PagingState<ItemId, PageRequestKey, ItemValue> = PagingState.initial()
     private var initialLoadParams = PagingSource.LoadParams(

@@ -13,7 +13,7 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.pagingScope.imp
 
 interface Pager<ItemId : Any, PageRequestKey : Any, ItemValue : Any> {
     val state: StateFlow<PagingState<ItemId, PageRequestKey, ItemValue>>
-    suspend fun dispatch(action: Action<ItemId, PageRequestKey, ItemValue>)
+    suspend fun dispatch(action: PagingAction<ItemId, PageRequestKey, ItemValue>)
     suspend fun getUpdatingItem(id: ItemId): UpdatingItem<ItemId, ItemValue>
 
     interface Builder<ItemId : Any, PageRequestKey : Any, ItemValue : Any> {

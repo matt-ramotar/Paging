@@ -2,7 +2,7 @@ package org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl
 
 import kotlinx.coroutines.flow.first
 import org.mobilenativefoundation.storex.paging.custom.Middleware
-import org.mobilenativefoundation.storex.paging.runtime.Action
+import org.mobilenativefoundation.storex.paging.runtime.PagingAction
 import org.mobilenativefoundation.storex.paging.runtime.ErrorHandlingStrategy
 import org.mobilenativefoundation.storex.paging.runtime.LoadDirection
 import org.mobilenativefoundation.storex.paging.runtime.LoadStrategy
@@ -179,7 +179,7 @@ internal class RealLoadingHandler<ItemId: Any, PageRequestKey: Any, ItemValue: A
 
     private suspend fun enqueueAppendNext(key: PageRequestKey) {
         queueManager.enqueueAppend(
-            Action.Enqueue(
+            PagingAction.Enqueue(
                 key = key,
                 direction = LoadDirection.Append,
                 strategy = LoadStrategy.SkipCache,
@@ -190,7 +190,7 @@ internal class RealLoadingHandler<ItemId: Any, PageRequestKey: Any, ItemValue: A
 
     private suspend fun enqueuePrependNext(key: PageRequestKey) {
         queueManager.enqueuePrepend(
-            Action.Enqueue(
+            PagingAction.Enqueue(
                 key = key,
                 direction = LoadDirection.Prepend,
                 strategy = LoadStrategy.SkipCache,

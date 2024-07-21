@@ -34,7 +34,7 @@ internal class RealUpdatingItemPresenter<ItemId : Any, PageRequestKey : Any, Ite
 ) : UpdatingItemPresenter<ItemId, ItemValue> {
 
     @Composable
-    override fun present(id: ItemId, events: Flow<UpdatingItem.Event<ItemId, ItemValue>>): ItemState<ItemValue> {
+    override fun present(id: ItemId, actions: Flow<UpdatingItem.Action<ItemId, ItemValue>>): ItemState<ItemValue> {
         var itemState by remember {
             mutableStateOf(
                 ItemState<ItemValue>(
@@ -47,14 +47,14 @@ internal class RealUpdatingItemPresenter<ItemId : Any, PageRequestKey : Any, Ite
 
         val itemValue by itemStore.observeItem(id).collectAsState(null)
 
-        val currentEvent by events.collectAsState(initial = UpdatingItem.Event.Init)
+        val currentAction by actions.collectAsState(initial = null)
 
         LaunchedEffect(id) {
             updateFetchingState(id)
         }
 
-        LaunchedEffect(id, itemValue, currentEvent) {
-            val nextState = reduceState(id, itemState, itemValue, currentEvent)
+        LaunchedEffect(id, itemValue, currentAction) {
+            val nextState = reduceState(id, itemState, itemValue, currentAction)
 
             // Update the state only if it has actually changed
             if (nextState != itemState) {
@@ -69,13 +69,13 @@ internal class RealUpdatingItemPresenter<ItemId : Any, PageRequestKey : Any, Ite
         id: ItemId,
         prevState: ItemState<ItemValue>,
         itemValue: ItemValue?,
-        event: UpdatingItem.Event<out ItemId, out ItemValue>
+        action: UpdatingItem.Action<out ItemId, out ItemValue>?
     ): ItemState<ItemValue> {
-        val newState = when (event) {
-            is UpdatingItem.Event.Clear -> handleClear(id)
-            is UpdatingItem.Event.Refresh -> handleRefresh(id, prevState)
-            is UpdatingItem.Event.Update -> handleUpdate(id, event.value, prevState)
-            UpdatingItem.Event.Init -> handleItemValueChange(itemValue, prevState)
+        val newState = when (action) {
+            is UpdatingItem.Action.Clear -> handleClear(id)
+            is UpdatingItem.Action.Refresh -> handleRefresh(id, prevState)
+            is UpdatingItem.Action.Update -> handleUpdate(id, action.value, prevState)
+            null -> handleItemValueChange(itemValue, prevState)
         }
 
         return if (newState.item != prevState.item || itemValue != prevState.item) {

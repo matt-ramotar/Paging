@@ -12,6 +12,6 @@ internal interface UpdatingItemPresenter<ItemId : Any, ItemValue : Any> {
     @Composable
     fun present(
         id: ItemId,
-        events: Flow<UpdatingItem.Event<ItemId, ItemValue>>
+        actions: Flow<UpdatingItem.Action<ItemId, ItemValue>>
     ): ItemState<ItemValue>
 }

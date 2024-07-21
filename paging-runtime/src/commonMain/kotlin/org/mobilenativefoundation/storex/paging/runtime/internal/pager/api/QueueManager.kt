@@ -1,7 +1,7 @@
 package org.mobilenativefoundation.storex.paging.runtime.internal.pager.api
 
 
-import org.mobilenativefoundation.storex.paging.runtime.Action
+import org.mobilenativefoundation.storex.paging.runtime.PagingAction
 
 /**
  * Interface for managing queues of load parameters and pending jobs.
@@ -24,14 +24,14 @@ internal interface QueueManager<PageRequestKey: Any> {
      *
      * @param action The action to enqueue.
      */
-    suspend fun enqueueAppend(action: Action.Enqueue<PageRequestKey>)
+    suspend fun enqueueAppend(action: PagingAction.Enqueue<PageRequestKey>)
 
     /**
      * Enqueues a prepend action.
      *
      * @param action The action to enqueue.
      */
-    suspend fun enqueuePrepend(action: Action.Enqueue<PageRequestKey>)
+    suspend fun enqueuePrepend(action: PagingAction.Enqueue<PageRequestKey>)
 
     /**
      * Adds a pending job.

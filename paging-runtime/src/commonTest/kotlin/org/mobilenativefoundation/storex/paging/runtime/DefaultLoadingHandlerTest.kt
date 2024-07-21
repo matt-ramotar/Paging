@@ -131,7 +131,7 @@ class DefaultLoadingHandlerTest {
         verifySuspend(exactly(1)) {
             queueManager.enqueueAppend(
                 eq(
-                    Action.Enqueue(
+                    PagingAction.Enqueue(
                         key = nextKey,
                         direction = direction,
                         strategy = strategy,
@@ -181,7 +181,7 @@ class DefaultLoadingHandlerTest {
         verifySuspend(exactly(1)) {
             queueManager.enqueuePrepend(
                 eq(
-                    Action.Enqueue(
+                    PagingAction.Enqueue(
                         key = prevKey,
                         direction = direction,
                         strategy = strategy,

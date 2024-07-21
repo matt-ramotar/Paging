@@ -2,7 +2,7 @@ package org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl
 
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import org.mobilenativefoundation.storex.paging.runtime.Action
+import org.mobilenativefoundation.storex.paging.runtime.PagingAction
 import org.mobilenativefoundation.storex.paging.runtime.Comparator
 import org.mobilenativefoundation.storex.paging.runtime.PagingSource
 import org.mobilenativefoundation.storex.paging.runtime.internal.logger.api.PagingLogger
@@ -25,7 +25,7 @@ internal class RealQueueManager<PageRequestKey : Any>(
     private val pendingJobManager: PendingJobManager<PageRequestKey> = MutexProtectedPendingJobManager()
     private val mutex = Mutex()
 
-    override suspend fun enqueueAppend(action: Action.Enqueue<PageRequestKey>) = mutex.withLock {
+    override suspend fun enqueueAppend(action: PagingAction.Enqueue<PageRequestKey>) = mutex.withLock {
         logger.debug("Enqueuing append action: $action")
         val element = LoadParamsQueue.Element(
             params = action.toPagingSourceLoadParams(),
@@ -41,7 +41,7 @@ internal class RealQueueManager<PageRequestKey : Any>(
         logger.debug("Append queue size after enqueue: ${appendQueue.size()}")
     }
 
-    override suspend fun enqueuePrepend(action: Action.Enqueue<PageRequestKey>) = mutex.withLock {
+    override suspend fun enqueuePrepend(action: PagingAction.Enqueue<PageRequestKey>) = mutex.withLock {
         logger.debug("Enqueuing prepend action: $action")
         val element = LoadParamsQueue.Element(
             params = action.toPagingSourceLoadParams(),
@@ -85,7 +85,7 @@ internal class RealQueueManager<PageRequestKey : Any>(
         )
     }
 
-    private fun Action.Enqueue<PageRequestKey>.toPagingSourceLoadParams(): PagingSource.LoadParams<PageRequestKey> {
+    private fun PagingAction.Enqueue<PageRequestKey>.toPagingSourceLoadParams(): PagingSource.LoadParams<PageRequestKey> {
         logger.debug("Converting Enqueue action to PagingSource.LoadParams: $this")
         return PagingSource.LoadParams(
             key = key,

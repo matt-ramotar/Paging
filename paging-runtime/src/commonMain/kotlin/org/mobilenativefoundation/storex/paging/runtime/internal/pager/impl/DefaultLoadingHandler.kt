@@ -6,7 +6,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.mobilenativefoundation.storex.paging.custom.Middleware
-import org.mobilenativefoundation.storex.paging.runtime.Action
+import org.mobilenativefoundation.storex.paging.runtime.PagingAction
 import org.mobilenativefoundation.storex.paging.runtime.ErrorHandlingStrategy
 import org.mobilenativefoundation.storex.paging.runtime.LoadDirection
 import org.mobilenativefoundation.storex.paging.runtime.LoadStrategy
@@ -289,7 +289,7 @@ internal class DefaultLoadingHandler<ItemId : Any, PageRequestKey : Any, ItemVal
 
     private suspend fun enqueueNext(key: PageRequestKey, direction: LoadDirection) {
         // Skip cache because these params come from a network response
-        val action = Action.Enqueue(key, direction, LoadStrategy.SkipCache, jump = false)
+        val action = PagingAction.Enqueue(key, direction, LoadStrategy.SkipCache, jump = false)
         logger.debug("Enqueuing next action: $action")
         when (direction) {
             LoadDirection.Append -> queueManager.enqueueAppend(action)

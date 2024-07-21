@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import org.mobilenativefoundation.storex.paging.custom.FetchingStrategy
 import org.mobilenativefoundation.storex.paging.custom.LaunchEffect
-import org.mobilenativefoundation.storex.paging.runtime.Action
+import org.mobilenativefoundation.storex.paging.runtime.PagingAction
 import org.mobilenativefoundation.storex.paging.runtime.Dispatcher
 import org.mobilenativefoundation.storex.paging.runtime.FetchingState
 import org.mobilenativefoundation.storex.paging.runtime.LoadDirection
@@ -44,7 +44,7 @@ internal class RealPager<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
     private val fetchingStrategy: FetchingStrategy<ItemId, PageRequestKey, ItemValue>,
     private val initialLoadParams: PagingSource.LoadParams<PageRequestKey>,
     private val store: NormalizedStore<ItemId, PageRequestKey, ItemValue>,
-    private val actions: Flow<Action<ItemId, PageRequestKey, ItemValue>>,
+    private val actions: Flow<PagingAction<ItemId, PageRequestKey, ItemValue>>,
     private val logger: PagingLogger,
     private val pagingStateManager: PagingStateManager<ItemId, PageRequestKey, ItemValue>,
     private val queueManager: QueueManager<PageRequestKey>,
@@ -72,16 +72,16 @@ internal class RealPager<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
         return updatingItemProvider.get(id)
     }
 
-    override suspend fun dispatch(action: Action<ItemId, PageRequestKey, ItemValue>) {
+    override suspend fun dispatch(action: PagingAction<ItemId, PageRequestKey, ItemValue>) {
         dispatcher.dispatch(action)
     }
 
     /**
      * Composable function that manages the paging state.
-     * @param actions Flow of [Action] objects.
+     * @param actions Flow of [PagingAction] objects.
      */
     @Composable
-    private fun pagingState(actions: Flow<Action<ItemId, PageRequestKey, ItemValue>>): PagingState<ItemId, PageRequestKey, ItemValue> {
+    private fun pagingState(actions: Flow<PagingAction<ItemId, PageRequestKey, ItemValue>>): PagingState<ItemId, PageRequestKey, ItemValue> {
         val fetchingState by fetchingStateHolder.state.collectAsState()
         val pagingState by pagingStateManager.pagingState.collectAsState()
 
@@ -131,7 +131,7 @@ internal class RealPager<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
 
         coroutineScope.launch {
             queueManager.enqueueAppend(
-                Action.Enqueue(
+                PagingAction.Enqueue(
                     key = initialLoadParams.key,
                     strategy = initialLoadParams.strategy,
                     direction = LoadDirection.Append,
@@ -148,19 +148,18 @@ internal class RealPager<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
      *
      * @param actions Flow of paging actions.
      */
-    private suspend fun handleActions(actions: Flow<Action<ItemId, PageRequestKey, ItemValue>>) {
+    private suspend fun handleActions(actions: Flow<PagingAction<ItemId, PageRequestKey, ItemValue>>) {
         actions.distinctUntilChanged().collect { action ->
             logger.debug("Handling action: $action")
 
             when (action) {
-                is Action.ProcessQueue -> handleProcessQueueAction(action)
-                is Action.SkipQueue -> handleSkipQueueAction(action)
-                is Action.Enqueue -> handleEnqueueAction(action)
-                Action.Invalidate -> handleInvalidateAction()
+                is PagingAction.ProcessQueue -> handleProcessQueueAction(action)
+                is PagingAction.SkipQueue -> handleSkipQueueAction(action)
+                is PagingAction.Enqueue -> handleEnqueueAction(action)
+                PagingAction.Invalidate -> handleInvalidateAction()
 
-                is Action.AddOperation -> mutableOperationPipeline.add(action.operation)
-                Action.ClearOperations -> mutableOperationPipeline.clear()
-                is Action.RemoveOperation -> mutableOperationPipeline.remove(action.operation)
+                is PagingAction.AddOperation -> mutableOperationPipeline.add(action.operation)
+                is PagingAction.RemoveOperation -> mutableOperationPipeline.remove(action.operation)
             }
         }
     }
@@ -180,7 +179,7 @@ internal class RealPager<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
      *
      * @param action The process queue action.
      */
-    private suspend fun handleProcessQueueAction(action: Action.ProcessQueue) {
+    private suspend fun handleProcessQueueAction(action: PagingAction.ProcessQueue) {
         logger.debug("Handling ProcessQueue action: $action")
 
         when (action.direction) {
@@ -194,7 +193,7 @@ internal class RealPager<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
      *
      * @param action The skip queue action.
      */
-    private suspend fun handleSkipQueueAction(action: Action.SkipQueue<PageRequestKey>) {
+    private suspend fun handleSkipQueueAction(action: PagingAction.SkipQueue<PageRequestKey>) {
         logger.debug("Handling SkipQueue action: $action")
 
         queueManager.addPendingJob(action.key, inFlight = true)
@@ -213,7 +212,7 @@ internal class RealPager<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
      *
      * @param action The enqueue action.
      */
-    private suspend fun handleEnqueueAction(action: Action.Enqueue<PageRequestKey>) {
+    private suspend fun handleEnqueueAction(action: PagingAction.Enqueue<PageRequestKey>) {
         logger.debug("Handling Enqueue action: $action")
 
         when (action.direction) {
@@ -303,9 +302,9 @@ internal class RealPager<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
 
 
     /**
-     * Converts [Action.SkipQueue] to [PagingSource.LoadParams].
+     * Converts [PagingAction.SkipQueue] to [PagingSource.LoadParams].
      */
-    private fun Action.SkipQueue<PageRequestKey>.toPagingSourceLoadParams(): PagingSource.LoadParams<PageRequestKey> {
+    private fun PagingAction.SkipQueue<PageRequestKey>.toPagingSourceLoadParams(): PagingSource.LoadParams<PageRequestKey> {
         return PagingSource.LoadParams(
             key = key,
             strategy = strategy,

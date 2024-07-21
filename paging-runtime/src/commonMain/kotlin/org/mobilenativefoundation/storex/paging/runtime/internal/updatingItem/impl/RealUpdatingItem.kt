@@ -11,14 +11,14 @@ internal class RealUpdatingItem<ItemId : Any, ItemValue : Any>(
     private val presenter: UpdatingItemPresenter<ItemId, ItemValue>
 ) : UpdatingItem<ItemId, ItemValue> {
 
-    private val _events = MutableSharedFlow<UpdatingItem.Event<ItemId, ItemValue>>(extraBufferCapacity = 20)
+    private val _events = MutableSharedFlow<UpdatingItem.Action<ItemId, ItemValue>>(extraBufferCapacity = 20)
 
     @Composable
     override fun invoke(): ItemState<ItemValue> {
         return presenter.present(id, _events)
     }
 
-    override suspend fun emit(event: UpdatingItem.Event<ItemId, ItemValue>) {
-        _events.emit(event)
+    override suspend fun dispatch(action: UpdatingItem.Action<ItemId, ItemValue>) {
+        _events.emit(action)
     }
 }
