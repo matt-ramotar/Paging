@@ -13,8 +13,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.mobilenativefoundation.storex.paging.persistence.api.DataPersistence
 import org.mobilenativefoundation.storex.paging.persistence.api.PersistenceResult
-import org.mobilenativefoundation.storex.paging.runtime.Identifiable
-import org.mobilenativefoundation.storex.paging.runtime.Identifier
+import org.mobilenativefoundation.storex.paging.runtime.IdExtractor
 import org.mobilenativefoundation.storex.paging.runtime.PagingConfig
 import org.mobilenativefoundation.storex.paging.runtime.PagingSource
 import org.mobilenativefoundation.storex.paging.runtime.PlaceholderFactory
@@ -24,36 +23,37 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.Linke
 import org.mobilenativefoundation.storex.paging.runtime.internal.pagingScope.api.ItemMemoryCache
 import org.mobilenativefoundation.storex.paging.runtime.internal.pagingScope.api.PageMemoryCache
 
-internal class RealLinkedHashMapManager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>>(
-    private val pageMemoryCache: PageMemoryCache<Id, K, V>,
-    private val itemMemoryCache: ItemMemoryCache<Id, V>,
-    private val pagingConfig: PagingConfig<Id, K>,
-    private val persistence: DataPersistence<Id, K, V>?,
+internal class RealLinkedHashMapManager<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
+    private val pageMemoryCache: PageMemoryCache<ItemId, PageRequestKey, ItemValue>,
+    private val itemMemoryCache: ItemMemoryCache<ItemId, ItemValue>,
+    private val pagingConfig: PagingConfig<ItemId, PageRequestKey>,
+    private val persistence: DataPersistence<ItemId, PageRequestKey, ItemValue>?,
     private val logger: PagingLogger,
-    private val placeholderFactory: PlaceholderFactory<Id, K, V>
-) : LinkedHashMapManager<Id, K, V> {
+    private val placeholderFactory: PlaceholderFactory<ItemId, PageRequestKey, ItemValue>,
+    private val idExtractor: IdExtractor<ItemId, ItemValue>
+) : LinkedHashMapManager<ItemId, PageRequestKey, ItemValue> {
 
     // Pushing updates from the memory cache when it's modified
     // More efficient and responsive than polling
-    private val itemUpdates = MutableSharedFlow<Pair<Id, V?>>(
+    private val itemUpdates = MutableSharedFlow<Pair<ItemId, ItemValue?>>(
         extraBufferCapacity = 64,
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
 
     private val mutex = Mutex()
 
-    private var headPage: PageNode<K>? = null
-    private var tailPage: PageNode<K>? = null
+    private var headPage: PageNode<PageRequestKey>? = null
+    private var tailPage: PageNode<PageRequestKey>? = null
 
     private var pageCount: Int = 0
     private var itemCount: Int = 0
 
-    private val pageNodeMap = mutableMapOf<K, PageNode<K>>()
+    private val pageNodeMap = mutableMapOf<PageRequestKey, PageNode<PageRequestKey>>()
 
-    private val keyToParamsMap = mutableMapOf<K, PagingSource.LoadParams<K>>()
-    private val idToKeyMap = mutableMapOf<Id, K>()
+    private val keyToParamsMap = mutableMapOf<PageRequestKey, PagingSource.LoadParams<PageRequestKey>>()
+    private val idToKeyMap = mutableMapOf<ItemId, PageRequestKey>()
 
-    fun getPageNode(key: K): PageNode<K>? {
+    fun getPageNode(key: PageRequestKey): PageNode<PageRequestKey>? {
         return pageNodeMap[key]
     }
 
@@ -61,11 +61,11 @@ internal class RealLinkedHashMapManager<Id : Identifier<Id>, K : Comparable<K>, 
      * This method first checks the in-memory cache, and if the item is not found,
      * it attempts to retrieve it from the persistent storage.
      */
-    override suspend fun getItem(id: Id): V? = mutex.withLock {
+    override suspend fun getItem(id: ItemId): ItemValue? = mutex.withLock {
         return getCachedItem(id) ?: getPersistedItem(id)
     }
 
-    override suspend fun getPersistedItem(id: Id): V? {
+    override suspend fun getPersistedItem(id: ItemId): ItemValue? {
         val result = persistence?.items?.getItem(id) ?: return null
 
         return when (result) {
@@ -86,7 +86,7 @@ internal class RealLinkedHashMapManager<Id : Identifier<Id>, K : Comparable<K>, 
         }
     }
 
-    private suspend fun getPersistedItems(predicate: (V) -> Boolean): List<V>? {
+    private suspend fun getPersistedItems(predicate: (ItemValue) -> Boolean): List<ItemValue>? {
         return when (val result = persistence?.items?.queryItems(predicate)) {
             is PersistenceResult.Error -> {
                 logger.debug("Error querying items: ${result.message}")
@@ -99,15 +99,15 @@ internal class RealLinkedHashMapManager<Id : Identifier<Id>, K : Comparable<K>, 
         }
     }
 
-    override suspend fun getCachedItem(id: Id): V? {
+    override suspend fun getCachedItem(id: ItemId): ItemValue? {
         return itemMemoryCache[id]
     }
 
-    override suspend fun getCachedPage(key: K): PagingSource.LoadResult.Data<Id, K, V>? {
+    override suspend fun getCachedPage(key: PageRequestKey): PagingSource.LoadResult.Data<ItemId, PageRequestKey, ItemValue>? {
         return pageMemoryCache[key]
     }
 
-    override suspend fun getPersistedPage(params: PagingSource.LoadParams<K>): PagingSource.LoadResult.Data<Id, K, V>? {
+    override suspend fun getPersistedPage(params: PagingSource.LoadParams<PageRequestKey>): PagingSource.LoadResult.Data<ItemId, PageRequestKey, ItemValue>? {
         val result = persistence?.pages?.getPage(params) ?: return null
 
         return when (result) {
@@ -128,8 +128,8 @@ internal class RealLinkedHashMapManager<Id : Identifier<Id>, K : Comparable<K>, 
         }
     }
 
-    override suspend fun getItemsInOrder(): List<V?> {
-        val items = mutableListOf<V?>()
+    override suspend fun getItemsInOrder(): List<ItemValue?> {
+        val items = mutableListOf<ItemValue?>()
 
         var current = headPage
 
@@ -141,9 +141,9 @@ internal class RealLinkedHashMapManager<Id : Identifier<Id>, K : Comparable<K>, 
         return items
     }
 
-    private suspend fun getItemsFromCache(key: K): List<V?> {
+    private suspend fun getItemsFromCache(key: PageRequestKey): List<ItemValue?> {
         return pageMemoryCache[key]!!.let { data ->
-            val ids = data.items.map { it.id }
+            val ids = data.items.map { idExtractor.extract(it) }
             ids.map { id ->
                 if (id == pagingConfig.placeholderId) {
                     null
@@ -155,28 +155,30 @@ internal class RealLinkedHashMapManager<Id : Identifier<Id>, K : Comparable<K>, 
     }
 
 
-    override suspend fun putPageNode(key: K, pageNode: PageNode<K>) {
+    override suspend fun putPageNode(key: PageRequestKey, pageNode: PageNode<PageRequestKey>) {
         pageNodeMap[key] = pageNode
     }
 
-    override suspend fun saveItem(item: V) = mutex.withLock {
+    override suspend fun saveItem(item: ItemValue) = mutex.withLock {
+        val itemId = idExtractor.extract(item)
+
         // Save item to memory cache.
-        if (item.id !in itemMemoryCache) {
+        if (itemId !in itemMemoryCache) {
             itemCount++
         }
-        itemMemoryCache[item.id] = item
+        itemMemoryCache[itemId] = item
 
         // Emit update
-        itemUpdates.emit(item.id to item)
+        itemUpdates.emit(itemId to item)
 
         // Save item to database
-        val params = idToKeyMap[item.id]?.let { keyToParamsMap[it] }
+        val params = idToKeyMap[itemId]?.let { keyToParamsMap[it] }
         saveItemToDb(item, params)
     }
 
     private suspend fun saveItemToDb(
-        item: V,
-        params: PagingSource.LoadParams<K>?
+        item: ItemValue,
+        params: PagingSource.LoadParams<PageRequestKey>?
     ): PersistenceResult<Unit> {
         return persistence?.let {
             persistence.items.saveItem(item, params)
@@ -184,8 +186,8 @@ internal class RealLinkedHashMapManager<Id : Identifier<Id>, K : Comparable<K>, 
     }
 
     override suspend fun appendPage(
-        params: PagingSource.LoadParams<K>,
-        loadResult: PagingSource.LoadResult.Data<Id, K, V>
+        params: PagingSource.LoadParams<PageRequestKey>,
+        loadResult: PagingSource.LoadResult.Data<ItemId, PageRequestKey, ItemValue>
     ) {
         val pageNode = if (params.key !in pageNodeMap) {
             val node = PageNode(key = params.key)
@@ -215,8 +217,8 @@ internal class RealLinkedHashMapManager<Id : Identifier<Id>, K : Comparable<K>, 
     }
 
     override suspend fun prependPage(
-        params: PagingSource.LoadParams<K>,
-        loadResult: PagingSource.LoadResult.Data<Id, K, V>
+        params: PagingSource.LoadParams<PageRequestKey>,
+        loadResult: PagingSource.LoadResult.Data<ItemId, PageRequestKey, ItemValue>
     ) {
         val pageNode = if (params.key !in pageNodeMap) {
             val node = PageNode(key = params.key)
@@ -257,7 +259,7 @@ internal class RealLinkedHashMapManager<Id : Identifier<Id>, K : Comparable<K>, 
         }
     }
 
-    override suspend fun prependPlaceholders(params: PagingSource.LoadParams<K>) {
+    override suspend fun prependPlaceholders(params: PagingSource.LoadParams<PageRequestKey>) {
 
         if (pagingConfig.placeholderId == null) {
             return
@@ -280,7 +282,7 @@ internal class RealLinkedHashMapManager<Id : Identifier<Id>, K : Comparable<K>, 
         trimToMaxSize()
     }
 
-    override suspend fun appendPlaceholders(params: PagingSource.LoadParams<K>) {
+    override suspend fun appendPlaceholders(params: PagingSource.LoadParams<PageRequestKey>) {
 
         if (pagingConfig.placeholderId == null) {
             return
@@ -302,7 +304,7 @@ internal class RealLinkedHashMapManager<Id : Identifier<Id>, K : Comparable<K>, 
         pageCount++
     }
 
-    private fun createPlaceholderData(params: PagingSource.LoadParams<K>): PagingSource.LoadResult.Data<Id, K, V> {
+    private fun createPlaceholderData(params: PagingSource.LoadParams<PageRequestKey>): PagingSource.LoadResult.Data<ItemId, PageRequestKey, ItemValue> {
         return PagingSource.LoadResult.Data(
             items = List(pagingConfig.pageSize) { index ->
                 placeholderFactory.create(
@@ -317,14 +319,14 @@ internal class RealLinkedHashMapManager<Id : Identifier<Id>, K : Comparable<K>, 
         )
     }
 
-    override suspend fun removeItem(id: Id) = mutex.withLock {
+    override suspend fun removeItem(id: ItemId) = mutex.withLock {
         // Update pointers
         val key = idToKeyMap[id]
         if (key != null) {
             val page = pageMemoryCache[key]
             if (page != null) {
                 val updatedPageItems = page.items.toMutableList()
-                updatedPageItems.removeAll { it.id == id }
+                updatedPageItems.removeAll { itemValue -> idExtractor.extract(itemValue) == id }
                 if (updatedPageItems.isEmpty()) {
                     // Remove the page too, because it has no items
                     removePage(key)
@@ -346,7 +348,7 @@ internal class RealLinkedHashMapManager<Id : Identifier<Id>, K : Comparable<K>, 
     }
 
 
-    override suspend fun removePage(key: K) {
+    override suspend fun removePage(key: PageRequestKey) {
         pageNodeMap[key]?.let { node ->
             // Update pointers
             if (node.prev == null) {
@@ -366,7 +368,7 @@ internal class RealLinkedHashMapManager<Id : Identifier<Id>, K : Comparable<K>, 
 
             // Remove page's items
             val page = pageMemoryCache[node.key]
-            val pageItemIds = page?.items?.map { it.id }
+            val pageItemIds = page?.items?.map { idExtractor.extract(it) }
             pageItemIds?.forEach { id -> removeItem(id) }
 
             // Remove from memory cache
@@ -378,22 +380,22 @@ internal class RealLinkedHashMapManager<Id : Identifier<Id>, K : Comparable<K>, 
     }
 
     private suspend fun saveNormalizedPageToDb(
-        params: PagingSource.LoadParams<K>,
-        loadResult: PagingSource.LoadResult.Data<Id, K, V>
+        params: PagingSource.LoadParams<PageRequestKey>,
+        loadResult: PagingSource.LoadResult.Data<ItemId, PageRequestKey, ItemValue>
     ) {
         persistence?.let { persistence.pages.savePage(params, loadResult) }
     }
 
-    override suspend fun isInFlight(key: K): Boolean {
+    override suspend fun isInFlight(key: PageRequestKey): Boolean {
         return pageNodeMap[key]?.isInFlight == true
     }
 
-    override suspend fun isCached(key: K): Boolean {
+    override suspend fun isCached(key: PageRequestKey): Boolean {
         val page = pageMemoryCache[key]
         return page != null
     }
 
-    override suspend fun isInDatabase(params: PagingSource.LoadParams<K>): Boolean {
+    override suspend fun isInDatabase(params: PagingSource.LoadParams<PageRequestKey>): Boolean {
         var isInDatabase = false
 
         persistence?.let {
@@ -441,12 +443,12 @@ internal class RealLinkedHashMapManager<Id : Identifier<Id>, K : Comparable<K>, 
         removeAllPages()
     }
 
-    override suspend fun queryItems(predicate: (V) -> Boolean): PersistenceResult<List<V>> =
+    override suspend fun queryItems(predicate: (ItemValue) -> Boolean): PersistenceResult<List<ItemValue>> =
         mutex.withLock {
             val cachedItems = itemMemoryCache.values.filter(predicate)
             val persistedItems = getPersistedItems(predicate) ?: emptyList()
 
-            val combinedItems = (cachedItems + persistedItems).distinctBy { it.id }
+            val combinedItems = (cachedItems + persistedItems).distinctBy { idExtractor.extract(it) }
 
             PersistenceResult.Success(combinedItems)
         }
@@ -459,7 +461,7 @@ internal class RealLinkedHashMapManager<Id : Identifier<Id>, K : Comparable<K>, 
      * @param id The identifier of the item to observe.
      * @return A Flow emitting the latest state of the item, or null if the item is deleted.
      */
-    override fun observeItem(id: Id): Flow<V?> = flow {
+    override fun observeItem(id: ItemId): Flow<ItemValue?> = flow {
         // Emit the initial value
         emit(getItem(id))
 

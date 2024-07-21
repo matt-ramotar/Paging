@@ -1,7 +1,6 @@
 package org.mobilenativefoundation.storex.paging.custom
 
 import org.mobilenativefoundation.storex.paging.runtime.FetchingState
-import org.mobilenativefoundation.storex.paging.runtime.Identifier
 import org.mobilenativefoundation.storex.paging.runtime.PagingSource
 import org.mobilenativefoundation.storex.paging.runtime.PagingState
 
@@ -15,10 +14,10 @@ import org.mobilenativefoundation.storex.paging.runtime.PagingState
  * For example, you can fetch more data when the user scrolls near the end of the currently loaded data,
  * or when a certain number of items are remaining in the buffer.
  *
- * @param Id The type of the item identifier.
- * @param K The type of the paging key.
+ * @param ItemId The type of the item identifier.
+ * @param PageRequestKey The type of the paging key.
  */
-interface FetchingStrategy<Id : Identifier<*>, K : Any> {
+interface FetchingStrategy<ItemId : Any, PageRequestKey : Any> {
 
     /**
      * Determines whether to fetch more data in the forward direction based on the current state of the pager.
@@ -29,9 +28,9 @@ interface FetchingStrategy<Id : Identifier<*>, K : Any> {
      * @return true if more data should be fetched, false otherwise.
      */
     fun shouldFetchForward(
-        params: PagingSource.LoadParams<K>,
-        pagingState: PagingState<Id>,
-        fetchingState: FetchingState<Id, K>,
+        params: PagingSource.LoadParams<PageRequestKey>,
+        pagingState: PagingState<ItemId>,
+        fetchingState: FetchingState<ItemId, PageRequestKey>,
     ): Boolean
 
     /**
@@ -43,8 +42,8 @@ interface FetchingStrategy<Id : Identifier<*>, K : Any> {
      * @return true if more data should be fetched, false otherwise.
      */
     fun shouldFetchBackward(
-        params: PagingSource.LoadParams<K>,
-        pagingState: PagingState<Id>,
-        fetchingState: FetchingState<Id, K>,
+        params: PagingSource.LoadParams<PageRequestKey>,
+        pagingState: PagingState<ItemId>,
+        fetchingState: FetchingState<ItemId, PageRequestKey>,
     ): Boolean
 }

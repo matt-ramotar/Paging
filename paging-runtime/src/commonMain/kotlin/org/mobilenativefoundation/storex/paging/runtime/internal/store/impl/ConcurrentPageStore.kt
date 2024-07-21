@@ -7,8 +7,7 @@ import kotlinx.coroutines.sync.withLock
 import org.mobilenativefoundation.storex.paging.custom.SideEffect
 import org.mobilenativefoundation.storex.paging.persistence.api.PagePersistence
 import org.mobilenativefoundation.storex.paging.persistence.api.PersistenceResult
-import org.mobilenativefoundation.storex.paging.runtime.Identifiable
-import org.mobilenativefoundation.storex.paging.runtime.Identifier
+import org.mobilenativefoundation.storex.paging.runtime.IdExtractor
 import org.mobilenativefoundation.storex.paging.runtime.ItemSnapshotList
 import org.mobilenativefoundation.storex.paging.runtime.LoadDirection
 import org.mobilenativefoundation.storex.paging.runtime.LoadStrategy
@@ -28,24 +27,25 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.PageS
  * efficient and reliable page management. It ensures thread-safety through the use
  * of a Mutex for all operations that modify shared state.
  *
- * @param Id The type of the item identifier.
- * @param K The type of the paging key.
- * @param V The type of the item value.
+ * @param ItemId The type of the item identifier.
+ * @param PageRequestKey The type of the paging key.
+ * @param ItemValue The type of the item value.
  * @property pageMemoryCache In-memory cache for quick access to pages.
  * @property pagePersistence Persistent storage layer for pages.
  * @property fetchingStateHolder Holder for the current fetching state.
  * @property pagingConfig Configuration for paging behavior.
  */
-internal class ConcurrentPageStore<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>>(
-    private val pageMemoryCache: PageMemoryCache<Id, K, V>,
-    private val pagePersistence: PagePersistence<Id, K, V>,
-    private val fetchingStateHolder: FetchingStateHolder<Id, K>,
-    private val pagingConfig: PagingConfig<Id, K>,
-    private val sideEffects: List<SideEffect<Id, V>>,
-    private val pagingSource: PagingSource<Id, K, V>,
-    private val linkedHashMapManager: LinkedHashMapManager<Id, K, V>,
-    private val logger: PagingLogger
-) : PageStore<Id, K, V> {
+internal class ConcurrentPageStore<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
+    private val pageMemoryCache: PageMemoryCache<ItemId, PageRequestKey, ItemValue>,
+    private val pagePersistence: PagePersistence<ItemId, PageRequestKey, ItemValue>,
+    private val fetchingStateHolder: FetchingStateHolder<ItemId, PageRequestKey>,
+    private val pagingConfig: PagingConfig<ItemId, PageRequestKey>,
+    private val sideEffects: List<SideEffect<ItemId, ItemValue>>,
+    private val pagingSource: PagingSource<ItemId, PageRequestKey, ItemValue>,
+    private val linkedHashMapManager: LinkedHashMapManager<ItemId, PageRequestKey, ItemValue>,
+    private val logger: PagingLogger,
+    private val idExtractor: IdExtractor<ItemId, ItemValue>
+) : PageStore<ItemId, PageRequestKey, ItemValue> {
 
     // Mutex for ensuring thread-safe access to shared resources
     private val mutex = Mutex()
@@ -59,7 +59,7 @@ internal class ConcurrentPageStore<Id : Identifier<Id>, K : Comparable<K>, V : I
      * @param params The load parameters for the page.
      * @return A Flow emitting the PageLoadState for the requested page.
      */
-    override suspend fun loadPage(params: PagingSource.LoadParams<K>): Flow<PageLoadState<Id, K, V>> =
+    override suspend fun loadPage(params: PagingSource.LoadParams<PageRequestKey>): Flow<PageLoadState<ItemId, PageRequestKey, ItemValue>> =
         flow {
             mutex.withLock {
                 // Emit initial processing state
@@ -140,7 +140,7 @@ internal class ConcurrentPageStore<Id : Identifier<Id>, K : Comparable<K>, V : I
      *
      * @param key The key of the page to clear.
      */
-    override suspend fun clearPage(key: K) {
+    override suspend fun clearPage(key: PageRequestKey) {
         logger.debug("Clearing page for key: $key")
         mutex.withLock {
             pageMemoryCache.remove(key)
@@ -171,7 +171,7 @@ internal class ConcurrentPageStore<Id : Identifier<Id>, K : Comparable<K>, V : I
      * @param params The load parameters to check.
      * @return True if placeholders should be added, false otherwise.
      */
-    private fun shouldAddPlaceholders(params: PagingSource.LoadParams<K>): Boolean {
+    private fun shouldAddPlaceholders(params: PagingSource.LoadParams<PageRequestKey>): Boolean {
         val placeholdersAreEnabled = pagingConfig.placeholderId != null
         val mightFetchFromRemote = params.strategy != LoadStrategy.LocalOnly
         val should = placeholdersAreEnabled && mightFetchFromRemote
@@ -184,7 +184,7 @@ internal class ConcurrentPageStore<Id : Identifier<Id>, K : Comparable<K>, V : I
      *
      * @param params The load parameters for which to add placeholders.
      */
-    private suspend fun addPlaceholders(params: PagingSource.LoadParams<K>) {
+    private suspend fun addPlaceholders(params: PagingSource.LoadParams<PageRequestKey>) {
         logger.debug("Adding placeholders for params: $params")
         when (params.direction) {
             LoadDirection.Prepend -> linkedHashMapManager.prependPlaceholders(params)
@@ -200,9 +200,9 @@ internal class ConcurrentPageStore<Id : Identifier<Id>, K : Comparable<K>, V : I
      * @return A PageLoadState.Success instance.
      */
     private fun createSuccessState(
-        page: PagingSource.LoadResult.Data<Id, K, V>,
+        page: PagingSource.LoadResult.Data<ItemId, PageRequestKey, ItemValue>,
         source: PageLoadState.Success.Source
-    ): PageLoadState.Success<Id, K, V> {
+    ): PageLoadState.Success<ItemId, PageRequestKey, ItemValue> {
 
         val snapshot = takeSnapshot(page)
 
@@ -217,11 +217,11 @@ internal class ConcurrentPageStore<Id : Identifier<Id>, K : Comparable<K>, V : I
         }
     }
 
-    private fun takeSnapshot(page: PagingSource.LoadResult.Data<Id, K, V>): ItemSnapshotList<Id, V> {
-        return ItemSnapshotList(page.items)
+    private fun takeSnapshot(page: PagingSource.LoadResult.Data<ItemId, PageRequestKey, ItemValue>): ItemSnapshotList<ItemId, ItemValue> {
+        return ItemSnapshotList(page.items, idExtractor)
     }
 
-    private fun launchSideEffects(snapshot: ItemSnapshotList<Id, V>) {
+    private fun launchSideEffects(snapshot: ItemSnapshotList<ItemId, ItemValue>) {
         sideEffects.forEachIndexed { index, sideEffect ->
             logger.debug("Launching side effect #$index")
             sideEffect.invoke(snapshot)
@@ -233,7 +233,7 @@ internal class ConcurrentPageStore<Id : Identifier<Id>, K : Comparable<K>, V : I
      * @param params The load parameters for the page to fetch.
      * @return A [PagingSource.LoadResult] instance.
      */
-    private suspend fun loadPageFromRemote(params: PagingSource.LoadParams<K>): PagingSource.LoadResult<Id, K, V> {
+    private suspend fun loadPageFromRemote(params: PagingSource.LoadParams<PageRequestKey>): PagingSource.LoadResult<ItemId, PageRequestKey, ItemValue> {
         return pagingSource.load(params)
     }
 }

@@ -1,6 +1,6 @@
 package org.mobilenativefoundation.storex.paging.runtime
 
-sealed class Action<out K : Any> {
+sealed class Action<out PageRequestKey : Any> {
 
     data class ProcessQueue internal constructor(
         val direction: LoadDirection

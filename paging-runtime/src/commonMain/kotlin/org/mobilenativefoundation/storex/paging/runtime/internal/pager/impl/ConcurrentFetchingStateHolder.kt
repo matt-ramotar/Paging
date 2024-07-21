@@ -5,24 +5,26 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.mobilenativefoundation.storex.paging.runtime.Comparator
 import org.mobilenativefoundation.storex.paging.runtime.FetchingState
-import org.mobilenativefoundation.storex.paging.runtime.Identifier
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.FetchingStateHolder
 
 /**
  * A thread-safe implementation of FetchingStateHolder that manages the fetching state
  * for a paging system.
  *
- * @param Id The type of the item identifier.
- * @param K The type of the paging key.
+ * @param ItemId The type of the item identifier.
+ * @param PageRequestKey The type of the paging key.
  * @param initialState The initial fetching state.
  */
-class ConcurrentFetchingStateHolder<Id : Identifier<Id>, K : Comparable<K>>(
-    initialState: FetchingState<Id, K>
-) : FetchingStateHolder<Id, K> {
+class ConcurrentFetchingStateHolder<ItemId : Any, PageRequestKey : Any>(
+    initialState: FetchingState<ItemId, PageRequestKey>,
+    private val itemIdComparator: Comparator<ItemId>,
+    private val pageRequestKeyComparator: Comparator<PageRequestKey>
+) : FetchingStateHolder<ItemId, PageRequestKey> {
 
     private val _state = MutableStateFlow(initialState)
-    override val state: StateFlow<FetchingState<Id, K>> = _state.asStateFlow()
+    override val state: StateFlow<FetchingState<ItemId, PageRequestKey>> = _state.asStateFlow()
 
     // Mutex for ensuring thread-safe access to mutable state
     private val mutex = Mutex()
@@ -32,7 +34,7 @@ class ConcurrentFetchingStateHolder<Id : Identifier<Id>, K : Comparable<K>>(
      *
      * @param reducer A function that takes the previous state and returns a new state.
      */
-    override suspend fun update(reducer: (prevState: FetchingState<Id, K>) -> FetchingState<Id, K>) {
+    override suspend fun update(reducer: (prevState: FetchingState<ItemId, PageRequestKey>) -> FetchingState<ItemId, PageRequestKey>) {
         mutex.withLock {
             _state.value = reducer(_state.value)
         }
@@ -43,7 +45,7 @@ class ConcurrentFetchingStateHolder<Id : Identifier<Id>, K : Comparable<K>>(
      *
      * @param nextState The new fetching state.
      */
-    override suspend fun update(nextState: FetchingState<Id, K>) {
+    override suspend fun update(nextState: FetchingState<ItemId, PageRequestKey>) {
         mutex.withLock {
             _state.value = nextState
         }
@@ -54,9 +56,9 @@ class ConcurrentFetchingStateHolder<Id : Identifier<Id>, K : Comparable<K>>(
      *
      * @param id The ID of the item accessed.
      */
-    override suspend fun updateMaxItemAccessedSoFar(id: Id) {
+    override suspend fun updateMaxItemAccessedSoFar(id: ItemId) {
         update { prevState ->
-            prevState.copy(maxItemAccessedSoFar = maxOf(prevState.maxItemAccessedSoFar, id))
+            prevState.copy(maxItemAccessedSoFar = maxOfItemId(prevState.maxItemAccessedSoFar, id))
         }
     }
 
@@ -65,9 +67,9 @@ class ConcurrentFetchingStateHolder<Id : Identifier<Id>, K : Comparable<K>>(
      *
      * @param id The ID of the item accessed.
      */
-    override suspend fun updateMinItemAccessedSoFar(id: Id) {
+    override suspend fun updateMinItemAccessedSoFar(id: ItemId) {
         update { prevState ->
-            prevState.copy(minItemAccessedSoFar = minOf(prevState.minItemAccessedSoFar, id))
+            prevState.copy(minItemAccessedSoFar = minOfItemId(prevState.minItemAccessedSoFar, id))
         }
     }
 
@@ -76,9 +78,9 @@ class ConcurrentFetchingStateHolder<Id : Identifier<Id>, K : Comparable<K>>(
      *
      * @param key The paging key requested.
      */
-    override suspend fun updateMaxRequestSoFar(key: K) {
+    override suspend fun updateMaxRequestSoFar(key: PageRequestKey) {
         update { prevState ->
-            prevState.copy(maxRequestSoFar = maxOf(prevState.maxRequestSoFar, key))
+            prevState.copy(maxRequestSoFar = maxOfPageRequestKey(prevState.maxRequestSoFar, key))
         }
     }
 
@@ -87,9 +89,9 @@ class ConcurrentFetchingStateHolder<Id : Identifier<Id>, K : Comparable<K>>(
      *
      * @param key The paging key requested.
      */
-    override suspend fun updateMinRequestSoFar(key: K) {
+    override suspend fun updateMinRequestSoFar(key: PageRequestKey) {
         update { prevState ->
-            prevState.copy(minRequestSoFar = minOf(prevState.minRequestSoFar, key))
+            prevState.copy(minRequestSoFar = minOfPageRequestKey(prevState.minRequestSoFar, key))
         }
     }
 
@@ -98,9 +100,9 @@ class ConcurrentFetchingStateHolder<Id : Identifier<Id>, K : Comparable<K>>(
      *
      * @param id The ID of the item loaded.
      */
-    override suspend fun updateMinItemLoadedSoFar(id: Id) {
+    override suspend fun updateMinItemLoadedSoFar(id: ItemId) {
         update { prevState ->
-            prevState.copy(minItemLoadedSoFar = minOf(prevState.minItemLoadedSoFar, id))
+            prevState.copy(minItemLoadedSoFar = minOfItemId(prevState.minItemLoadedSoFar, id))
         }
     }
 
@@ -109,39 +111,39 @@ class ConcurrentFetchingStateHolder<Id : Identifier<Id>, K : Comparable<K>>(
      *
      * @param id The ID of the item loaded.
      */
-    override suspend fun updateMaxItemLoadedSoFar(id: Id) {
+    override suspend fun updateMaxItemLoadedSoFar(id: ItemId) {
         update { prevState ->
-            prevState.copy(maxItemLoadedSoFar = maxOf(prevState.maxItemLoadedSoFar, id))
+            prevState.copy(maxItemLoadedSoFar = maxOfItemId(prevState.maxItemLoadedSoFar, id))
         }
     }
 
-    private fun maxOf(a: Id?, b: Id): Id {
+    private fun maxOfItemId(a: ItemId?, b: ItemId): ItemId {
 
         return when {
             a == null -> b
-            else -> if (a > b) a else b
+            else -> if (itemIdComparator.compare(a, b) > 0) a else b
         }
     }
 
-    private fun minOf(a: Id?, b: Id): Id {
+    private fun minOfItemId(a: ItemId?, b: ItemId): ItemId {
         return when {
             a == null -> b
-            else -> if (a < b) a else b
+            else -> if (itemIdComparator.compare(a, b) < 0) a else b
         }
     }
 
-    private fun maxOf(a: K?, b: K): K {
+    private fun maxOfPageRequestKey(a: PageRequestKey?, b: PageRequestKey): PageRequestKey {
 
         return when {
             a == null -> b
-            else -> if (a > b) a else b
+            else -> if (pageRequestKeyComparator.compare(a, b) > 0) a else b
         }
     }
 
-    private fun minOf(a: K?, b: K): K {
+    private fun minOfPageRequestKey(a: PageRequestKey?, b: PageRequestKey): PageRequestKey {
         return when {
             a == null -> b
-            else -> if (a < b) a else b
+            else -> if (pageRequestKeyComparator.compare(a, b) < 0) a else b
         }
     }
 }

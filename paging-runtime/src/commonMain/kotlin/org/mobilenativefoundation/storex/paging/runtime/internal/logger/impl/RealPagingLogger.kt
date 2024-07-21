@@ -19,6 +19,12 @@ class RealPagingLogger(
         }
     }
 
+    override fun warn(message: String) {
+        if (severity.ordinal >= Severity.Warn.ordinal) {
+            Logger.w("storex/paging") { message }
+        }
+    }
+
     override fun verbose(message: String) {
         if (severity.ordinal >= Severity.Verbose.ordinal) {
             Logger.v("storex/paging") { message }

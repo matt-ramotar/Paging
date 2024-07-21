@@ -15,8 +15,6 @@ import org.mobilenativefoundation.storex.paging.custom.FetchingStrategy
 import org.mobilenativefoundation.storex.paging.custom.LaunchEffect
 import org.mobilenativefoundation.storex.paging.runtime.Action
 import org.mobilenativefoundation.storex.paging.runtime.FetchingState
-import org.mobilenativefoundation.storex.paging.runtime.Identifiable
-import org.mobilenativefoundation.storex.paging.runtime.Identifier
 import org.mobilenativefoundation.storex.paging.runtime.LoadDirection
 import org.mobilenativefoundation.storex.paging.runtime.Pager
 import org.mobilenativefoundation.storex.paging.runtime.PagingSource
@@ -35,20 +33,20 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.Norma
  * Implementation of [Pager] that coordinates paging operations.
 
  */
-internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>>(
+internal class RealPager<ItemId: Any, PageRequestKey: Any, ItemValue: Any>(
     recompositionMode: RecompositionMode,
-    private val fetchingStateHolder: FetchingStateHolder<Id, K>,
+    private val fetchingStateHolder: FetchingStateHolder<ItemId, PageRequestKey>,
     private val launchEffects: List<LaunchEffect>,
-    private val fetchingStrategy: FetchingStrategy<Id, K>,
-    private val initialLoadParams: PagingSource.LoadParams<K>,
-    private val store: NormalizedStore<Id, K, V>,
-    private val actions: Flow<Action<K>>,
+    private val fetchingStrategy: FetchingStrategy<ItemId, PageRequestKey>,
+    private val initialLoadParams: PagingSource.LoadParams<PageRequestKey>,
+    private val store: NormalizedStore<ItemId, PageRequestKey, ItemValue>,
+    private val actions: Flow<Action<PageRequestKey>>,
     private val logger: PagingLogger,
-    private val pagingStateManager: PagingStateManager<Id>,
-    private val queueManager: QueueManager<K>,
-    private val loadingHandler: LoadingHandler<Id, K, V>,
+    private val pagingStateManager: PagingStateManager<ItemId>,
+    private val queueManager: QueueManager<PageRequestKey>,
+    private val loadingHandler: LoadingHandler<ItemId, PageRequestKey, ItemValue>,
     private val coroutineScope: CoroutineScope,
-) : Pager<Id> {
+) : Pager<ItemId> {
 
     init {
 
@@ -58,7 +56,7 @@ internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
         handleEagerLoading()
     }
 
-    override val state: StateFlow<PagingState<Id>> =
+    override val state: StateFlow<PagingState<ItemId>> =
         coroutineScope.launchMolecule(recompositionMode.toCash()) {
             pagingState(actions)
         }
@@ -68,7 +66,7 @@ internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
      * @param actions Flow of [Action] objects.
      */
     @Composable
-    private fun pagingState(actions: Flow<Action<K>>): PagingState<Id> {
+    private fun pagingState(actions: Flow<Action<PageRequestKey>>): PagingState<ItemId> {
         val fetchingState by fetchingStateHolder.state.collectAsState()
         val pagingState by pagingStateManager.pagingState.collectAsState()
 
@@ -135,7 +133,7 @@ internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
      *
      * @param actions Flow of paging actions.
      */
-    private suspend fun handleActions(actions: Flow<Action<K>>) {
+    private suspend fun handleActions(actions: Flow<Action<PageRequestKey>>) {
         actions.distinctUntilChanged().collect { action ->
             logger.debug("Handling action: $action")
 
@@ -177,7 +175,7 @@ internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
      *
      * @param action The skip queue action.
      */
-    private suspend fun handleSkipQueueAction(action: Action.SkipQueue<K>) {
+    private suspend fun handleSkipQueueAction(action: Action.SkipQueue<PageRequestKey>) {
         logger.debug("Handling SkipQueue action: $action")
 
         queueManager.addPendingJob(action.key, inFlight = true)
@@ -196,7 +194,7 @@ internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
      *
      * @param action The enqueue action.
      */
-    private suspend fun handleEnqueueAction(action: Action.Enqueue<K>) {
+    private suspend fun handleEnqueueAction(action: Action.Enqueue<PageRequestKey>) {
         logger.debug("Handling Enqueue action: $action")
 
         when (action.direction) {
@@ -267,9 +265,9 @@ internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
      * @return True if we should fetch more data, false otherwise.
      */
     private fun shouldFetchForward(
-        queueElement: LoadParamsQueue.Element<K>,
-        pagingState: PagingState<Id>,
-        fetchingState: FetchingState<Id, K>
+        queueElement: LoadParamsQueue.Element<PageRequestKey>,
+        pagingState: PagingState<ItemId>,
+        fetchingState: FetchingState<ItemId, PageRequestKey>
     ): Boolean {
         val shouldFetch =
             queueElement.mechanism == LoadParamsQueue.Element.Mechanism.EnqueueRequest ||
@@ -288,7 +286,7 @@ internal class RealPager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiabl
     /**
      * Converts [Action.SkipQueue] to [PagingSource.LoadParams].
      */
-    private fun Action.SkipQueue<K>.toPagingSourceLoadParams(): PagingSource.LoadParams<K> {
+    private fun Action.SkipQueue<PageRequestKey>.toPagingSourceLoadParams(): PagingSource.LoadParams<PageRequestKey> {
         return PagingSource.LoadParams(
             key = key,
             strategy = strategy,

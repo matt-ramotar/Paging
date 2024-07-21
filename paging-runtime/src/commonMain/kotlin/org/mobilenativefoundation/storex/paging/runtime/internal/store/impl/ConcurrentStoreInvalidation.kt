@@ -6,8 +6,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.mobilenativefoundation.storex.paging.persistence.api.PersistenceResult
-import org.mobilenativefoundation.storex.paging.runtime.Identifiable
-import org.mobilenativefoundation.storex.paging.runtime.Identifier
 import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.ItemStore
 import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.PageStore
 import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.StoreInvalidation
@@ -22,9 +20,9 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.Store
  * @param itemStore The store managing individual items.
  * @param pageStore The store managing pages of items.
  */
-internal class ConcurrentStoreInvalidation<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>>(
-    private val itemStore: ItemStore<Id, K, V>,
-    private val pageStore: PageStore<Id, K, V>
+internal class ConcurrentStoreInvalidation<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
+    private val itemStore: ItemStore<ItemId, PageRequestKey, ItemValue>,
+    private val pageStore: PageStore<ItemId, PageRequestKey, ItemValue>
 ) : StoreInvalidation {
 
     // Mutex for ensuring thread-safe access to shared resources

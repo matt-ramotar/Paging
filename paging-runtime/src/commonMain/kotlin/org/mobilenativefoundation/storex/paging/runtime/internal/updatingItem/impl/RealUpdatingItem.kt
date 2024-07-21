@@ -2,25 +2,23 @@ package org.mobilenativefoundation.storex.paging.runtime.internal.updatingItem.i
 
 import androidx.compose.runtime.Composable
 import kotlinx.coroutines.flow.MutableSharedFlow
-import org.mobilenativefoundation.storex.paging.runtime.Identifiable
-import org.mobilenativefoundation.storex.paging.runtime.Identifier
 import org.mobilenativefoundation.storex.paging.runtime.ItemState
 import org.mobilenativefoundation.storex.paging.runtime.UpdatingItem
 import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.UpdatingItemPresenter
 
-internal class RealUpdatingItem<Id : Identifier<Id>, V : Identifiable<Id>>(
-    private val id: Id,
-    private val presenter: UpdatingItemPresenter<Id, V>
-) : UpdatingItem<Id, V> {
+internal class RealUpdatingItem<ItemId : Any, ItemValue : Any>(
+    private val id: ItemId,
+    private val presenter: UpdatingItemPresenter<ItemId, ItemValue>
+) : UpdatingItem<ItemId, ItemValue> {
 
-    private val _events = MutableSharedFlow<UpdatingItem.Event<Id, V>>(extraBufferCapacity = 20)
+    private val _events = MutableSharedFlow<UpdatingItem.Event<ItemId, ItemValue>>(extraBufferCapacity = 20)
 
     @Composable
-    override fun invoke(): ItemState<Id, V> {
+    override fun invoke(): ItemState<ItemValue> {
         return presenter.present(id, _events)
     }
 
-    override suspend fun emit(event: UpdatingItem.Event<Id, V>) {
+    override suspend fun emit(event: UpdatingItem.Event<ItemId, ItemValue>) {
         _events.emit(event)
     }
 }

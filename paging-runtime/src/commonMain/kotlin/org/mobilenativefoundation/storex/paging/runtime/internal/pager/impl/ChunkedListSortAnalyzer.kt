@@ -2,7 +2,7 @@ package org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl
 
 import kotlinx.atomicfu.atomic
 import kotlinx.atomicfu.update
-import org.mobilenativefoundation.storex.paging.runtime.Identifier
+import org.mobilenativefoundation.storex.paging.runtime.Comparator
 import org.mobilenativefoundation.storex.paging.runtime.internal.logger.api.PagingLogger
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.ListSortAnalyzer
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.ListSortAnalyzer.Order
@@ -11,7 +11,7 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl.Chun
 
 
 /**
- * Thread-safe implementation of [ListSortAnalyzer] optimized for large lists of [Id]s.
+ * Thread-safe implementation of [ListSortAnalyzer] optimized for large lists of [ItemId]s.
  *
  * This class uses a chunk-based caching strategy to efficiently analyze and cache [Order]:
  * 1. It divides the input list into smaller chunks based on [chunkSize].
@@ -25,16 +25,17 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl.Chun
  * 3. **Extra function calls**: Costs of calls to [invoke], [determineOrder], [determineOverallOrder] will be more noticeable with smaller lists.
  * 4. **Memory usage**: Creating [ChunkInfo] and [CacheEntry] objects is unnecessary for smaller lists and wastes memory.
  *
- * @param Id The type of the identifier for items in the dataset, must implement [Identifier].
+ * @param ItemId The type of the identifier for items in the dataset, must implement [Identifier].
  * @property logger A [PagingLogger] instance for debug logging.
  * @property chunkSize The size of each chunk when processing the list. Default is 100.
  *
  * @see [DefaultListSortAnalyzer]
  */
-class ChunkedListSortAnalyzer<Id : Identifier<Id>>(
+class ChunkedListSortAnalyzer<ItemId : Any>(
     private val logger: PagingLogger,
+    private val itemIdComparator: Comparator<ItemId>,
     private val chunkSize: Int = 100 // TODO(): Adaptive chunk sizes based on input list size could optimize performance for varying input sizes.
-) : ListSortAnalyzer<Id> {
+) : ListSortAnalyzer<ItemId> {
 
     /**
      * Represents information about a single chunk of the input list.
@@ -54,7 +55,7 @@ class ChunkedListSortAnalyzer<Id : Identifier<Id>>(
 
 
     // Thread-safe atomic reference to the cached entry
-    private val cache = atomic<CacheEntry<Id>?>(null)
+    private val cache = atomic<CacheEntry<ItemId>?>(null)
 
     /**
      * Determines the sort order of the given list of identifiers.
@@ -66,7 +67,7 @@ class ChunkedListSortAnalyzer<Id : Identifier<Id>>(
      * @param ids The list of identifiers to analyze.
      * @return The determined [ListSortAnalyzer.Order] of the input list.
      */
-    override operator fun invoke(ids: List<Id?>): Order {
+    override operator fun invoke(ids: List<ItemId?>): Order {
         // Quick return if it's not yet possible to determine sort order
         if (ids.size < 2) return Order.UNKNOWN
 
@@ -109,7 +110,7 @@ class ChunkedListSortAnalyzer<Id : Identifier<Id>>(
      * @param chunk A list of identifiers representing a chunk of the original input.
      * @return The [Order] of the chunk.
      */
-    private fun determineOrder(chunk: List<Id?>): Order {
+    private fun determineOrder(chunk: List<ItemId?>): Order {
         var ascending = true
         var descending = true
 
@@ -125,14 +126,13 @@ class ChunkedListSortAnalyzer<Id : Identifier<Id>>(
             // Only check if ascending not already ruled out
             if (ascending) {
                 // Check if the order violates ascending
-                if (current >= next) ascending = false
+                if (itemIdComparator.compare(current, next) >= 0) ascending = false
             }
 
             // Only check if descending not already ruled out
             if (descending) {
                 // Check if the order violates descending
-                if (current <= next) descending = false
-
+                if (itemIdComparator.compare(current, next) <= 0) descending = false
             }
 
             // Break if now unsorted

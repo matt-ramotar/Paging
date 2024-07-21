@@ -8,15 +8,15 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.Pendi
 /**
  * Implementation of PendingJobManager using a mutex-protected map.
  */
-class MutexProtectedPendingJobManager<K : Any> : PendingJobManager<K> {
-    private val pendingJobs = HashMap<K, PendingSkipQueueJob<K>>()
+class MutexProtectedPendingJobManager<PageRequestKey : Any> : PendingJobManager<PageRequestKey> {
+    private val pendingJobs = HashMap<PageRequestKey, PendingSkipQueueJob<PageRequestKey>>()
     private val mutex = Mutex()
 
-    override suspend fun addPendingJob(key: K, inFlight: Boolean) = mutex.withLock {
+    override suspend fun addPendingJob(key: PageRequestKey, inFlight: Boolean) = mutex.withLock {
         pendingJobs[key] = PendingSkipQueueJob(key, inFlight)
     }
 
-    override suspend fun updateExistingJob(key: K, inFlight: Boolean, completed: Boolean) =
+    override suspend fun updateExistingJob(key: PageRequestKey, inFlight: Boolean, completed: Boolean) =
         mutex.withLock {
             if (key !in pendingJobs) return@withLock
             if (completed) {

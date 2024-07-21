@@ -1,7 +1,7 @@
 package org.mobilenativefoundation.storex.paging.runtime
 
-data class ItemState<Id : Identifier<*>, V : Identifiable<Id>>(
-    val item: V?,
+data class ItemState<ItemValue : Any>(
+    val item: ItemValue?,
     val loadState: SingleLoadState,
     // TODO(): When do we update version?
     val itemVersion: Long = 0,
@@ -9,27 +9,27 @@ data class ItemState<Id : Identifier<*>, V : Identifiable<Id>>(
 
     fun isPlaceholder(): Boolean {
         return item == null &&
-                (loadState == SingleLoadState.Initial ||
-                        loadState == SingleLoadState.Loading ||
-                        loadState is SingleLoadState.Refreshing)
+            (loadState == SingleLoadState.Initial ||
+                loadState == SingleLoadState.Loading ||
+                loadState is SingleLoadState.Refreshing)
     }
 
     companion object {
-        fun <Id : Identifier<*>, V : Identifiable<Id>> initial() =
-            ItemState<Id, V>(null, SingleLoadState.Initial)
+        fun <ItemValue : Any> initial() =
+            ItemState<ItemValue>(null, SingleLoadState.Initial)
 
-        fun <Id : Identifier<*>, V : Identifiable<Id>> loaded(
-            item: V,
+        fun <ItemValue : Any> loaded(
+            item: ItemValue,
             version: Long
-        ) = ItemState<Id, V>(item, SingleLoadState.Loaded, version)
+        ) = ItemState<ItemValue>(item, SingleLoadState.Loaded, version)
 
-        fun <Id : Identifier<*>, V : Identifiable<Id>> loading(
-            item: V?,
+        fun <ItemValue : Any> loading(
+            item: ItemValue?,
             version: Long
-        ) = ItemState<Id, V>(item, SingleLoadState.Loading, version)
+        ) = ItemState<ItemValue>(item, SingleLoadState.Loading, version)
 
-        fun <Id : Identifier<*>, V : Identifiable<Id>> errorRefreshing(
-            item: V?,
+        fun <ItemValue : Any> errorRefreshing(
+            item: ItemValue?,
             error: Throwable,
             version: Long
         ) = ItemState(
@@ -38,8 +38,8 @@ data class ItemState<Id : Identifier<*>, V : Identifiable<Id>>(
             version
         )
 
-        fun <Id : Identifier<*>, V : Identifiable<Id>> cleared(
-        ) = ItemState<Id, V>(null, SingleLoadState.Cleared)
+        fun <ItemValue : Any> cleared(
+        ) = ItemState<ItemValue>(null, SingleLoadState.Cleared)
     }
 
 }

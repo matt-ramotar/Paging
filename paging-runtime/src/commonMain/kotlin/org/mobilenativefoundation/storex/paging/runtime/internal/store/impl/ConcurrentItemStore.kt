@@ -4,8 +4,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
 import org.mobilenativefoundation.storex.paging.persistence.api.ItemPersistence
 import org.mobilenativefoundation.storex.paging.persistence.api.PersistenceResult
-import org.mobilenativefoundation.storex.paging.runtime.Identifiable
-import org.mobilenativefoundation.storex.paging.runtime.Identifier
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.LinkedHashMapManager
 import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.ItemStore
 
@@ -16,22 +14,22 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.ItemS
  * efficient and reliable item management. It ensures thread-safety through the use
  * of a Mutex for all operations that modify shared state.
  *
- * @param Id The type of the item identifier.
- * @param V The type of the item value.
+ * @param ItemId The type of the item identifier.
+ * @param ItemValue The type of the item value.
  * @property itemMemoryCache In-memory cache for quick access to items.
  * @property itemPersistence Persistent storage layer for items.
  */
-internal class ConcurrentItemStore<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>>(
-    private val itemMemoryCache: MutableMap<Id, V>,
-    private val itemPersistence: ItemPersistence<Id, K, V>,
-    private val linkedHashMapManager: LinkedHashMapManager<Id, K, V>
-) : ItemStore<Id, K, V> {
+internal class ConcurrentItemStore<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
+    private val itemMemoryCache: MutableMap<ItemId, ItemValue>,
+    private val itemPersistence: ItemPersistence<ItemId, PageRequestKey, ItemValue>,
+    private val linkedHashMapManager: LinkedHashMapManager<ItemId, PageRequestKey, ItemValue>
+) : ItemStore<ItemId, PageRequestKey, ItemValue> {
 
     // Mutex for ensuring thread-safe access to shared resources
     private val mutex = Mutex()
 
 
-    override suspend fun getItem(id: Id): V? {
+    override suspend fun getItem(id: ItemId): ItemValue? {
         return linkedHashMapManager.getItem(id)
     }
 
@@ -42,7 +40,7 @@ internal class ConcurrentItemStore<Id : Identifier<Id>, K : Comparable<K>, V : I
      * @return A PersistenceResult indicating success or failure of the operation.
      */
     override suspend fun saveItem(
-        item: V
+        item: ItemValue
     ): PersistenceResult<Unit> {
         val result = linkedHashMapManager.saveItem(item)
         // TODO(): Update network?
@@ -55,7 +53,7 @@ internal class ConcurrentItemStore<Id : Identifier<Id>, K : Comparable<K>, V : I
      * @param id The identifier of the item to remove.
      * @return A PersistenceResult indicating success or failure of the operation.
      */
-    override suspend fun removeItem(id: Id): PersistenceResult<Unit> {
+    override suspend fun removeItem(id: ItemId): PersistenceResult<Unit> {
         return linkedHashMapManager.removeItem(id)
     }
 
@@ -76,7 +74,7 @@ internal class ConcurrentItemStore<Id : Identifier<Id>, K : Comparable<K>, V : I
      * @param predicate A function that determines whether an item should be included in the result.
      * @return A PersistenceResult containing a list of items that match the predicate.
      */
-    override suspend fun queryItems(predicate: (V) -> Boolean): PersistenceResult<List<V>> {
+    override suspend fun queryItems(predicate: (ItemValue) -> Boolean): PersistenceResult<List<ItemValue>> {
         return linkedHashMapManager.queryItems(predicate)
     }
 
@@ -88,7 +86,7 @@ internal class ConcurrentItemStore<Id : Identifier<Id>, K : Comparable<K>, V : I
      * @param id The identifier of the item to observe.
      * @return A Flow emitting the latest state of the item, or null if the item is deleted.
      */
-    override fun observeItem(id: Id): Flow<V?> {
+    override fun observeItem(id: ItemId): Flow<ItemValue?> {
         return linkedHashMapManager.observeItem(id)
     }
 }
