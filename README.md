@@ -109,7 +109,7 @@ class TimelineScreenPresenter(
             ids = pagingState.ids,
             eventSink = { event ->
                 when (event) {
-                    TimelineScreen.Event.Refresh -> pager.dispatch(Action.refresh())
+                    TimelineScreen.Event.Refresh -> pager.dispatch(PagingAction.refresh())
                 }
             }
         )
@@ -180,14 +180,14 @@ class TimelineScreenPresenter(...) : Presenter<TimelineScreen.State> {
             val operation = when (sortingMethod) {
                 is Top -> SortForTimeRange(operation.timeRange)
             }
-            pager.dispatch(Action.UpdateOperations(operation))
+            pager.dispatch(PagingAction.UpdateOperations(operation))
         }
 
         return TimelineScreen.State(
             ids = pagingState.ids,
             eventSink = { event ->
                 when (event) {
-                    TimelineScreen.Event.Refresh -> pager.dispatch(Action.refresh())
+                    TimelineScreen.Event.Refresh -> pager.dispatch(PagingAction.refresh())
                     TimelineEvent.UpdateSort -> sortingMethod = event.sortingMethod
                 }
             }
