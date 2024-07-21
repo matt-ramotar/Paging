@@ -5,9 +5,8 @@ import kotlinx.coroutines.sync.withLock
 import org.mobilenativefoundation.storex.paging.runtime.FetchingState
 import org.mobilenativefoundation.storex.paging.runtime.ItemSnapshotList
 import org.mobilenativefoundation.storex.paging.runtime.Operation
-import org.mobilenativefoundation.storex.paging.runtime.OperationManager
+import org.mobilenativefoundation.storex.paging.runtime.OperationPipeline
 import org.mobilenativefoundation.storex.paging.runtime.PagingState
-import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.MutableOperationPipeline
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.OperationApplier
 
 /**
@@ -21,8 +20,7 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.Opera
  * @param ItemValue The type of the item value.
  */
 class ConcurrentOperationApplier<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
-    private val operationManager: OperationManager<ItemId, PageRequestKey, ItemValue>,
-    private val mutableOperationPipeline: MutableOperationPipeline<ItemId, PageRequestKey, ItemValue>
+    private val operationPipeline: OperationPipeline<ItemId, PageRequestKey, ItemValue>
 ) : OperationApplier<ItemId, PageRequestKey, ItemValue> {
 
     // Mutex for ensuring thread-safe access to shared resources
@@ -49,7 +47,7 @@ class ConcurrentOperationApplier<ItemId : Any, PageRequestKey : Any, ItemValue :
         pagingState: PagingState<ItemId, PageRequestKey, ItemValue>,
         fetchingState: FetchingState<ItemId, PageRequestKey>
     ): ItemSnapshotList<ItemId, ItemValue> = mutex.withLock {
-        operationManager.get().fold(snapshot) { acc, operation ->
+        operationPipeline.fold(snapshot) { acc, operation ->
             if (operation.shouldApply(key, pagingState, fetchingState)) {
                 val cacheKey = CacheKey(operation, acc, key, pagingState, fetchingState)
                 operationCache.getOrPut(cacheKey) {

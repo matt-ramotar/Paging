@@ -24,6 +24,7 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.logger.api.Pagi
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.FetchingStateHolder
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.LoadParamsQueue
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.LoadingHandler
+import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.MutableOperationPipeline
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.PagingStateManager
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.QueueManager
 import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.NormalizedStore
@@ -46,6 +47,7 @@ internal class RealPager<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
     private val queueManager: QueueManager<PageRequestKey>,
     private val loadingHandler: LoadingHandler<ItemId, PageRequestKey, ItemValue>,
     private val coroutineScope: CoroutineScope,
+    private val mutableOperationPipeline: MutableOperationPipeline<ItemId, PageRequestKey, ItemValue>
 ) : Pager<ItemId, PageRequestKey, ItemValue> {
 
     init {
@@ -143,9 +145,9 @@ internal class RealPager<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
                 is Action.Enqueue -> handleEnqueueAction(action)
                 Action.Invalidate -> handleInvalidateAction()
 
-                is Action.AddOperation -> TODO()
-                Action.ClearOperations -> TODO()
-                is Action.RemoveOperation -> TODO()
+                is Action.AddOperation -> mutableOperationPipeline.add(action.operation)
+                Action.ClearOperations -> mutableOperationPipeline.clear()
+                is Action.RemoveOperation -> mutableOperationPipeline.remove(action.operation)
             }
         }
     }

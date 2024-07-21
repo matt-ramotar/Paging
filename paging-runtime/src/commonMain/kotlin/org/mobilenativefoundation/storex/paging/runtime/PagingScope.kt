@@ -12,7 +12,6 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.pagingScope.imp
 
 interface PagingScope<ItemId : Any, PageRequestKey : Any, ItemValue : Any> {
     fun getPager(): Pager<ItemId, PageRequestKey, ItemValue>
-    fun getOperationManager(): OperationManager<ItemId, PageRequestKey, ItemValue>
     fun getDispatcher(): Dispatcher<ItemId, PageRequestKey, ItemValue>
     fun getUpdatingItemProvider(): UpdatingItemProvider<ItemId, ItemValue>
 
