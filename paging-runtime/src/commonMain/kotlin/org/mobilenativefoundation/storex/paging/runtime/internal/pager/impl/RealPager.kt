@@ -14,12 +14,15 @@ import kotlinx.coroutines.launch
 import org.mobilenativefoundation.storex.paging.custom.FetchingStrategy
 import org.mobilenativefoundation.storex.paging.custom.LaunchEffect
 import org.mobilenativefoundation.storex.paging.runtime.Action
+import org.mobilenativefoundation.storex.paging.runtime.Dispatcher
 import org.mobilenativefoundation.storex.paging.runtime.FetchingState
 import org.mobilenativefoundation.storex.paging.runtime.LoadDirection
 import org.mobilenativefoundation.storex.paging.runtime.Pager
 import org.mobilenativefoundation.storex.paging.runtime.PagingSource
 import org.mobilenativefoundation.storex.paging.runtime.PagingState
 import org.mobilenativefoundation.storex.paging.runtime.RecompositionMode
+import org.mobilenativefoundation.storex.paging.runtime.UpdatingItem
+import org.mobilenativefoundation.storex.paging.runtime.UpdatingItemProvider
 import org.mobilenativefoundation.storex.paging.runtime.internal.logger.api.PagingLogger
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.FetchingStateHolder
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.LoadParamsQueue
@@ -47,7 +50,9 @@ internal class RealPager<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
     private val queueManager: QueueManager<PageRequestKey>,
     private val loadingHandler: LoadingHandler<ItemId, PageRequestKey, ItemValue>,
     private val coroutineScope: CoroutineScope,
-    private val mutableOperationPipeline: MutableOperationPipeline<ItemId, PageRequestKey, ItemValue>
+    private val mutableOperationPipeline: MutableOperationPipeline<ItemId, PageRequestKey, ItemValue>,
+    private val dispatcher: Dispatcher<ItemId, PageRequestKey, ItemValue>,
+    private val updatingItemProvider: UpdatingItemProvider<ItemId, ItemValue>
 ) : Pager<ItemId, PageRequestKey, ItemValue> {
 
     init {
@@ -62,6 +67,14 @@ internal class RealPager<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
         coroutineScope.launchMolecule(recompositionMode.toCash()) {
             pagingState(actions)
         }
+
+    override suspend fun getUpdatingItem(id: ItemId): UpdatingItem<ItemId, ItemValue> {
+        return updatingItemProvider.get(id)
+    }
+
+    override suspend fun dispatch(action: Action<ItemId, PageRequestKey, ItemValue>) {
+        dispatcher.dispatch(action)
+    }
 
     /**
      * Composable function that manages the paging state.

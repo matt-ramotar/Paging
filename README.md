@@ -66,10 +66,10 @@ class TimelinePagingSource : PagingSource<Cursor, TimelineRequest, Post> {
 }
 ```
 
-4. Build a `PagingScope`:
+4. Build a `Pager`:
 
 ```kotlin
-PagingScope
+Pager
     .builder<Cursor, TimelineRequest, Post>(pagingConfig)
     .setIdExtractor(idExtractor)
     .setPagingSource(TimelinePagingSource())
@@ -81,13 +81,13 @@ PagingScope
     .build()
 ```
 
-5. Provide the `PagingScope` to the compose environment at the appropriate level in the composition hierarchy:
+5. Provide the `Pager` to the compose environment at the appropriate level in the composition hierarchy:
 
 ```kotlin
-class TimelineScreenUi(private val pagingScope: PagingScope) : Ui<TimelineScreen.State> {
+class TimelineScreenUi(private val pager: Pager) : Ui<TimelineScreen.State> {
     @Composable
     override fun Content(state: TimelineScreen.State, modifier: Modifier) {
-        PagingScope(pagingScope) {
+        PagingScope(pager) {
             LazyUpdatingItems(state.ids, modifier) { model: UpdatingItem<Cursor, Post> ->
                 TimelinePostUi(model)
             }
@@ -101,16 +101,15 @@ class TimelineScreenUi(private val pagingScope: PagingScope) : Ui<TimelineScreen
 ```kotlin
 class TimelineScreenPresenter(
     private val pager: Pager<Cursor>,
-    private val dispatcher: Dispatcher<GetFeedRequest>
 ) : Presenter<TimelineScreen.State> {
     @Composable
     override fun present(): TimelineScreen.State {
-        val pagingState = pager.flow.collectAsState()
+        val pagingState = pager.collectAsState()
         return TimelineScreen.State(
             ids = pagingState.ids,
             eventSink = { event ->
                 when (event) {
-                    TimelineScreen.Event.Refresh -> dispatcher.dispatch(Action.refresh())
+                    TimelineScreen.Event.Refresh -> pager.dispatch(Action.refresh())
                 }
             }
         )
@@ -174,21 +173,21 @@ class SortForTimeRange(private val timeRange: TimeRange) :
 class TimelineScreenPresenter(...) : Presenter<TimelineScreen.State> {
     @Composable
     override fun present(): TimelineScreen.State {
-        val pagingState = pager.flow.collectAsState()
+        val pagingState = pager.collectAsState()
         var sortingMethod by remember { mutableStateOf<SortingMethod>(SortingMethod.New) }
 
         LaunchedEffect(sortingMethod) {
             val operation = when (sortingMethod) {
                 is Top -> SortForTimeRange(operation.timeRange)
             }
-            dispatcher.dispatch(Action.UpdateOperations(operation))
+            pager.dispatch(Action.UpdateOperations(operation))
         }
 
         return TimelineScreen.State(
             ids = pagingState.ids,
             eventSink = { event ->
                 when (event) {
-                    TimelineScreen.Event.Refresh -> dispatcher.dispatch(Action.refresh())
+                    TimelineScreen.Event.Refresh -> pager.dispatch(Action.refresh())
                     TimelineEvent.UpdateSort -> sortingMethod = event.sortingMethod
                 }
             }

@@ -21,8 +21,8 @@ import org.mobilenativefoundation.storex.paging.runtime.IdExtractor
 import org.mobilenativefoundation.storex.paging.runtime.LoadDirection
 import org.mobilenativefoundation.storex.paging.runtime.LoadStrategy
 import org.mobilenativefoundation.storex.paging.runtime.Operation
+import org.mobilenativefoundation.storex.paging.runtime.Pager
 import org.mobilenativefoundation.storex.paging.runtime.PagingConfig
-import org.mobilenativefoundation.storex.paging.runtime.PagingScope
 import org.mobilenativefoundation.storex.paging.runtime.PagingSource
 import org.mobilenativefoundation.storex.paging.runtime.PagingState
 import org.mobilenativefoundation.storex.paging.runtime.PlaceholderFactory
@@ -55,9 +55,9 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.store.impl.Real
 import org.mobilenativefoundation.storex.paging.runtime.internal.updatingItem.impl.RealUpdatingItemFactory
 import org.mobilenativefoundation.storex.paging.runtime.internal.updatingItem.impl.RealUpdatingItemProvider
 
-class PagingScopeBuilder<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
+class PagerBuilder<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
     private val pagingConfig: PagingConfig<ItemId, PageRequestKey>,
-) : PagingScope.Builder<ItemId, PageRequestKey, ItemValue> {
+) : Pager.Builder<ItemId, PageRequestKey, ItemValue> {
 
     private val logger = RealPagingLogger(pagingConfig.logging)
     private val actionsFlow = MutableSharedFlow<Action<ItemId, PageRequestKey, ItemValue>>(replay = 20)
@@ -111,7 +111,7 @@ class PagingScopeBuilder<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
     override fun setErrorHandlingStrategy(strategy: ErrorHandlingStrategy) =
         apply { errorHandlingStrategy = strategy }
 
-    override fun setPlaceholderFactory(placeholderFactory: PlaceholderFactory<ItemId, PageRequestKey, ItemValue>): PagingScope.Builder<ItemId, PageRequestKey, ItemValue> =
+    override fun setPlaceholderFactory(placeholderFactory: PlaceholderFactory<ItemId, PageRequestKey, ItemValue>): Pager.Builder<ItemId, PageRequestKey, ItemValue> =
         apply {
             this.placeholderFactory = placeholderFactory
         }
@@ -128,12 +128,12 @@ class PagingScopeBuilder<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
 
     override fun setItemUpdater(updater: Updater<ItemId, ItemValue, *>) = apply { itemUpdater = updater }
 
-    override fun setInitialOperations(operations: List<Operation<ItemId, PageRequestKey, ItemValue>>): PagingScope.Builder<ItemId, PageRequestKey, ItemValue> =
+    override fun setInitialOperations(operations: List<Operation<ItemId, PageRequestKey, ItemValue>>): Pager.Builder<ItemId, PageRequestKey, ItemValue> =
         apply {
             this.initialOperations = operations.toMutableList()
         }
 
-    override fun build(): PagingScope<ItemId, PageRequestKey, ItemValue> {
+    override fun build(): Pager<ItemId, PageRequestKey, ItemValue> {
         val fetchingStateHolder = ConcurrentFetchingStateHolder(initialFetchingState, itemIdComparator, pageRequestKeyComparator)
 
         val dataPersistence = RealDataPersistence(itemPersistence, pagePersistence)
@@ -182,14 +182,12 @@ class PagingScopeBuilder<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
             queueManager = queueManager,
             loadingHandler = loadingHandler,
             coroutineScope = coroutineScope,
-            mutableOperationPipeline = mutableOperationPipeline
-        )
-
-        return RealPagingScope(
-            pager = pager,
+            mutableOperationPipeline = mutableOperationPipeline,
             dispatcher = dispatcher,
             updatingItemProvider = updatingItemProvider
         )
+
+        return pager
     }
 
     private fun buildStore(
