@@ -6,13 +6,13 @@ import org.mobilenativefoundation.storex.paging.runtime.Pager
 import org.mobilenativefoundation.storex.paging.runtime.PagingScope
 import org.mobilenativefoundation.storex.paging.runtime.UpdatingItemProvider
 
-class RealPagingScope<ItemId: Any, PageRequestKey: Any, ItemValue: Any>(
-    private val pager: Pager<ItemId>,
+class RealPagingScope<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
+    private val pager: Pager<ItemId, PageRequestKey, ItemValue>,
     private val operationManager: OperationManager<ItemId, PageRequestKey, ItemValue>,
-    private val dispatcher: Dispatcher<PageRequestKey>,
+    private val dispatcher: Dispatcher<ItemId, PageRequestKey, ItemValue>,
     private val updatingItemProvider: UpdatingItemProvider<ItemId, ItemValue>
 ) : PagingScope<ItemId, PageRequestKey, ItemValue> {
-    override fun getPager(): Pager<ItemId> {
+    override fun getPager(): Pager<ItemId, PageRequestKey, ItemValue> {
         return pager
     }
 
@@ -20,7 +20,7 @@ class RealPagingScope<ItemId: Any, PageRequestKey: Any, ItemValue: Any>(
         return operationManager
     }
 
-    override fun getDispatcher(): Dispatcher<PageRequestKey> {
+    override fun getDispatcher(): Dispatcher<ItemId, PageRequestKey, ItemValue> {
         return dispatcher
     }
 

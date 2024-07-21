@@ -1,5 +1,5 @@
 package org.mobilenativefoundation.storex.paging.runtime
 
-interface Dispatcher<PageRequestKey: Any> {
-    suspend fun dispatch(action: Action<PageRequestKey>)
+interface Dispatcher<ItemId : Any, PageRequestKey : Any, ItemValue : Any> {
+    suspend fun dispatch(action: Action<ItemId, PageRequestKey, ItemValue>)
 }

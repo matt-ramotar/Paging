@@ -33,20 +33,20 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.Norma
  * Implementation of [Pager] that coordinates paging operations.
 
  */
-internal class RealPager<ItemId: Any, PageRequestKey: Any, ItemValue: Any>(
+internal class RealPager<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
     recompositionMode: RecompositionMode,
     private val fetchingStateHolder: FetchingStateHolder<ItemId, PageRequestKey>,
     private val launchEffects: List<LaunchEffect>,
-    private val fetchingStrategy: FetchingStrategy<ItemId, PageRequestKey>,
+    private val fetchingStrategy: FetchingStrategy<ItemId, PageRequestKey, ItemValue>,
     private val initialLoadParams: PagingSource.LoadParams<PageRequestKey>,
     private val store: NormalizedStore<ItemId, PageRequestKey, ItemValue>,
-    private val actions: Flow<Action<PageRequestKey>>,
+    private val actions: Flow<Action<ItemId, PageRequestKey, ItemValue>>,
     private val logger: PagingLogger,
-    private val pagingStateManager: PagingStateManager<ItemId>,
+    private val pagingStateManager: PagingStateManager<ItemId, PageRequestKey, ItemValue>,
     private val queueManager: QueueManager<PageRequestKey>,
     private val loadingHandler: LoadingHandler<ItemId, PageRequestKey, ItemValue>,
     private val coroutineScope: CoroutineScope,
-) : Pager<ItemId> {
+) : Pager<ItemId, PageRequestKey, ItemValue> {
 
     init {
 
@@ -56,7 +56,7 @@ internal class RealPager<ItemId: Any, PageRequestKey: Any, ItemValue: Any>(
         handleEagerLoading()
     }
 
-    override val state: StateFlow<PagingState<ItemId>> =
+    override val state: StateFlow<PagingState<ItemId, PageRequestKey, ItemValue>> =
         coroutineScope.launchMolecule(recompositionMode.toCash()) {
             pagingState(actions)
         }
@@ -66,7 +66,7 @@ internal class RealPager<ItemId: Any, PageRequestKey: Any, ItemValue: Any>(
      * @param actions Flow of [Action] objects.
      */
     @Composable
-    private fun pagingState(actions: Flow<Action<PageRequestKey>>): PagingState<ItemId> {
+    private fun pagingState(actions: Flow<Action<ItemId, PageRequestKey, ItemValue>>): PagingState<ItemId, PageRequestKey, ItemValue> {
         val fetchingState by fetchingStateHolder.state.collectAsState()
         val pagingState by pagingStateManager.pagingState.collectAsState()
 
@@ -133,7 +133,7 @@ internal class RealPager<ItemId: Any, PageRequestKey: Any, ItemValue: Any>(
      *
      * @param actions Flow of paging actions.
      */
-    private suspend fun handleActions(actions: Flow<Action<PageRequestKey>>) {
+    private suspend fun handleActions(actions: Flow<Action<ItemId, PageRequestKey, ItemValue>>) {
         actions.distinctUntilChanged().collect { action ->
             logger.debug("Handling action: $action")
 
@@ -142,6 +142,10 @@ internal class RealPager<ItemId: Any, PageRequestKey: Any, ItemValue: Any>(
                 is Action.SkipQueue -> handleSkipQueueAction(action)
                 is Action.Enqueue -> handleEnqueueAction(action)
                 Action.Invalidate -> handleInvalidateAction()
+
+                is Action.AddOperation -> TODO()
+                Action.ClearOperations -> TODO()
+                is Action.RemoveOperation -> TODO()
             }
         }
     }
@@ -266,16 +270,16 @@ internal class RealPager<ItemId: Any, PageRequestKey: Any, ItemValue: Any>(
      */
     private fun shouldFetchForward(
         queueElement: LoadParamsQueue.Element<PageRequestKey>,
-        pagingState: PagingState<ItemId>,
+        pagingState: PagingState<ItemId, PageRequestKey, ItemValue>,
         fetchingState: FetchingState<ItemId, PageRequestKey>
     ): Boolean {
         val shouldFetch =
             queueElement.mechanism == LoadParamsQueue.Element.Mechanism.EnqueueRequest ||
-                    fetchingStrategy.shouldFetchForward(
-                        queueElement.params,
-                        pagingState,
-                        fetchingState
-                    )
+                fetchingStrategy.shouldFetchForward(
+                    queueElement.params,
+                    pagingState,
+                    fetchingState
+                )
 
         logger.debug("Should fetch forward: $shouldFetch for key: ${queueElement.params.key}")
 

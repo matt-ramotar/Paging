@@ -10,34 +10,35 @@ import org.mobilenativefoundation.storex.paging.persistence.api.ItemPersistence
 import org.mobilenativefoundation.storex.paging.persistence.api.PagePersistence
 import org.mobilenativefoundation.storex.paging.runtime.internal.pagingScope.impl.PagingScopeBuilder
 
-interface PagingScope<ItemId: Any, PageRequestKey: Any, ItemValue: Any> {
-    fun getPager(): Pager<ItemId>
+interface PagingScope<ItemId : Any, PageRequestKey : Any, ItemValue : Any> {
+    fun getPager(): Pager<ItemId, PageRequestKey, ItemValue>
     fun getOperationManager(): OperationManager<ItemId, PageRequestKey, ItemValue>
-    fun getDispatcher(): Dispatcher<PageRequestKey>
+    fun getDispatcher(): Dispatcher<ItemId, PageRequestKey, ItemValue>
     fun getUpdatingItemProvider(): UpdatingItemProvider<ItemId, ItemValue>
 
-    interface Builder<Id: Any, K: Any, V: Any> {
-        fun setInitialState(state: PagingState<Id>): Builder<Id, K, V>
-        fun setInitialLoadParams(params: PagingSource.LoadParams<K>): Builder<Id, K, V>
-        fun setPagingSource(source: PagingSource<Id, K, V>): Builder<Id, K, V>
-        fun setCoroutineDispatcher(dispatcher: CoroutineDispatcher): Builder<Id, K, V>
-        fun addLaunchEffect(effect: LaunchEffect): Builder<Id, K, V>
-        fun addSideEffect(effect: SideEffect<Id, V>): Builder<Id, K, V>
-        fun addMiddleware(mw: Middleware<K>): Builder<Id, K, V>
-        fun setInitialFetchingState(state: FetchingState<Id, K>): Builder<Id, K, V>
-        fun setFetchingStrategy(strategy: FetchingStrategy<Id, K>): Builder<Id, K, V>
-        fun setErrorHandlingStrategy(strategy: ErrorHandlingStrategy): Builder<Id, K, V>
-        fun setItemMemoryCache(cache: MutableMap<Id, V>): Builder<Id, K, V>
-        fun setPageMemoryCache(cache: MutableMap<K, PagingSource.LoadResult.Data<Id, K, V>>): Builder<Id, K, V>
-        fun setItemPersistence(persistence: ItemPersistence<Id, K, V>): Builder<Id, K, V>
-        fun setPagePersistence(persistence: PagePersistence<Id, K, V>): Builder<Id, K, V>
-        fun setItemUpdater(updater: Updater<Id, V, *>): Builder<Id, K, V>
-        fun setPlaceholderFactory(placeholderFactory: PlaceholderFactory<Id, K, V>): Builder<Id, K, V>
-        fun build(): PagingScope<Id, K, V>
+    interface Builder<ItemId : Any, PageRequestKey : Any, ItemValue : Any> {
+        fun setInitialState(state: PagingState<ItemId, PageRequestKey, ItemValue>): Builder<ItemId, PageRequestKey, ItemValue>
+        fun setInitialLoadParams(params: PagingSource.LoadParams<PageRequestKey>): Builder<ItemId, PageRequestKey, ItemValue>
+        fun setPagingSource(source: PagingSource<ItemId, PageRequestKey, ItemValue>): Builder<ItemId, PageRequestKey, ItemValue>
+        fun setCoroutineDispatcher(dispatcher: CoroutineDispatcher): Builder<ItemId, PageRequestKey, ItemValue>
+        fun addLaunchEffect(effect: LaunchEffect): Builder<ItemId, PageRequestKey, ItemValue>
+        fun addSideEffect(effect: SideEffect<ItemId, ItemValue>): Builder<ItemId, PageRequestKey, ItemValue>
+        fun addMiddleware(mw: Middleware<PageRequestKey>): Builder<ItemId, PageRequestKey, ItemValue>
+        fun setInitialFetchingState(state: FetchingState<ItemId, PageRequestKey>): Builder<ItemId, PageRequestKey, ItemValue>
+        fun setFetchingStrategy(strategy: FetchingStrategy<ItemId, PageRequestKey, ItemValue>): Builder<ItemId, PageRequestKey, ItemValue>
+        fun setErrorHandlingStrategy(strategy: ErrorHandlingStrategy): Builder<ItemId, PageRequestKey, ItemValue>
+        fun setItemMemoryCache(cache: MutableMap<ItemId, ItemValue>): Builder<ItemId, PageRequestKey, ItemValue>
+        fun setPageMemoryCache(cache: MutableMap<PageRequestKey, PagingSource.LoadResult.Data<ItemId, PageRequestKey, ItemValue>>): Builder<ItemId, PageRequestKey, ItemValue>
+        fun setItemPersistence(persistence: ItemPersistence<ItemId, PageRequestKey, ItemValue>): Builder<ItemId, PageRequestKey, ItemValue>
+        fun setPagePersistence(persistence: PagePersistence<ItemId, PageRequestKey, ItemValue>): Builder<ItemId, PageRequestKey, ItemValue>
+        fun setItemUpdater(updater: Updater<ItemId, ItemValue, *>): Builder<ItemId, PageRequestKey, ItemValue>
+        fun setPlaceholderFactory(placeholderFactory: PlaceholderFactory<ItemId, PageRequestKey, ItemValue>): Builder<ItemId, PageRequestKey, ItemValue>
+        fun setInitialOperations(operations: List<Operation<ItemId, PageRequestKey, ItemValue>>): Builder<ItemId, PageRequestKey, ItemValue>
+        fun build(): PagingScope<ItemId, PageRequestKey, ItemValue>
     }
 
     companion object {
-        fun <Id: Any, K: Any, V: Any> builder(
+        fun <Id : Any, K : Any, V : Any> builder(
             pagingConfig: PagingConfig<Id, K>
         ): Builder<Id, K, V> = PagingScopeBuilder(pagingConfig)
     }

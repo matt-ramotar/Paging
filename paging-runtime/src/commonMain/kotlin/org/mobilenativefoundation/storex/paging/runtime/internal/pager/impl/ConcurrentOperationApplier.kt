@@ -7,6 +7,7 @@ import org.mobilenativefoundation.storex.paging.runtime.ItemSnapshotList
 import org.mobilenativefoundation.storex.paging.runtime.Operation
 import org.mobilenativefoundation.storex.paging.runtime.OperationManager
 import org.mobilenativefoundation.storex.paging.runtime.PagingState
+import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.MutableOperationPipeline
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.OperationApplier
 
 /**
@@ -19,8 +20,9 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.Opera
  * @param PageRequestKey The type of the paging key.
  * @param ItemValue The type of the item value.
  */
-class ConcurrentOperationApplier<ItemId: Any, PageRequestKey: Any, ItemValue: Any>(
-    private val operationManager: OperationManager<ItemId, PageRequestKey, ItemValue>
+class ConcurrentOperationApplier<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
+    private val operationManager: OperationManager<ItemId, PageRequestKey, ItemValue>,
+    private val mutableOperationPipeline: MutableOperationPipeline<ItemId, PageRequestKey, ItemValue>
 ) : OperationApplier<ItemId, PageRequestKey, ItemValue> {
 
     // Mutex for ensuring thread-safe access to shared resources
@@ -44,7 +46,7 @@ class ConcurrentOperationApplier<ItemId: Any, PageRequestKey: Any, ItemValue: An
     override suspend fun applyOperations(
         snapshot: ItemSnapshotList<ItemId, ItemValue>,
         key: PageRequestKey?,
-        pagingState: PagingState<ItemId>,
+        pagingState: PagingState<ItemId, PageRequestKey, ItemValue>,
         fetchingState: FetchingState<ItemId, PageRequestKey>
     ): ItemSnapshotList<ItemId, ItemValue> = mutex.withLock {
         operationManager.get().fold(snapshot) { acc, operation ->
@@ -68,12 +70,12 @@ class ConcurrentOperationApplier<ItemId: Any, PageRequestKey: Any, ItemValue: An
      * @param pagingState The paging state.
      * @param fetchingState The fetching state.
      */
-    private data class CacheKey<Id: Any, K: Any, V: Any>(
-        val operation: Operation<Id, K, V>,
-        val snapshot: ItemSnapshotList<Id, V>,
-        val key: K?,
-        val pagingState: PagingState<Id>,
-        val fetchingState: FetchingState<Id, K>
+    private data class CacheKey<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
+        val operation: Operation<ItemId, PageRequestKey, ItemValue>,
+        val snapshot: ItemSnapshotList<ItemId, ItemValue>,
+        val key: PageRequestKey?,
+        val pagingState: PagingState<ItemId, PageRequestKey, ItemValue>,
+        val fetchingState: FetchingState<ItemId, PageRequestKey>
     )
 }
 

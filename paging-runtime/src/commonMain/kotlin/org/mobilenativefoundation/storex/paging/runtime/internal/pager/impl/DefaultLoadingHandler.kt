@@ -22,9 +22,9 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.Retry
 import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.NormalizedStore
 import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.PageLoadState
 
-internal class DefaultLoadingHandler<ItemId: Any, PageRequestKey: Any, ItemValue: Any>(
+internal class DefaultLoadingHandler<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
     private val store: NormalizedStore<ItemId, PageRequestKey, ItemValue>,
-    private val pagingStateManager: PagingStateManager<ItemId>,
+    private val pagingStateManager: PagingStateManager<ItemId, PageRequestKey, ItemValue>,
     private val queueManager: QueueManager<PageRequestKey>,
     private val fetchingStateHolder: FetchingStateHolder<ItemId, PageRequestKey>,
     private val errorHandlingStrategy: ErrorHandlingStrategy,

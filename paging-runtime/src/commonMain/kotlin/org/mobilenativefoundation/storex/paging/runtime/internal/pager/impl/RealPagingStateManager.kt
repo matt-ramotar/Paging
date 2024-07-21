@@ -14,12 +14,12 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.Pagin
 /**
  * Implementation of PagingStateManager that manages the paging state.
  */
-class RealPagingStateManager<ItemId: Any>(
-    initialState: PagingState<ItemId>,
+class RealPagingStateManager<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
+    initialState: PagingState<ItemId, PageRequestKey, ItemValue>,
     private val logger: PagingLogger,
-) : PagingStateManager<ItemId> {
+) : PagingStateManager<ItemId, PageRequestKey, ItemValue> {
     private val _pagingState = MutableStateFlow(initialState)
-    override val pagingState: StateFlow<PagingState<ItemId>> = _pagingState.asStateFlow()
+    override val pagingState: StateFlow<PagingState<ItemId, PageRequestKey, ItemValue>> = _pagingState.asStateFlow()
 
     override fun updateWithAppendData(ids: List<ItemId?>, endOfPaginationReached: Boolean) {
         updateState("append data") { currentState ->
@@ -59,7 +59,10 @@ class RealPagingStateManager<ItemId: Any>(
         updateLoadState("prepend loading") { it.copy(prepend = LoadState.Loading) }
     }
 
-    private fun updateState(operation: String, update: (PagingState<ItemId>) -> PagingState<ItemId>) {
+    private fun updateState(
+        operation: String,
+        update: (PagingState<ItemId, PageRequestKey, ItemValue>) -> PagingState<ItemId, PageRequestKey, ItemValue>
+    ) {
         logger.debug("Updating paging state with $operation")
         logger.debug("Current paging state: ${pagingState.value}")
 

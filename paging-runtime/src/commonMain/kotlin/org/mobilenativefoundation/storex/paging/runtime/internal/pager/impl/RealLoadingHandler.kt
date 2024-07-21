@@ -21,7 +21,7 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.PageL
  */
 internal class RealLoadingHandler<ItemId: Any, PageRequestKey: Any, ItemValue: Any>(
     private val store: NormalizedStore<ItemId, PageRequestKey, ItemValue>,
-    private val pagingStateManager: PagingStateManager<ItemId>,
+    private val pagingStateManager: PagingStateManager<ItemId, PageRequestKey, ItemValue>,
     private val queueManager: QueueManager<PageRequestKey>,
     private val fetchingStateHolder: FetchingStateHolder<ItemId, PageRequestKey>,
     private val errorHandlingStrategy: ErrorHandlingStrategy,
