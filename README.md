@@ -234,7 +234,7 @@ fun TimelinePostLoadedUi(
 }
 ```
 
-## Using a Custom Comparator
+### Using a Custom Comparator
 
 ```kotlin
 
