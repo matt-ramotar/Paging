@@ -2,55 +2,53 @@ package org.mobilenativefoundation.storex.paging.runtime.internal.pager.api
 
 import kotlinx.coroutines.flow.Flow
 import org.mobilenativefoundation.storex.paging.persistence.api.PersistenceResult
-import org.mobilenativefoundation.storex.paging.runtime.Identifiable
-import org.mobilenativefoundation.storex.paging.runtime.Identifier
 import org.mobilenativefoundation.storex.paging.runtime.PagingSource
 
-internal interface LinkedHashMapManager<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> {
-    suspend fun isInFlight(key: K): Boolean
+internal interface LinkedHashMapManager<ItemId: Any, PageRequestKey: Any, ItemValue: Any> {
+    suspend fun isInFlight(key: PageRequestKey): Boolean
 
-    suspend fun isCached(key: K): Boolean
+    suspend fun isCached(key: PageRequestKey): Boolean
 
-    suspend fun isInDatabase(params: PagingSource.LoadParams<K>): Boolean
+    suspend fun isInDatabase(params: PagingSource.LoadParams<PageRequestKey>): Boolean
 
 
-    suspend fun appendPlaceholders(params: PagingSource.LoadParams<K>)
-    suspend fun prependPlaceholders(params: PagingSource.LoadParams<K>)
+    suspend fun appendPlaceholders(params: PagingSource.LoadParams<PageRequestKey>)
+    suspend fun prependPlaceholders(params: PagingSource.LoadParams<PageRequestKey>)
 
-    suspend fun getItem(id: Id): V?
+    suspend fun getItem(id: ItemId): ItemValue?
 
-    suspend fun getCachedItem(id: Id): V?
-    suspend fun getPersistedItem(id: Id): V?
+    suspend fun getCachedItem(id: ItemId): ItemValue?
+    suspend fun getPersistedItem(id: ItemId): ItemValue?
 
-    suspend fun getCachedPage(key: K):  PagingSource. LoadResult. Data<Id, K, V>?
-    suspend fun getPersistedPage(params: PagingSource.LoadParams<K>):  PagingSource. LoadResult. Data<Id, K, V>?
+    suspend fun getCachedPage(key: PageRequestKey):  PagingSource. LoadResult. Data<ItemId, PageRequestKey, ItemValue>?
+    suspend fun getPersistedPage(params: PagingSource.LoadParams<PageRequestKey>):  PagingSource. LoadResult. Data<ItemId, PageRequestKey, ItemValue>?
 
-    suspend fun saveItem(item: V) : PersistenceResult<Unit>
-    suspend fun getItemsInOrder(): List<V?>
+    suspend fun saveItem(item: ItemValue) : PersistenceResult<Unit>
+    suspend fun getItemsInOrder(): List<ItemValue?>
 
-    suspend fun putPageNode(key: K, pageNode: PageNode<K>)
+    suspend fun putPageNode(key: PageRequestKey, pageNode: PageNode<PageRequestKey>)
 
     suspend fun appendPage(
-        params: PagingSource.LoadParams<K>,
-        loadResult: PagingSource.LoadResult.Data<Id, K, V>
+        params: PagingSource.LoadParams<PageRequestKey>,
+        loadResult: PagingSource.LoadResult.Data<ItemId, PageRequestKey, ItemValue>
     )
 
     suspend fun prependPage(
-        params: PagingSource.LoadParams<K>,
-        loadResult: PagingSource.LoadResult.Data<Id, K, V>
+        params: PagingSource.LoadParams<PageRequestKey>,
+        loadResult: PagingSource.LoadResult.Data<ItemId, PageRequestKey, ItemValue>
     )
 
-    suspend fun removeItem(id: Id): PersistenceResult<Unit>
+    suspend fun removeItem(id: ItemId): PersistenceResult<Unit>
     suspend fun removeAllItems(): PersistenceResult<Unit>
 
-    suspend fun removePage(key: K)
+    suspend fun removePage(key: PageRequestKey)
     suspend fun removeAllPages(): PersistenceResult<Unit>
 
     suspend fun invalidate()
 
-    suspend fun queryItems(predicate: (V) -> Boolean): PersistenceResult<List<V>>
+    suspend fun queryItems(predicate: (ItemValue) -> Boolean): PersistenceResult<List<ItemValue>>
 
-    fun observeItem(id: Id): Flow<V?>
+    fun observeItem(id: ItemId): Flow<ItemValue?>
 
     data class PageNode<K : Any>(
         val key: K,

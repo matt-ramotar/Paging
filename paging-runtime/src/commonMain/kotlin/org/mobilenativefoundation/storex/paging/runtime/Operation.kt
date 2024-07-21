@@ -3,11 +3,11 @@ package org.mobilenativefoundation.storex.paging.runtime
 /**
  * Represents an operation that can be applied to an item snapshot.
  *
- * @param Id The type of the item identifier.
- * @param K The type of the paging key.
- * @param V The type of the item value.
+ * @param ItemId The type of the item identifier.
+ * @param PageRequestKey The type of the paging key.
+ * @param ItemValue The type of the item value.
  */
-interface Operation<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> {
+interface Operation<ItemId: Any, PageRequestKey: Any, ItemValue: Any> {
     /**
      * Determines whether this operation should be applied based on the current state.
      *
@@ -16,7 +16,7 @@ interface Operation<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>
      * @param fetchingState The current fetching state.
      * @return True if the operation should be applied, false otherwise.
      */
-    fun shouldApply(key: K?, pagingState: PagingState<Id>, fetchingState: FetchingState<Id, K>): Boolean
+    fun shouldApply(key: PageRequestKey?, pagingState: PagingState<ItemId>, fetchingState: FetchingState<ItemId, PageRequestKey>): Boolean
 
     /**
      * Applies the operation to the given snapshot.
@@ -28,9 +28,9 @@ interface Operation<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>
      * @return The transformed snapshot after applying the operation.
      */
     fun apply(
-        snapshot: ItemSnapshotList<Id, V>,
-        key: K?,
-        pagingState: PagingState<Id>,
-        fetchingState: FetchingState<Id, K>
-    ): ItemSnapshotList<Id, V>
+        snapshot: ItemSnapshotList<ItemId, ItemValue>,
+        key: PageRequestKey?,
+        pagingState: PagingState<ItemId>,
+        fetchingState: FetchingState<ItemId, PageRequestKey>
+    ): ItemSnapshotList<ItemId, ItemValue>
 }

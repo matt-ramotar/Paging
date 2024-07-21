@@ -1,16 +1,15 @@
 package org.mobilenativefoundation.storex.paging.runtime.internal.pager.api
 
 import kotlinx.coroutines.flow.StateFlow
-import org.mobilenativefoundation.storex.paging.runtime.Identifier
 import org.mobilenativefoundation.storex.paging.runtime.PagingState
 
 /**
  * Manages the paging state and provides methods to update it.
  */
-internal interface PagingStateManager<Id : Identifier<Id>> {
-    val pagingState: StateFlow<PagingState<Id>>
-    fun updateWithAppendData(ids: List<Id?>, endOfPaginationReached: Boolean)
-    fun updateWithPrependData(ids: List<Id?>, endOfPaginationReached: Boolean)
+internal interface PagingStateManager<ItemId: Any> {
+    val pagingState: StateFlow<PagingState<ItemId>>
+    fun updateWithAppendData(ids: List<ItemId?>, endOfPaginationReached: Boolean)
+    fun updateWithPrependData(ids: List<ItemId?>, endOfPaginationReached: Boolean)
     fun updateWithAppendError(error: Throwable)
     fun updateWithPrependError(error: Throwable)
     fun updateWithAppendLoading()

@@ -1,8 +1,8 @@
 package org.mobilenativefoundation.storex.paging.runtime
 
-data class PagingConfig<Id : Identifier<*>, K : Any>(
-    val placeholderId: Id?,
-    val initialKey: K,
+data class PagingConfig<ItemId : Any, PageRequestKey : Any>(
+    val placeholderId: ItemId?,
+    val initialKey: PageRequestKey,
     val pageSize: Int = DEFAULT_PAGE_SIZE,
     val prefetchDistance: Int = pageSize * DEFAULT_PREFETCH_DISTANCE_MULTIPLIER,
     val maxSize: Int = MAX_SIZE_UNBOUNDED,

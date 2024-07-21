@@ -2,23 +2,21 @@ package org.mobilenativefoundation.storex.paging.runtime.internal.store.api
 
 import kotlinx.coroutines.flow.Flow
 import org.mobilenativefoundation.storex.paging.persistence.api.PersistenceResult
-import org.mobilenativefoundation.storex.paging.runtime.Identifiable
-import org.mobilenativefoundation.storex.paging.runtime.Identifier
 
 /**
  * Represents a store for managing individual items.
  *
- * @param Id The type of the item identifier.
- * @param V The type of the item value, which must be Identifiable by Id.
+ * @param ItemId The type of the item identifier.
+ * @param ItemValue The type of the item value.
  */
-internal interface ItemStore<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> {
+internal interface ItemStore<ItemId : Any, PageRequestKey : Any, ItemValue : Any> {
     /**
      * Retrieves an item by its identifier.
      *
      * @param id The identifier of the item.
      * @return The item if found, null otherwise.
      */
-    suspend fun getItem(id: Id): V?
+    suspend fun getItem(id: ItemId): ItemValue?
 
     /**
      * Saves an item to both the memory cache and the persistent storage.
@@ -26,7 +24,7 @@ internal interface ItemStore<Id : Identifier<Id>, K : Comparable<K>, V : Identif
      * @param item The item to save.
      * @return A PersistenceResult indicating success or failure of the operation.
      */
-    suspend fun saveItem(item: V): PersistenceResult<Unit>
+    suspend fun saveItem(item: ItemValue): PersistenceResult<Unit>
 
 
     /**
@@ -35,7 +33,7 @@ internal interface ItemStore<Id : Identifier<Id>, K : Comparable<K>, V : Identif
      * @param id The identifier of the item to remove.
      * @return A PersistenceResult indicating success or failure of the operation.
      */
-    suspend fun removeItem(id: Id): PersistenceResult<Unit>
+    suspend fun removeItem(id: ItemId): PersistenceResult<Unit>
 
     /**
      * Clears all items from the memory cache and the persistent storage.
@@ -52,7 +50,7 @@ internal interface ItemStore<Id : Identifier<Id>, K : Comparable<K>, V : Identif
      * @param predicate A function that determines whether an item should be included in the result.
      * @return A PersistenceResult containing a list of items that match the predicate.
      */
-    suspend fun queryItems(predicate: (V) -> Boolean): PersistenceResult<List<V>>
+    suspend fun queryItems(predicate: (ItemValue) -> Boolean): PersistenceResult<List<ItemValue>>
 
     /**
      * Provides a flow of updates for a specific item.
@@ -62,6 +60,6 @@ internal interface ItemStore<Id : Identifier<Id>, K : Comparable<K>, V : Identif
      * @param id The identifier of the item to observe.
      * @return A Flow emitting the latest state of the item, or null if the item is deleted.
      */
-    fun observeItem(id: Id): Flow<V?>
+    fun observeItem(id: ItemId): Flow<ItemValue?>
 
 }

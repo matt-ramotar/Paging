@@ -16,4 +16,8 @@ class TestPagingLogger : PagingLogger {
         println(error)
     }
 
+    override fun warn(message: String) {
+        println(message)
+    }
+
 }

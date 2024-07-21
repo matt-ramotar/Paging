@@ -4,8 +4,6 @@ import kotlinx.coroutines.flow.first
 import org.mobilenativefoundation.storex.paging.custom.Middleware
 import org.mobilenativefoundation.storex.paging.runtime.Action
 import org.mobilenativefoundation.storex.paging.runtime.ErrorHandlingStrategy
-import org.mobilenativefoundation.storex.paging.runtime.Identifiable
-import org.mobilenativefoundation.storex.paging.runtime.Identifier
 import org.mobilenativefoundation.storex.paging.runtime.LoadDirection
 import org.mobilenativefoundation.storex.paging.runtime.LoadStrategy
 import org.mobilenativefoundation.storex.paging.runtime.PagingSource
@@ -21,18 +19,18 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.PageL
 /**
  * Implementation of LoadingHandler that manages loading operations.
  */
-internal class RealLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>>(
-    private val store: NormalizedStore<Id, K, V>,
-    private val pagingStateManager: PagingStateManager<Id>,
-    private val queueManager: QueueManager<K>,
-    private val fetchingStateHolder: FetchingStateHolder<Id, K>,
+internal class RealLoadingHandler<ItemId: Any, PageRequestKey: Any, ItemValue: Any>(
+    private val store: NormalizedStore<ItemId, PageRequestKey, ItemValue>,
+    private val pagingStateManager: PagingStateManager<ItemId>,
+    private val queueManager: QueueManager<PageRequestKey>,
+    private val fetchingStateHolder: FetchingStateHolder<ItemId, PageRequestKey>,
     private val errorHandlingStrategy: ErrorHandlingStrategy,
-    private val middleware: List<Middleware<K>>,
-    private val operationApplier: OperationApplier<Id, K, V>
-) : LoadingHandler<Id, K, V> {
+    private val middleware: List<Middleware<PageRequestKey>>,
+    private val operationApplier: OperationApplier<ItemId, PageRequestKey, ItemValue>
+) : LoadingHandler<ItemId, PageRequestKey, ItemValue> {
 
     override suspend fun handleAppendLoading(
-        loadParams: PagingSource.LoadParams<K>,
+        loadParams: PagingSource.LoadParams<PageRequestKey>,
         addNextToQueue: Boolean
     ) {
         val modifiedParams = applyMiddleware(loadParams)
@@ -47,7 +45,7 @@ internal class RealLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V : Id
     }
 
 
-    override suspend fun handlePrependLoading(loadParams: PagingSource.LoadParams<K>, addNextToQueue: Boolean) {
+    override suspend fun handlePrependLoading(loadParams: PagingSource.LoadParams<PageRequestKey>, addNextToQueue: Boolean) {
         val modifiedParams = applyMiddleware(loadParams)
 
         pagingStateManager.updateWithPrependLoading()
@@ -59,7 +57,7 @@ internal class RealLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V : Id
     }
 
     private suspend fun loadAppendPage(
-        loadParams: PagingSource.LoadParams<K>,
+        loadParams: PagingSource.LoadParams<PageRequestKey>,
         addNextToQueue: Boolean
     ) {
         store.loadPage(loadParams).first { pageLoadState ->
@@ -67,15 +65,15 @@ internal class RealLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V : Id
         }
     }
 
-    private suspend fun loadPrependPage(loadParams: PagingSource.LoadParams<K>) {
+    private suspend fun loadPrependPage(loadParams: PagingSource.LoadParams<PageRequestKey>) {
         store.loadPage(loadParams).first { pageLoadState ->
             handlePrependPageLoadState(pageLoadState, loadParams.key)
         }
     }
 
     private suspend fun handleAppendPageLoadState(
-        pageLoadState: PageLoadState<Id, K, V>,
-        key: K,
+        pageLoadState: PageLoadState<ItemId, PageRequestKey, ItemValue>,
+        key: PageRequestKey,
         addNextToQueue: Boolean
     ): Boolean {
         return when (pageLoadState) {
@@ -86,8 +84,8 @@ internal class RealLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V : Id
     }
 
     private suspend fun handlePrependPageLoadState(
-        pageLoadState: PageLoadState<Id, K, V>,
-        key: K
+        pageLoadState: PageLoadState<ItemId, PageRequestKey, ItemValue>,
+        key: PageRequestKey
     ): Boolean {
         return when (pageLoadState) {
             is PageLoadState.Success -> handlePrependSuccess(pageLoadState, key)
@@ -97,8 +95,8 @@ internal class RealLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V : Id
     }
 
     private suspend fun handleAppendSuccess(
-        successState: PageLoadState.Success<Id, K, V>,
-        key: K,
+        successState: PageLoadState.Success<ItemId, PageRequestKey, ItemValue>,
+        key: PageRequestKey,
         addNextToQueue: Boolean
     ): Boolean {
 
@@ -121,8 +119,8 @@ internal class RealLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V : Id
     }
 
     private suspend fun handlePrependSuccess(
-        successState: PageLoadState.Success<Id, K, V>,
-        key: K
+        successState: PageLoadState.Success<ItemId, PageRequestKey, ItemValue>,
+        key: PageRequestKey
     ): Boolean {
 
         val transformedData = operationApplier.applyOperations(
@@ -143,7 +141,7 @@ internal class RealLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V : Id
 
     private fun handleAppendPagingError(
         pagingError: Throwable,
-        loadParams: PagingSource.LoadParams<K>
+        loadParams: PagingSource.LoadParams<PageRequestKey>
     ) {
         when (errorHandlingStrategy) {
             ErrorHandlingStrategy.Ignore -> {
@@ -162,7 +160,7 @@ internal class RealLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V : Id
 
     private fun handlePrependPagingError(
         pagingError: Throwable,
-        loadParams: PagingSource.LoadParams<K>
+        loadParams: PagingSource.LoadParams<PageRequestKey>
     ) {
         when (errorHandlingStrategy) {
             ErrorHandlingStrategy.Ignore -> {
@@ -179,7 +177,7 @@ internal class RealLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V : Id
         }
     }
 
-    private suspend fun enqueueAppendNext(key: K) {
+    private suspend fun enqueueAppendNext(key: PageRequestKey) {
         queueManager.enqueueAppend(
             Action.Enqueue(
                 key = key,
@@ -190,7 +188,7 @@ internal class RealLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V : Id
         )
     }
 
-    private suspend fun enqueuePrependNext(key: K) {
+    private suspend fun enqueuePrependNext(key: PageRequestKey) {
         queueManager.enqueuePrepend(
             Action.Enqueue(
                 key = key,
@@ -201,11 +199,11 @@ internal class RealLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V : Id
         )
     }
 
-    private suspend fun applyMiddleware(initialParams: PagingSource.LoadParams<K>): PagingSource.LoadParams<K> {
+    private suspend fun applyMiddleware(initialParams: PagingSource.LoadParams<PageRequestKey>): PagingSource.LoadParams<PageRequestKey> {
         suspend fun applyRemaining(
             index: Int,
-            params: PagingSource.LoadParams<K>
-        ): PagingSource.LoadParams<K> {
+            params: PagingSource.LoadParams<PageRequestKey>
+        ): PagingSource.LoadParams<PageRequestKey> {
             if (index >= middleware.size) {
                 return params
             }

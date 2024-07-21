@@ -8,8 +8,6 @@ import kotlinx.coroutines.withContext
 import org.mobilenativefoundation.storex.paging.custom.Middleware
 import org.mobilenativefoundation.storex.paging.runtime.Action
 import org.mobilenativefoundation.storex.paging.runtime.ErrorHandlingStrategy
-import org.mobilenativefoundation.storex.paging.runtime.Identifiable
-import org.mobilenativefoundation.storex.paging.runtime.Identifier
 import org.mobilenativefoundation.storex.paging.runtime.LoadDirection
 import org.mobilenativefoundation.storex.paging.runtime.LoadStrategy
 import org.mobilenativefoundation.storex.paging.runtime.PagingSource
@@ -24,18 +22,18 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.Retry
 import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.NormalizedStore
 import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.PageLoadState
 
-internal class DefaultLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>>(
-    private val store: NormalizedStore<Id, K, V>,
-    private val pagingStateManager: PagingStateManager<Id>,
-    private val queueManager: QueueManager<K>,
-    private val fetchingStateHolder: FetchingStateHolder<Id, K>,
+internal class DefaultLoadingHandler<ItemId: Any, PageRequestKey: Any, ItemValue: Any>(
+    private val store: NormalizedStore<ItemId, PageRequestKey, ItemValue>,
+    private val pagingStateManager: PagingStateManager<ItemId>,
+    private val queueManager: QueueManager<PageRequestKey>,
+    private val fetchingStateHolder: FetchingStateHolder<ItemId, PageRequestKey>,
     private val errorHandlingStrategy: ErrorHandlingStrategy,
-    private val middleware: List<Middleware<K>>,
-    private val operationApplier: OperationApplier<Id, K, V>,
-    private val retryBookkeeper: RetryBookkeeper<Id, K>,
+    private val middleware: List<Middleware<PageRequestKey>>,
+    private val operationApplier: OperationApplier<ItemId, PageRequestKey, ItemValue>,
+    private val retryBookkeeper: RetryBookkeeper<ItemId, PageRequestKey>,
     private val logger: PagingLogger,
     private val exponentialBackoff: ExponentialBackoff
-) : LoadingHandler<Id, K, V> {
+) : LoadingHandler<ItemId, PageRequestKey, ItemValue> {
 
     // Single mutex for all loading operations to prevent race conditions
     // TODO(): Optimize concurrency control by using more fine-grained locking or explore lock-free alternatives for specific operations
@@ -43,15 +41,15 @@ internal class DefaultLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V :
 
     // Cache middleware results to avoid recomputation
     // TODO(): Optimize middleware caching with size limit or expiration policy to prevent memory issues
-    private val middlewareCache = mutableMapOf<PagingSource.LoadParams<K>, PagingSource.LoadParams<K>>()
+    private val middlewareCache = mutableMapOf<PagingSource.LoadParams<PageRequestKey>, PagingSource.LoadParams<PageRequestKey>>()
 
-    override suspend fun handleAppendLoading(loadParams: PagingSource.LoadParams<K>, addNextToQueue: Boolean) =
+    override suspend fun handleAppendLoading(loadParams: PagingSource.LoadParams<PageRequestKey>, addNextToQueue: Boolean) =
         handleLoading(loadParams, addNextToQueue)
 
-    override suspend fun handlePrependLoading(loadParams: PagingSource.LoadParams<K>, addNextToQueue: Boolean) =
+    override suspend fun handlePrependLoading(loadParams: PagingSource.LoadParams<PageRequestKey>, addNextToQueue: Boolean) =
         handleLoading(loadParams, addNextToQueue)
 
-    private suspend fun handleLoading(loadParams: PagingSource.LoadParams<K>, addNextToQueue: Boolean) {
+    private suspend fun handleLoading(loadParams: PagingSource.LoadParams<PageRequestKey>, addNextToQueue: Boolean) {
 
         logger.debug(
             """
@@ -88,7 +86,7 @@ internal class DefaultLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V :
 
     // This is extracted from handleLoading because we might need to retry the load
     // We can't simply re invoke handleLoading is because it will cause a deadlock
-    private suspend fun tryLoad(loadParams: PagingSource.LoadParams<K>, addNextToQueue: Boolean) {
+    private suspend fun tryLoad(loadParams: PagingSource.LoadParams<PageRequestKey>, addNextToQueue: Boolean) {
         try {
 
             loadPage(loadParams, addNextToQueue)
@@ -105,7 +103,7 @@ internal class DefaultLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V :
         }
     }
 
-    private suspend fun loadPage(loadParams: PagingSource.LoadParams<K>, addNextToQueue: Boolean) {
+    private suspend fun loadPage(loadParams: PagingSource.LoadParams<PageRequestKey>, addNextToQueue: Boolean) {
         val pageLoadFlow = store.loadPage(loadParams)
 
         // Design decision to use only the latest data for any given params
@@ -120,7 +118,7 @@ internal class DefaultLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V :
         }
     }
 
-    private suspend fun applyMiddleware(params: PagingSource.LoadParams<K>): PagingSource.LoadParams<K> {
+    private suspend fun applyMiddleware(params: PagingSource.LoadParams<PageRequestKey>): PagingSource.LoadParams<PageRequestKey> {
 
         // Caching middleware results to avoid recomputations for the same parameters
         return middlewareCache.getOrPut(params) {
@@ -137,8 +135,8 @@ internal class DefaultLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V :
     }
 
     private suspend fun handleSuccess(
-        successState: PageLoadState.Success<Id, K, V>,
-        key: K,
+        successState: PageLoadState.Success<ItemId, PageRequestKey, ItemValue>,
+        key: PageRequestKey,
         direction: LoadDirection,
         addNextToQueue: Boolean
     ) {
@@ -177,7 +175,7 @@ internal class DefaultLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V :
         queueManager.updateExistingPendingJob(key, inFlight = false, completed = true)
     }
 
-    private suspend fun passThroughError(error: Throwable, loadParams: PagingSource.LoadParams<K>) {
+    private suspend fun passThroughError(error: Throwable, loadParams: PagingSource.LoadParams<PageRequestKey>) {
 
         // Passing the error through
         updateErrorState(error, loadParams.direction)
@@ -186,7 +184,7 @@ internal class DefaultLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V :
         completeLoadJobAfterError(loadParams)
     }
 
-    private suspend fun completeLoadJobAfterError(loadParams: PagingSource.LoadParams<K>) {
+    private suspend fun completeLoadJobAfterError(loadParams: PagingSource.LoadParams<PageRequestKey>) {
         // Design decision to remove placeholders when not retrying after an error
         // Page refreshes are not currently supported
         // So the page must currently contain placeholders
@@ -211,7 +209,7 @@ internal class DefaultLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V :
         retryBookkeeper.resetCount(loadParams)
     }
 
-    private suspend fun handleError(error: Throwable, loadParams: PagingSource.LoadParams<K>, addNextToQueue: Boolean) {
+    private suspend fun handleError(error: Throwable, loadParams: PagingSource.LoadParams<PageRequestKey>, addNextToQueue: Boolean) {
         when (errorHandlingStrategy) {
             ErrorHandlingStrategy.Ignore -> {
                 logger.error(
@@ -289,7 +287,7 @@ internal class DefaultLoadingHandler<Id : Identifier<Id>, K : Comparable<K>, V :
         }
     }
 
-    private suspend fun enqueueNext(key: K, direction: LoadDirection) {
+    private suspend fun enqueueNext(key: PageRequestKey, direction: LoadDirection) {
         // Skip cache because these params come from a network response
         val action = Action.Enqueue(key, direction, LoadStrategy.SkipCache, jump = false)
         logger.debug("Enqueuing next action: $action")

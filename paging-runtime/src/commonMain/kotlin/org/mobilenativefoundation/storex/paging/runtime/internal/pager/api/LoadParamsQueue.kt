@@ -5,17 +5,17 @@ import org.mobilenativefoundation.storex.paging.runtime.PagingSource
 /**
  * Interface for a queue that manages load parameters for paging operations.
  *
- * @param K The type of the paging key, which must be Comparable.
+ * @param PageRequestKey The type of the paging key, which must be Comparable.
  */
-internal interface LoadParamsQueue<K : Comparable<K>> {
+internal interface LoadParamsQueue<PageRequestKey: Any> {
     /**
      * Represents an element in the queue.
      *
      * @property params The load parameters for a paging operation.
      * @property mechanism The mechanism that triggered this load operation.
      */
-    data class Element<K : Any>(
-        val params: PagingSource.LoadParams<K>,
+    data class Element<PageRequestKey : Any>(
+        val params: PagingSource.LoadParams<PageRequestKey>,
         val mechanism: Mechanism
     ) {
         /**
@@ -33,61 +33,61 @@ internal interface LoadParamsQueue<K : Comparable<K>> {
      *
      * @param element The element to add.
      */
-    suspend fun addLast(element: Element<K>)
+    suspend fun addLast(element: Element<PageRequestKey>)
 
     /**
      * Adds an element to the beginning of the queue if it hasn't been processed before.
      *
      * @param element The element to add.
      */
-    suspend fun addFirst(element: Element<K>)
+    suspend fun addFirst(element: Element<PageRequestKey>)
 
     /**
      * Returns the first element in the queue without removing it.
      *
      * @return The first element in the queue.
      */
-    suspend fun first(): Element<K>
+    suspend fun first(): Element<PageRequestKey>
 
     /**
      * Removes and returns the first element in the queue.
      *
      * @return The first element in the queue.
      */
-    suspend fun removeFirst(): Element<K>
+    suspend fun removeFirst(): Element<PageRequestKey>
 
     /**
      * Removes the first matching element in the queue.
      * @return The first matching element in the queue.
      */
-    suspend fun removeFirst(predicate: (element: Element<K>) -> Boolean)
+    suspend fun removeFirst(predicate: (element: Element<PageRequestKey>) -> Boolean)
 
     /**
      * Removes the last matching element in the queue.
      * @return The last matching element in the queue.
      */
-    suspend fun removeLast(predicate: (element: Element<K>) -> Boolean)
+    suspend fun removeLast(predicate: (element: Element<PageRequestKey>) -> Boolean)
 
     /**
      * Returns the last element in the queue without removing it.
      *
      * @return The last element in the queue.
      */
-    suspend fun last(): Element<K>
+    suspend fun last(): Element<PageRequestKey>
 
     /**
      * Removes and returns the last element in the queue.
      *
      * @return The last element in the queue.
      */
-    suspend fun removeLast(): Element<K>
+    suspend fun removeLast(): Element<PageRequestKey>
 
     /**
      * Jumps to a specific element in the queue, removing all elements with keys less than or equal to it.
      *
      * @param element The element to jump to.
      */
-    suspend fun jump(element: Element<K>)
+    suspend fun jump(element: Element<PageRequestKey>)
 
     /**
      * Clears all elements from the queue.

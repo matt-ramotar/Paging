@@ -26,7 +26,7 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.Retry
 import org.mobilenativefoundation.storex.paging.runtime.internal.pager.impl.DefaultLoadingHandler
 import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.NormalizedStore
 import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.PageLoadState
-import org.mobilenativefoundation.storex.paging.testUtils.CursorIdentifier
+import org.mobilenativefoundation.storex.paging.testUtils.Cursor
 import org.mobilenativefoundation.storex.paging.testUtils.Post
 import org.mobilenativefoundation.storex.paging.testUtils.TestExponentialBackoff
 import org.mobilenativefoundation.storex.paging.testUtils.TestPagingLogger
@@ -40,30 +40,31 @@ class DefaultLoadingHandlerTest {
     private val appendQueue = mock<LoadParamsQueue<TimelineRequest>>()
     private val prependQueue = mock<LoadParamsQueue<TimelineRequest>>()
 
-    private val pagingState = MutableStateFlow(PagingState.initial<CursorIdentifier>())
-    private val fetchingState = MutableStateFlow(FetchingState<CursorIdentifier, TimelineRequest>())
+    private val pagingState = MutableStateFlow(PagingState.initial<Cursor>())
+    private val fetchingState = MutableStateFlow(FetchingState<Cursor, TimelineRequest>())
 
-    private val pagingStateManager = mock<PagingStateManager<CursorIdentifier>> {
+    private val pagingStateManager = mock<PagingStateManager<Cursor>> {
         every { pagingState } returns this@DefaultLoadingHandlerTest.pagingState
     }
-    private val store = mock<NormalizedStore<CursorIdentifier, TimelineRequest, Post>>()
+    private val store = mock<NormalizedStore<Cursor, TimelineRequest, Post>>()
     private val queueManager = mock<QueueManager<TimelineRequest>> {
         every { appendQueue } returns this@DefaultLoadingHandlerTest.appendQueue
         every { prependQueue } returns this@DefaultLoadingHandlerTest.prependQueue
     }
-    private val fetchingStateHolder = mock<FetchingStateHolder<CursorIdentifier, TimelineRequest>> {
+    private val fetchingStateHolder = mock<FetchingStateHolder<Cursor, TimelineRequest>> {
         every { state } returns this@DefaultLoadingHandlerTest.fetchingState
     }
     private val errorHandlingStrategy = ErrorHandlingStrategy.Ignore
     private val middleware = emptyList<Middleware<TimelineRequest>>()
-    private val operationApplier = mock<OperationApplier<CursorIdentifier, TimelineRequest, Post>>()
-    private val retryBookkeeper = mock<RetryBookkeeper<CursorIdentifier, TimelineRequest>> {
+    private val operationApplier = mock<OperationApplier<Cursor, TimelineRequest, Post>>()
+    private val retryBookkeeper = mock<RetryBookkeeper<Cursor, TimelineRequest>> {
         everySuspend { getCount(any()) } returns 0
     }
     private val logger = TestPagingLogger()
     private val exponentialBackoff = spy<ExponentialBackoff>(TestExponentialBackoff())
+    private val idExtractor = IdExtractor<Cursor, Post> { it.id }
 
-    private lateinit var loadingHandler: DefaultLoadingHandler<CursorIdentifier, TimelineRequest, Post>
+    private lateinit var loadingHandler: DefaultLoadingHandler<Cursor, TimelineRequest, Post>
 
     @BeforeTest
     fun setup() {
@@ -84,7 +85,7 @@ class DefaultLoadingHandlerTest {
     private fun createFakePost(id: Int): Post {
         val timestamp = Clock.System.now().toEpochMilliseconds()
         return Post(
-            id = CursorIdentifier("$timestamp-$id"),
+            id = Cursor("$timestamp-$id"),
             title = "title-$id",
             body = "body-$id",
             authorId = "author-$id"
@@ -108,7 +109,7 @@ class DefaultLoadingHandlerTest {
         val expectedStoreFlow = flowOf(
             PageLoadState.Success(
                 isTerminal = false,
-                snapshot = ItemSnapshotList(expectedPosts),
+                snapshot = ItemSnapshotList(expectedPosts, idExtractor),
                 prevKey = null,
                 nextKey = nextKey,
                 source = PageLoadState.Success.Source.Network
@@ -116,7 +117,7 @@ class DefaultLoadingHandlerTest {
         )
 
         everySuspend { store.loadPage(eq(loadParams)) }.returns(expectedStoreFlow)
-        everySuspend { operationApplier.applyOperations(any(), any(), any(), any()) } returns ItemSnapshotList(expectedPosts)
+        everySuspend { operationApplier.applyOperations(any(), any(), any(), any()) } returns ItemSnapshotList(expectedPosts, idExtractor)
 
         // When
         loadingHandler.handleAppendLoading(loadParams, true)
@@ -158,7 +159,7 @@ class DefaultLoadingHandlerTest {
         val expectedStoreFlow = flowOf(
             PageLoadState.Success(
                 isTerminal = false,
-                snapshot = ItemSnapshotList(expectedPosts),
+                snapshot = ItemSnapshotList(expectedPosts, idExtractor),
                 prevKey = prevKey,
                 nextKey = null,
                 source = PageLoadState.Success.Source.Network
@@ -166,7 +167,7 @@ class DefaultLoadingHandlerTest {
         )
 
         everySuspend { store.loadPage(eq(loadParams)) }.returns(expectedStoreFlow)
-        everySuspend { operationApplier.applyOperations(any(), any(), any(), any()) } returns ItemSnapshotList(expectedPosts)
+        everySuspend { operationApplier.applyOperations(any(), any(), any(), any()) } returns ItemSnapshotList(expectedPosts, idExtractor)
 
         // When
         loadingHandler.handlePrependLoading(loadParams)
@@ -217,11 +218,11 @@ class DefaultLoadingHandlerTest {
         )
 
         val expectedStoreFlow = flowOf(
-            PageLoadState.Error.Message<CursorIdentifier, TimelineRequest, Post>("", true)
+            PageLoadState.Error.Message<Cursor, TimelineRequest, Post>("", true)
         )
 
         everySuspend { store.loadPage(eq(loadParams)) }.returns(expectedStoreFlow)
-        everySuspend { operationApplier.applyOperations(any(), any(), any(), any()) } returns ItemSnapshotList(expectedPosts)
+        everySuspend { operationApplier.applyOperations(any(), any(), any(), any()) } returns ItemSnapshotList(expectedPosts, idExtractor)
 
         // When
         loadingHandler.handleAppendLoading(loadParams)
@@ -261,11 +262,11 @@ class DefaultLoadingHandlerTest {
         )
 
         val expectedStoreFlow = flowOf(
-            PageLoadState.Error.Message<CursorIdentifier, TimelineRequest, Post>("", true)
+            PageLoadState.Error.Message<Cursor, TimelineRequest, Post>("", true)
         )
 
         everySuspend { store.loadPage(eq(loadParams)) }.returns(expectedStoreFlow)
-        everySuspend { operationApplier.applyOperations(any(), any(), any(), any()) } returns ItemSnapshotList(expectedPosts)
+        everySuspend { operationApplier.applyOperations(any(), any(), any(), any()) } returns ItemSnapshotList(expectedPosts, idExtractor)
 
         // When
         loadingHandler.handlePrependLoading(loadParams)
@@ -305,11 +306,11 @@ class DefaultLoadingHandlerTest {
         )
 
         val expectedStoreFlow = flowOf(
-            PageLoadState.Error.Message<CursorIdentifier, TimelineRequest, Post>("", true)
+            PageLoadState.Error.Message<Cursor, TimelineRequest, Post>("", true)
         )
 
         everySuspend { store.loadPage(eq(loadParams)) }.returns(expectedStoreFlow)
-        everySuspend { operationApplier.applyOperations(any(), any(), any(), any()) } returns ItemSnapshotList(expectedPosts)
+        everySuspend { operationApplier.applyOperations(any(), any(), any(), any()) } returns ItemSnapshotList(expectedPosts, idExtractor)
 
         // When
         loadingHandler.handleAppendLoading(loadParams)
@@ -349,11 +350,11 @@ class DefaultLoadingHandlerTest {
         )
 
         val expectedStoreFlow = flowOf(
-            PageLoadState.Error.Message<CursorIdentifier, TimelineRequest, Post>("", true)
+            PageLoadState.Error.Message<Cursor, TimelineRequest, Post>("", true)
         )
 
         everySuspend { store.loadPage(eq(loadParams)) }.returns(expectedStoreFlow)
-        everySuspend { operationApplier.applyOperations(any(), any(), any(), any()) } returns ItemSnapshotList(expectedPosts)
+        everySuspend { operationApplier.applyOperations(any(), any(), any(), any()) } returns ItemSnapshotList(expectedPosts, idExtractor)
 
         // When
         loadingHandler.handlePrependLoading(loadParams)
@@ -385,7 +386,7 @@ class DefaultLoadingHandlerTest {
         }
 
         fun getRetryCount() = retryCount
-        val retryBookkeeper = mock<RetryBookkeeper<CursorIdentifier, TimelineRequest>> {
+        val retryBookkeeper = mock<RetryBookkeeper<Cursor, TimelineRequest>> {
             everySuspend { getCount(any()) }.answers(Answer.Block { getRetryCount() })
             everySuspend { incrementCount(any()) }.answers(Answer.Block { incrementRetryCount() })
         }
@@ -404,11 +405,11 @@ class DefaultLoadingHandlerTest {
         )
 
         val expectedStoreFlow = flowOf(
-            PageLoadState.Error.Message<CursorIdentifier, TimelineRequest, Post>("", true)
+            PageLoadState.Error.Message<Cursor, TimelineRequest, Post>("", true)
         )
 
         everySuspend { store.loadPage(eq(loadParams)) }.returns(expectedStoreFlow)
-        everySuspend { operationApplier.applyOperations(any(), any(), any(), any()) } returns ItemSnapshotList(expectedPosts)
+        everySuspend { operationApplier.applyOperations(any(), any(), any(), any()) } returns ItemSnapshotList(expectedPosts, idExtractor)
 
         // When
         loadingHandler.handleAppendLoading(loadParams)
@@ -447,7 +448,7 @@ class DefaultLoadingHandlerTest {
         }
 
         fun getRetryCount() = retryCount
-        val retryBookkeeper = mock<RetryBookkeeper<CursorIdentifier, TimelineRequest>> {
+        val retryBookkeeper = mock<RetryBookkeeper<Cursor, TimelineRequest>> {
             everySuspend { getCount(any()) }.answers(Answer.Block { getRetryCount() })
             everySuspend { incrementCount(any()) }.answers(Answer.Block { incrementRetryCount() })
         }
@@ -466,11 +467,11 @@ class DefaultLoadingHandlerTest {
         )
 
         val expectedStoreFlow = flowOf(
-            PageLoadState.Error.Message<CursorIdentifier, TimelineRequest, Post>("", true)
+            PageLoadState.Error.Message<Cursor, TimelineRequest, Post>("", true)
         )
 
         everySuspend { store.loadPage(eq(loadParams)) }.returns(expectedStoreFlow)
-        everySuspend { operationApplier.applyOperations(any(), any(), any(), any()) } returns ItemSnapshotList(expectedPosts)
+        everySuspend { operationApplier.applyOperations(any(), any(), any(), any()) } returns ItemSnapshotList(expectedPosts, idExtractor)
 
         // When
         loadingHandler.handlePrependLoading(loadParams)

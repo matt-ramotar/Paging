@@ -9,8 +9,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.flow.Flow
 import org.mobilenativefoundation.store.store5.Updater
-import org.mobilenativefoundation.storex.paging.runtime.Identifiable
-import org.mobilenativefoundation.storex.paging.runtime.Identifier
 import org.mobilenativefoundation.storex.paging.runtime.ItemState
 import org.mobilenativefoundation.storex.paging.runtime.SingleLoadState
 import org.mobilenativefoundation.storex.paging.runtime.UpdatingItem
@@ -24,22 +22,22 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.Updat
  * This class handles the presentation logic for items that can update themselves,
  * ensuring thread safety and optimizing for runtime performance.
  *
- * @param Id The type of the item identifier.
- * @param V The type of the item value.
+ * @param ItemId The type of the item identifier.
+ * @param ItemValue The type of the item value.
  * @property itemStore The store for retrieving and updating items.
  * @property updater An optional updater for posting item updates to an external system.
  */
-internal class RealUpdatingItemPresenter<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>>(
-    private val itemStore: ItemStore<Id, K, V>,
-    private val updater: Updater<Id, V, *>?,
-    private val fetchingStateHolder: FetchingStateHolder<Id, K>,
-) : UpdatingItemPresenter<Id, V> {
+internal class RealUpdatingItemPresenter<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
+    private val itemStore: ItemStore<ItemId, PageRequestKey, ItemValue>,
+    private val updater: Updater<ItemId, ItemValue, *>?,
+    private val fetchingStateHolder: FetchingStateHolder<ItemId, PageRequestKey>,
+) : UpdatingItemPresenter<ItemId, ItemValue> {
 
     @Composable
-    override fun present(id: Id, events: Flow<UpdatingItem.Event<Id, V>>): ItemState<Id, V> {
+    override fun present(id: ItemId, events: Flow<UpdatingItem.Event<ItemId, ItemValue>>): ItemState<ItemValue> {
         var itemState by remember {
             mutableStateOf(
-                ItemState<Id, V>(
+                ItemState<ItemValue>(
                     null,
                     SingleLoadState.Initial,
                     0
@@ -68,11 +66,11 @@ internal class RealUpdatingItemPresenter<Id : Identifier<Id>, K : Comparable<K>,
     }
 
     private suspend fun reduceState(
-        id: Id,
-        prevState: ItemState<Id, V>,
-        itemValue: V?,
-        event: UpdatingItem.Event<out Id, out V>
-    ): ItemState<Id, V> {
+        id: ItemId,
+        prevState: ItemState<ItemValue>,
+        itemValue: ItemValue?,
+        event: UpdatingItem.Event<out ItemId, out ItemValue>
+    ): ItemState<ItemValue> {
         val newState = when (event) {
             is UpdatingItem.Event.Clear -> handleClear(id)
             is UpdatingItem.Event.Refresh -> handleRefresh(id, prevState)
@@ -91,9 +89,9 @@ internal class RealUpdatingItemPresenter<Id : Identifier<Id>, K : Comparable<K>,
     }
 
     private fun handleItemValueChange(
-        itemValue: V?,
-        prevState: ItemState<Id, V>
-    ): ItemState<Id, V> {
+        itemValue: ItemValue?,
+        prevState: ItemState<ItemValue>
+    ): ItemState<ItemValue> {
         return if (itemValue != prevState.item) {
             prevState.copy(
                 item = itemValue,
@@ -110,7 +108,7 @@ internal class RealUpdatingItemPresenter<Id : Identifier<Id>, K : Comparable<K>,
      * @param id The identifier of the item to clear.
      * @return The updated ItemState after clearing.
      */
-    private suspend fun handleClear(id: Id): ItemState<Id, V> {
+    private suspend fun handleClear(id: ItemId): ItemState<ItemValue> {
         itemStore.removeItem(id)
 
         return ItemState(item = null, loadState = SingleLoadState.Cleared, itemVersion = 0)
@@ -122,7 +120,7 @@ internal class RealUpdatingItemPresenter<Id : Identifier<Id>, K : Comparable<K>,
      * @param id The identifier of the item to refresh.
      * @return The updated ItemState after refreshing.
      */
-    private suspend fun handleRefresh(id: Id, prevState: ItemState<Id, V>): ItemState<Id, V> {
+    private suspend fun handleRefresh(id: ItemId, prevState: ItemState<ItemValue>): ItemState<ItemValue> {
         val item = itemStore.getItem(id)
         return if (item != null) {
             ItemState(
@@ -147,10 +145,10 @@ internal class RealUpdatingItemPresenter<Id : Identifier<Id>, K : Comparable<K>,
      * @return The updated ItemState after applying the update.
      */
     private suspend fun handleUpdate(
-        id: Id,
-        updatedItem: V,
-        prevState: ItemState<Id, V>
-    ): ItemState<Id, V> {
+        id: ItemId,
+        updatedItem: ItemValue,
+        prevState: ItemState<ItemValue>
+    ): ItemState<ItemValue> {
         itemStore.saveItem(updatedItem)
         updater?.post(id, updatedItem)
         val version = prevState.itemVersion + 1
@@ -161,7 +159,7 @@ internal class RealUpdatingItemPresenter<Id : Identifier<Id>, K : Comparable<K>,
         )
     }
 
-    private suspend fun updateFetchingState(id: Id) {
+    private suspend fun updateFetchingState(id: ItemId) {
         fetchingStateHolder.updateMaxItemAccessedSoFar(id)
         fetchingStateHolder.updateMinItemAccessedSoFar(id)
     }

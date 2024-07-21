@@ -2,8 +2,8 @@ package org.mobilenativefoundation.storex.paging.runtime
 
 import kotlinx.serialization.json.JsonObject
 
-fun interface PagingSource<Id : Identifier<*>, K : Any, V : Identifiable<Id>> {
-    suspend fun load(params: LoadParams<K>): LoadResult<Id, K, V>
+fun interface PagingSource<ItemId : Any, PageRequestKey : Any, ItemValue : Any> {
+    suspend fun load(params: LoadParams<PageRequestKey>): LoadResult<ItemId, PageRequestKey, ItemValue>
 
 
     data class LoadParams<K : Any>(
@@ -13,9 +13,9 @@ fun interface PagingSource<Id : Identifier<*>, K : Any, V : Identifiable<Id>> {
     )
 
 
-    sealed interface LoadResult<Id : Identifier<*>, K : Any, V : Identifiable<Id>> {
+    sealed interface LoadResult<Id : Any, K : Any, V : Any> {
 
-        data class Data<Id : Identifier<*>, K : Any, V : Identifiable<Id>>(
+        data class Data<Id : Any, K : Any, V : Any>(
             val items: List<V>,
             val prevKey: K?,
             val params: LoadParams<K>,
@@ -32,33 +32,23 @@ fun interface PagingSource<Id : Identifier<*>, K : Any, V : Identifiable<Id>> {
                 SourceOfTruth,
                 Placeholder
             }
-
-            val normalized: Normalized<Id, K>
-                get() = Normalized(
-                    items = items.map { it.id },
-                    prevKey = prevKey,
-                    params = params,
-                    nextKey = nextKey,
-                    origin = origin
-                )
-
         }
 
 
-        sealed class Error<Id : Identifier<*>, K : Comparable<K>, V : Identifiable<Id>> :
+        sealed class Error<Id : Any, K : Any, V : Any> :
             LoadResult<Id, K, V> {
-            data class Exception<Id : Identifier<*>, K : Comparable<K>, V : Identifiable<Id>>(
+            data class Exception<Id : Any, K : Any, V : Any>(
                 val error: Throwable,
                 val extras: JsonObject? = null
             ) : Error<Id, K, V>()
 
-            data class Message<Id : Identifier<*>, K : Comparable<K>, V : Identifiable<Id>>(
+            data class Message<Id : Any, K : Any, V : Any>(
                 val error: String,
                 val extras: JsonObject? = null
             ) : Error<Id, K, V>()
         }
 
-        data class Normalized<Id : Identifier<*>, K : Any>(
+        data class Normalized<Id : Any, K : Any>(
             val items: List<Id>,
             val prevKey: K?,
             val params: LoadParams<K>,

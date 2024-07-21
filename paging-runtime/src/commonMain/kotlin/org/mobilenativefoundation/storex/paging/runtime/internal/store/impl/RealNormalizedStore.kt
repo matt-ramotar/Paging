@@ -2,8 +2,6 @@ package org.mobilenativefoundation.storex.paging.runtime.internal.store.impl
 
 import kotlinx.coroutines.flow.Flow
 import org.mobilenativefoundation.storex.paging.persistence.api.PersistenceResult
-import org.mobilenativefoundation.storex.paging.runtime.Identifiable
-import org.mobilenativefoundation.storex.paging.runtime.Identifier
 import org.mobilenativefoundation.storex.paging.runtime.PagingSource
 import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.ItemStore
 import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.NormalizedStore
@@ -11,22 +9,22 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.PageL
 import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.PageStore
 import org.mobilenativefoundation.storex.paging.runtime.internal.store.api.StoreInvalidation
 
-internal class RealNormalizedStore<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>>(
-    private val itemStore: ItemStore<Id, K, V>,
-    private val pageStore: PageStore<Id, K, V>,
+internal class RealNormalizedStore<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
+    private val itemStore: ItemStore<ItemId, PageRequestKey, ItemValue>,
+    private val pageStore: PageStore<ItemId, PageRequestKey, ItemValue>,
     private val storeInvalidation: StoreInvalidation
-) : NormalizedStore<Id, K, V> {
-    override suspend fun getItem(id: Id): V? {
+) : NormalizedStore<ItemId, PageRequestKey, ItemValue> {
+    override suspend fun getItem(id: ItemId): ItemValue? {
         return itemStore.getItem(id)
     }
 
     override suspend fun saveItem(
-        item: V
+        item: ItemValue
     ): PersistenceResult<Unit> {
         return itemStore.saveItem(item)
     }
 
-    override suspend fun removeItem(id: Id): PersistenceResult<Unit> {
+    override suspend fun removeItem(id: ItemId): PersistenceResult<Unit> {
         return itemStore.removeItem(id)
     }
 
@@ -34,11 +32,11 @@ internal class RealNormalizedStore<Id : Identifier<Id>, K : Comparable<K>, V : I
         return itemStore.clearAllItems()
     }
 
-    override suspend fun loadPage(params: PagingSource.LoadParams<K>): Flow<PageLoadState<Id, K, V>> {
+    override suspend fun loadPage(params: PagingSource.LoadParams<PageRequestKey>): Flow<PageLoadState<ItemId, PageRequestKey, ItemValue>> {
         return pageStore.loadPage(params)
     }
 
-    override suspend fun clearPage(key: K) {
+    override suspend fun clearPage(key: PageRequestKey) {
         return pageStore.clearPage(key)
     }
 
@@ -46,11 +44,11 @@ internal class RealNormalizedStore<Id : Identifier<Id>, K : Comparable<K>, V : I
         return pageStore.clearAllPages()
     }
 
-    override fun observeItem(id: Id): Flow<V?> {
+    override fun observeItem(id: ItemId): Flow<ItemValue?> {
         return itemStore.observeItem(id)
     }
 
-    override suspend fun queryItems(predicate: (V) -> Boolean): PersistenceResult<List<V>> {
+    override suspend fun queryItems(predicate: (ItemValue) -> Boolean): PersistenceResult<List<ItemValue>> {
         return itemStore.queryItems(predicate)
     }
 

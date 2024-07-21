@@ -1,21 +1,19 @@
 package org.mobilenativefoundation.storex.paging.runtime.internal.store.api
 
-import org.mobilenativefoundation.storex.paging.runtime.Identifiable
-import org.mobilenativefoundation.storex.paging.runtime.Identifier
 import org.mobilenativefoundation.storex.paging.runtime.ItemSnapshotList
 
-internal sealed interface PageLoadState<Id : Identifier<*>, out K : Any, out V : Identifiable<Id>> {
+internal sealed interface PageLoadState<ItemId : Any, out PageRequestKey : Any, out ItemValue : Any> {
 
     val isTerminal: Boolean
 
-    data class Processing<Id : Identifier<*>, K : Any, V : Identifiable<Id>>(
+    data class Processing<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
         override val isTerminal: Boolean = false
-    ) : PageLoadState<Id, K, V>
+    ) : PageLoadState<ItemId, PageRequestKey, ItemValue>
 
-    data class Loading<Id : Identifier<*>, K : Any, V : Identifiable<Id>>(
+    data class Loading<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
         override val isTerminal: Boolean = false,
         val source: Source
-    ) : PageLoadState<Id, K, V> {
+    ) : PageLoadState<ItemId, PageRequestKey, ItemValue> {
         enum class Source {
             MemoryCache,
             Database,
@@ -23,47 +21,47 @@ internal sealed interface PageLoadState<Id : Identifier<*>, out K : Any, out V :
         }
 
         companion object {
-            fun <Id : Identifier<*>, K : Any, V : Identifiable<Id>> memoryCache() =
-                Loading<Id, K, V>(
+            fun <ItemId : Any, PageRequestKey : Any, ItemValue : Any> memoryCache() =
+                Loading<ItemId, PageRequestKey, ItemValue>(
                     source = Source.MemoryCache
                 )
 
-            fun <Id : Identifier<*>, K : Any, V : Identifiable<Id>> database() =
-                Loading<Id, K, V>(
+            fun <ItemId : Any, PageRequestKey : Any, ItemValue : Any> database() =
+                Loading<ItemId, PageRequestKey, ItemValue>(
                     source = Source.Database
                 )
 
-            fun <Id : Identifier<*>, K : Any, V : Identifiable<Id>> remote() =
-                Loading<Id, K, V>(
+            fun <ItemId : Any, PageRequestKey : Any, ItemValue : Any> remote() =
+                Loading<ItemId, PageRequestKey, ItemValue>(
                     source = Source.Remote
                 )
         }
     }
 
 
-    data class SkippingLoad<Id : Identifier<*>, K : Any, V : Identifiable<Id>>(
+    data class SkippingLoad<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
         val reason: Reason,
         override val isTerminal: Boolean = true
-    ) : PageLoadState<Id, K, V> {
+    ) : PageLoadState<ItemId, PageRequestKey, ItemValue> {
         enum class Reason {
             AlreadyInFlight
         }
 
         companion object {
-            fun <Id : Identifier<*>, K : Any, V : Identifiable<Id>> inFlight() =
-                SkippingLoad<Id, K, V>(
+            fun <ItemId : Any, PageRequestKey : Any, ItemValue : Any> inFlight() =
+                SkippingLoad<ItemId, PageRequestKey, ItemValue>(
                     Reason.AlreadyInFlight
                 )
         }
     }
 
-    data class Success<Id : Identifier<*>, K : Any, V : Identifiable<Id>>(
+    data class Success<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
         override val isTerminal: Boolean = true,
-        val snapshot: ItemSnapshotList<Id, V>,
-        val prevKey: K? = null,
-        val nextKey: K? = null,
+        val snapshot: ItemSnapshotList<ItemId, ItemValue>,
+        val prevKey: PageRequestKey? = null,
+        val nextKey: PageRequestKey? = null,
         val source: Source
-    ) : PageLoadState<Id, K, V> {
+    ) : PageLoadState<ItemId, PageRequestKey, ItemValue> {
         enum class Source {
             MemoryCache,
             Database,
@@ -71,23 +69,23 @@ internal sealed interface PageLoadState<Id : Identifier<*>, out K : Any, out V :
         }
     }
 
-    sealed class Error<Id : Identifier<*>, K : Any, V : Identifiable<Id>> :
-        PageLoadState<Id, K, V> {
-        data class Message<Id : Identifier<*>, K : Any, V : Identifiable<Id>>(
+    sealed class Error<ItemId : Any, PageRequestKey : Any, ItemValue : Any> :
+        PageLoadState<ItemId, PageRequestKey, ItemValue> {
+        data class Message<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
             val error: String,
             override val isTerminal: Boolean
-        ) : Error<Id, K, V>()
+        ) : Error<ItemId, PageRequestKey, ItemValue>()
 
-        data class Exception<Id : Identifier<*>, K : Any, V : Identifiable<Id>>(
+        data class Exception<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
             val error: Throwable,
             override val isTerminal: Boolean
-        ) : Error<Id, K, V>()
+        ) : Error<ItemId, PageRequestKey, ItemValue>()
     }
 
-    data class Empty<Id : Identifier<*>, K : Any, V : Identifiable<Id>>(
+    data class Empty<ItemId : Any, PageRequestKey : Any, ItemValue : Any>(
         override val isTerminal: Boolean = true,
         val reason: Reason
-    ) : PageLoadState<Id, K, V> {
+    ) : PageLoadState<ItemId, PageRequestKey, ItemValue> {
         enum class Reason {
             LocalOnlyRequest,
             NetworkResponse

@@ -5,7 +5,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import org.mobilenativefoundation.storex.paging.runtime.CombinedLoadStates
-import org.mobilenativefoundation.storex.paging.runtime.Identifier
 import org.mobilenativefoundation.storex.paging.runtime.LoadState
 import org.mobilenativefoundation.storex.paging.runtime.PagingState
 import org.mobilenativefoundation.storex.paging.runtime.internal.logger.api.PagingLogger
@@ -15,14 +14,14 @@ import org.mobilenativefoundation.storex.paging.runtime.internal.pager.api.Pagin
 /**
  * Implementation of PagingStateManager that manages the paging state.
  */
-class RealPagingStateManager<Id : Identifier<Id>>(
-    initialState: PagingState<Id>,
+class RealPagingStateManager<ItemId: Any>(
+    initialState: PagingState<ItemId>,
     private val logger: PagingLogger,
-) : PagingStateManager<Id> {
+) : PagingStateManager<ItemId> {
     private val _pagingState = MutableStateFlow(initialState)
-    override val pagingState: StateFlow<PagingState<Id>> = _pagingState.asStateFlow()
+    override val pagingState: StateFlow<PagingState<ItemId>> = _pagingState.asStateFlow()
 
-    override fun updateWithAppendData(ids: List<Id?>, endOfPaginationReached: Boolean) {
+    override fun updateWithAppendData(ids: List<ItemId?>, endOfPaginationReached: Boolean) {
         updateState("append data") { currentState ->
             currentState.copy(
                 ids = currentState.ids + ids,
@@ -33,7 +32,7 @@ class RealPagingStateManager<Id : Identifier<Id>>(
         }
     }
 
-    override fun updateWithPrependData(ids: List<Id?>, endOfPaginationReached: Boolean) {
+    override fun updateWithPrependData(ids: List<ItemId?>, endOfPaginationReached: Boolean) {
         updateState("prepend data") { currentState ->
             currentState.copy(
                 ids = ids + currentState.ids,
@@ -60,7 +59,7 @@ class RealPagingStateManager<Id : Identifier<Id>>(
         updateLoadState("prepend loading") { it.copy(prepend = LoadState.Loading) }
     }
 
-    private fun updateState(operation: String, update: (PagingState<Id>) -> PagingState<Id>) {
+    private fun updateState(operation: String, update: (PagingState<ItemId>) -> PagingState<ItemId>) {
         logger.debug("Updating paging state with $operation")
         logger.debug("Current paging state: ${pagingState.value}")
 

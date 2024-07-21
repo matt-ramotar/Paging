@@ -1,9 +1,6 @@
 package org.mobilenativefoundation.storex.paging.persistence.api
 
 
-import org.mobilenativefoundation.storex.paging.runtime.Identifiable
-import org.mobilenativefoundation.storex.paging.runtime.Identifier
-
 /**
  * Design Decisions:
  * 1. Abstraction: The main interface is renamed to 'DataPersistence' to accommodate various
@@ -28,11 +25,11 @@ import org.mobilenativefoundation.storex.paging.runtime.Identifier
 /**
  * Main interface for data persistence operations in the paging system.
  *
- * @param Id The type of the item identifier.
- * @param K The type of the paging key.
- * @param V The type of the item value.
+ * @param ItemId The type of the item identifier.
+ * @param PageRequestKey The type of the paging key.
+ * @param ItemValue The type of the item value.
  */
-interface DataPersistence<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> {
-    val items: ItemPersistence<Id, K, V>
-    val pages: PagePersistence<Id, K, V>
+interface DataPersistence<ItemId: Any, PageRequestKey: Any, ItemValue: Any> {
+    val items: ItemPersistence<ItemId, PageRequestKey, ItemValue>
+    val pages: PagePersistence<ItemId, PageRequestKey, ItemValue>
 }

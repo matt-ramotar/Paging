@@ -7,9 +7,9 @@ import org.mobilenativefoundation.storex.paging.runtime.PagingSource
  * Middleware can be used to modify or intercept load parameters before they are
  * used to fetch data.
  *
- * @param K The type of the paging key.
+ * @param PageRequestKey The type of the paging key.
  */
-fun interface Middleware<K : Any> {
+fun interface Middleware<PageRequestKey : Any> {
     /**
      * Applies the middleware to the given load parameters.
      *
@@ -18,7 +18,7 @@ fun interface Middleware<K : Any> {
      * @return The potentially modified load parameters.
      */
     suspend fun apply(
-        params: PagingSource.LoadParams<K>,
-        next: suspend (PagingSource.LoadParams<K>) -> PagingSource.LoadParams<K>
-    ): PagingSource.LoadParams<K>
+        params: PagingSource.LoadParams<PageRequestKey>,
+        next: suspend (PagingSource.LoadParams<PageRequestKey>) -> PagingSource.LoadParams<PageRequestKey>
+    ): PagingSource.LoadParams<PageRequestKey>
 }

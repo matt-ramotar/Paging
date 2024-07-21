@@ -10,13 +10,13 @@ import org.mobilenativefoundation.storex.paging.persistence.api.ItemPersistence
 import org.mobilenativefoundation.storex.paging.persistence.api.PagePersistence
 import org.mobilenativefoundation.storex.paging.runtime.internal.pagingScope.impl.PagingScopeBuilder
 
-interface PagingScope<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> {
-    fun getPager(): Pager<Id>
-    fun getOperationManager(): OperationManager<Id, K, V>
-    fun getDispatcher(): Dispatcher<K>
-    fun getUpdatingItemProvider(): UpdatingItemProvider<Id, V>
+interface PagingScope<ItemId: Any, PageRequestKey: Any, ItemValue: Any> {
+    fun getPager(): Pager<ItemId>
+    fun getOperationManager(): OperationManager<ItemId, PageRequestKey, ItemValue>
+    fun getDispatcher(): Dispatcher<PageRequestKey>
+    fun getUpdatingItemProvider(): UpdatingItemProvider<ItemId, ItemValue>
 
-    interface Builder<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> {
+    interface Builder<Id: Any, K: Any, V: Any> {
         fun setInitialState(state: PagingState<Id>): Builder<Id, K, V>
         fun setInitialLoadParams(params: PagingSource.LoadParams<K>): Builder<Id, K, V>
         fun setPagingSource(source: PagingSource<Id, K, V>): Builder<Id, K, V>
@@ -37,7 +37,7 @@ interface PagingScope<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<I
     }
 
     companion object {
-        fun <Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> builder(
+        fun <Id: Any, K: Any, V: Any> builder(
             pagingConfig: PagingConfig<Id, K>
         ): Builder<Id, K, V> = PagingScopeBuilder(pagingConfig)
     }

@@ -1,19 +1,16 @@
 package org.mobilenativefoundation.storex.paging.runtime.internal.pager.api
 
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-
 /**
  * Interface for managing pending skip queue jobs.
  */
-internal interface PendingJobManager<K : Any> {
+internal interface PendingJobManager<PageRequestKey : Any> {
     /**
      * Adds a new pending job.
      *
      * @param key The key for the job.
      * @param inFlight Whether the job is currently in flight.
      */
-    suspend fun addPendingJob(key: K, inFlight: Boolean)
+    suspend fun addPendingJob(key: PageRequestKey, inFlight: Boolean)
 
     /**
      * Updates an existing pending job.
@@ -22,7 +19,7 @@ internal interface PendingJobManager<K : Any> {
      * @param inFlight Whether the job is currently in flight.
      * @param completed Whether the job has completed.
      */
-    suspend fun updateExistingJob(key: K, inFlight: Boolean, completed: Boolean)
+    suspend fun updateExistingJob(key: PageRequestKey, inFlight: Boolean, completed: Boolean)
 
     /**
      * Checks if there are any pending jobs.

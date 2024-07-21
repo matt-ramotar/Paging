@@ -1,8 +1,5 @@
 package org.mobilenativefoundation.storex.paging.runtime.internal.store.api
 
-import org.mobilenativefoundation.storex.paging.runtime.Identifiable
-import org.mobilenativefoundation.storex.paging.runtime.Identifier
-
 /**
  * This file contains the interfaces for a normalized store used in paging operations.
  *
@@ -32,13 +29,13 @@ import org.mobilenativefoundation.storex.paging.runtime.Identifier
  * This interface extends ItemStore, PageStore, and StoreInvalidation, providing a comprehensive
  * set of operations for managing paged data in a normalized format.
  *
- * @param Id The type of the item identifier.
- * @param K The type of the paging key.
- * @param V The type of the item value, which must be Identifiable by Id.
+ * @param ItemId The type of the item identifier.
+ * @param PageRequestKey The type of the paging key.
+ * @param ItemValue The type of the item value.
  */
-internal interface NormalizedStore<Id : Identifier<Id>, K : Comparable<K>, V : Identifiable<Id>> :
-    ItemStore<Id, K, V>,
-    PageStore<Id, K, V>,
+internal interface NormalizedStore<ItemId : Any, PageRequestKey : Any, ItemValue : Any> :
+    ItemStore<ItemId, PageRequestKey, ItemValue>,
+    PageStore<ItemId, PageRequestKey, ItemValue>,
     StoreInvalidation
 
 
